@@ -1,5 +1,7 @@
 # Wake Shift
 
+![Wake Shift](screenshot.jpg)
+
 A minimalist endless runner about flipping between two worlds — Reality and the Dream — built to teach myself [Odin](https://odin-lang.org/) through a real project.
 
 Full design reference: `WakeShift_Design_Doc.md`
