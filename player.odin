@@ -6,10 +6,6 @@ package main
 
 import rl "vendor:raylib/v55"
 
-// Screen reference resolution (Design Doc, section 6)
-SCREEN_WIDTH :: 1280
-SCREEN_HEIGHT :: 720
-
 // Vertical split of the play area (Design Doc, section 6):
 // Dream lane 30% / transition zone 40% / Real lane 30%
 DREAM_LANE_RATIO :: 0.30
@@ -22,12 +18,6 @@ PLAYER_SIZE :: 45
 // Fixed horizontal position of the player on screen.
 // The player stays put; the world will scroll past it (Section 5).
 PLAYER_X :: 200
-
-// The two lanes the player can occupy (Design Doc, section 5-6)
-Lane :: enum {
-	Real,
-	Dream,
-}
 
 // Player state machine (Design Doc, section 4).
 // Transitioning is a short in-between state while flipping lanes.
@@ -75,19 +65,6 @@ new_player :: proc() -> Player {
 // Draws the player as a placeholder rectangle (silhouette style comes in section 15).
 draw_player :: proc(player: Player) {
 	rl.DrawRectangleV(player.position, player.size, rl.BLACK)
-}
-
-// Returns the vertical position for a given lane.
-// Real lane: bottom edge touches the floor (bottom of the screen).
-// Dream lane: top edge touches the ceiling (top of the screen).
-get_lane_y :: proc(lane: Lane, size: rl.Vector2) -> f32 {
-	switch lane {
-	case .Real:
-		return SCREEN_HEIGHT - size.y
-	case .Dream:
-		return 0
-	}
-	return 0
 }
 
 // Ease-out quadratic: starts fast, slows down towards the end.

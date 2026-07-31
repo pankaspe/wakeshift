@@ -23,6 +23,10 @@ main :: proc() {
 	// create the world (scroll, state)
 	world := new_world()
 
+	// create a single hardcoded obstacle for now, starting off-screen to the right,
+	// in the Real lane (section 7+ will replace this with real spawning)
+	obstacle := new_obstacle(SCREEN_WIDTH + 100, .Real)
+
 	// start main loop until close
 	for !rl.WindowShouldClose() {
 
@@ -39,8 +43,14 @@ main :: proc() {
 		// update the player (input, state)
 		update_player(&player)
 
+		// update the obstacle
+		update_obstacle(&obstacle, world, rl.GetFrameTime())
+
 		// draw the world (floor/ceiling marks)
 		draw_world(world)
+
+		// draw the obstacle
+		draw_obstacle(obstacle)
 
 		// draw the player
 		draw_player(player)
