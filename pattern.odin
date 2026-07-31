@@ -8,12 +8,14 @@
 */
 package main
 
+import "core:fmt"
 import "core:math/rand"
 
 // A single obstacle event within a pattern, in time relative to pattern start.
 PatternEvent :: struct {
-	time_offset: f32, // seconds since the pattern started
-	lane:        Lane, // lane the obstacle occupies (player must be in the OTHER lane to survive)
+	time_offset:   f32, // seconds since the pattern started
+	lane:          Lane, // lane the obstacle occupies (player must be in the OTHER lane to survive)
+	obstacle_type: ObstacleType,
 }
 
 Pattern :: struct {
@@ -23,17 +25,33 @@ Pattern :: struct {
 	exit_lane:  Lane, // lane the player will be in when the pattern ends
 }
 
-// A single obstacle in the Real lane: player must be in Dream to survive.
+// A single Block in the Real lane: player must be in Dream to survive.
 pattern_steady_real := Pattern {
-	events     = []PatternEvent{{time_offset = 1.0, lane = .Real}},
+	events     = []PatternEvent{{time_offset = 1.0, lane = .Real, obstacle_type = .Block}},
 	duration   = 2.0,
 	entry_lane = .Dream,
 	exit_lane  = .Dream,
 }
 
-// A single obstacle in the Dream lane: player must be in Real to survive.
+// A single Chasm in the Real lane: same rule as Block, read inverted (Design Doc, section 5).
+pattern_steady_chasm := Pattern {
+	events     = []PatternEvent{{time_offset = 1.0, lane = .Real, obstacle_type = .Chasm}},
+	duration   = 2.0,
+	entry_lane = .Dream,
+	exit_lane  = .Dream,
+}
+
+// A single Pulsing Shape in the Dream lane: player must be in Real to survive.
 pattern_steady_dream := Pattern {
-	events     = []PatternEvent{{time_offset = 1.0, lane = .Dream}},
+	events     = []PatternEvent{{time_offset = 1.0, lane = .Dream, obstacle_type = .PulsingShape}},
+	duration   = 2.0,
+	entry_lane = .Real,
+	exit_lane  = .Real,
+}
+
+// A single Dream Hole in the Dream lane: same rule as Pulsing Shape's lane, read inverted.
+pattern_steady_dreamhole := Pattern {
+	events     = []PatternEvent{{time_offset = 1.0, lane = .Dream, obstacle_type = .DreamHole}},
 	duration   = 2.0,
 	entry_lane = .Real,
 	exit_lane  = .Real,
@@ -42,8 +60,8 @@ pattern_steady_dream := Pattern {
 // Two obstacles requiring a flip mid-pattern: Real first, then Dream.
 pattern_double_switch := Pattern {
 	events     = []PatternEvent {
-		{time_offset = 0.8, lane = .Real},
-		{time_offset = 1.8, lane = .Dream},
+		{time_offset = 0.8, lane = .Real, obstacle_type = .Block},
+		{time_offset = 1.8, lane = .Dream, obstacle_type = .PulsingShape},
 	},
 	duration   = 2.6,
 	entry_lane = .Dream,
@@ -55,20 +73,22 @@ pattern_double_switch := Pattern {
 // graph has a dead end (Real can never lead back to Dream).
 pattern_double_switch_reverse := Pattern {
 	events     = []PatternEvent {
-		{time_offset = 0.8, lane = .Dream},
-		{time_offset = 1.8, lane = .Real},
+		{time_offset = 0.8, lane = .Dream, obstacle_type = .PulsingShape},
+		{time_offset = 1.8, lane = .Real, obstacle_type = .Chasm},
 	},
 	duration   = 2.6,
 	entry_lane = .Real,
 	exit_lane  = .Dream,
 }
 
-// Pool of hand-authored patterns for the Real World (Design Doc, section 7).
+// Pool of hand-authored patterns (Design Doc, section 7).
 // Every entry_lane must have at least one pattern leading back to the
 // other lane, or the generator can get stuck (see pattern_double_switch_reverse).
-real_world_patterns := []Pattern {
+all_patterns := []Pattern {
 	pattern_steady_real,
+	pattern_steady_chasm,
 	pattern_steady_dream,
+	pattern_steady_dreamhole,
 	pattern_double_switch,
 	pattern_double_switch_reverse,
 }
@@ -83,11 +103,13 @@ build_obstacles_from_patterns :: proc(patterns: []Pattern, start_time: f32) -> [
 	cursor_time := start_time
 	for pattern in patterns {
 		for event in pattern.events {
-			append(&obstacles, new_obstacle(cursor_time + event.time_offset, event.lane))
+			append(
+				&obstacles,
+				new_obstacle(cursor_time + event.time_offset, event.lane, event.obstacle_type),
+			)
 		}
 		cursor_time += pattern.duration
 	}
-
 	return obstacles
 }
 
@@ -153,11 +175,36 @@ generate_ahead :: proc(
 		for event in pattern.events {
 			append(
 				obstacles,
-				new_obstacle(generator.generated_until + event.time_offset, event.lane),
+				new_obstacle(
+					generator.generated_until + event.time_offset,
+					event.lane,
+					event.obstacle_type,
+				),
 			)
 		}
 
 		generator.generated_until += pattern.duration
 		generator.next_entry_lane = pattern.exit_lane
+	}
+}
+
+// Checks that every event in every pattern uses an obstacle_type consistent
+// with its lane (see expected_lane_for_type). Meant to be called once at
+// startup, in debug builds, to catch pattern-authoring mistakes immediately
+// instead of relying on noticing it during a playtest.
+validate_pattern_pool :: proc(pool: []Pattern) {
+	for pattern, pattern_index in pool {
+		for event in pattern.events {
+			expected := expected_lane_for_type(event.obstacle_type)
+			if event.lane != expected {
+				fmt.printf(
+					"WARNING: pattern %d has a %v obstacle in the %v lane, expected %v\n",
+					pattern_index,
+					event.obstacle_type,
+					event.lane,
+					expected,
+				)
+			}
+		}
 	}
 }

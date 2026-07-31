@@ -17,6 +17,9 @@ main :: proc() {
 	// set fps
 	rl.SetTargetFPS(60)
 
+	// catch any pattern-authoring mistakes immediately at startup
+	validate_pattern_pool(all_patterns)
+
 	// create the player, anchored to the floor in the real lane
 	player := new_player()
 
@@ -28,7 +31,7 @@ main :: proc() {
 
 	// pattern generator: starts 2 safe seconds in, requiring the player
 	// to be in the Dream lane first (matches pattern_steady_real's entry_lane)
-	generator := new_pattern_generator(real_world_patterns, 2.0, .Dream)
+	generator := new_pattern_generator(all_patterns, 2.0, .Dream)
 
 	// overall game state
 	game_state := GameState.Playing
@@ -67,7 +70,7 @@ main :: proc() {
 
 				delete(obstacles)
 				obstacles = nil
-				generator = new_pattern_generator(real_world_patterns, 2.0, .Dream)
+				generator = new_pattern_generator(all_patterns, 2.0, .Dream)
 
 				game_state = .Playing
 			}

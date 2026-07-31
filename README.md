@@ -1,8 +1,9 @@
 # Wake Shift
 
-![Wake Shift](screenshot.jpg)
-
 A minimalist endless runner about flipping between two worlds — Reality and the Dream — built to teach myself [Odin](https://odin-lang.org/) through a real project.
+
+Full design reference: `WakeShift_Design_Doc.md`
+Full development plan: `WakeShift_Roadmap_Sviluppo.md`
 
 ## Stack
 
@@ -17,7 +18,7 @@ odin run .
 ```
 
 ## Project structure
- 
+
 ```
 main.odin      — entry point, game loop
 lane.odin      — shared two-lane concepts (Lane enum, screen size, lane-to-position math)
@@ -27,9 +28,9 @@ obstacle.odin  — obstacle as a time-based event, position derivation, drawing
 pattern.odin   — hand-authored obstacle patterns, chaining into obstacle lists
 game.odin      — game state (Playing/GameOver), collision checks
 ```
- 
+
 ## Development Progress
- 
+
 - [x] **Section 0** — Project setup, Odin + raylib window, 60 FPS game loop
 - [x] **Section 1** — Player struct, drawn as placeholder rectangle, anchored to floor
 - [x] **Section 2** — Flip mechanic (instant lane switch via Space)
@@ -47,7 +48,12 @@ game.odin      — game state (Playing/GameOver), collision checks
   - `pick_next_pattern` selects randomly among pool patterns whose `entry_lane` matches the current chain state; `generate_ahead` keeps a rolling horizon of obstacles generated `GENERATION_LOOKAHEAD` seconds in advance.
   - **Lesson learned**: the pattern pool forms a lane graph (entry_lane → exit_lane). If no pattern leads back from a given lane, the generator gets permanently stuck in that lane. Fixed by adding `pattern_double_switch_reverse` to close the graph. Any future pattern additions must keep both lanes reachable from each other.
   - No explicit RNG seed yet — each run uses a different sequence. Fine for now; revisit if a shared-seed mode (daily challenge, replay) is ever needed post-MVP.
-- [ ] **Section 11** — Multiple obstacle types + Dream World
+- [x] **Section 11** — Multiple obstacle types + Dream World
+  - `ObstacleType`: `Block`/`Chasm` (Real lane, "full" theme, static) and `PulsingShape`/`DreamHole` (Dream lane, "void" theme). Chasm/DreamHole drawn as outline-only (absence), Block/PulsingShape drawn filled (presence) — matches Design Doc section 5's pieno/vuoto principle. Pulsing Shape has a dynamic sine-based height, anchored to the ceiling, so it sometimes blocks the lane and sometimes doesn't depending on exact timing.
+  - Collision rule is identical for all 4 types ("don't be in this lane when it arrives") — the doc's "inverted reading" for Chasm/DreamHole is visual only, not a different collision rule.
+  - Added `validate_pattern_pool`, run once at startup: warns (doesn't block) if a pattern event's obstacle_type doesn't match its lane's expected theme (`expected_lane_for_type`). Safety net for when the pool grows in later sections.
+  - Renamed `real_world_patterns` → `all_patterns` (name was misleading even before this section — the pool always contained events for both lanes).
+- [ ] **Section 12** — Score (Dream Depth)
 - [ ] **Section 12** — Score (Dream Depth)
 - [ ] **Section 13** — UI: Menu, HUD, Pause
 - [ ] **Section 14** — End-run report + local high score persistence
@@ -56,8 +62,8 @@ game.odin      — game state (Playing/GameOver), collision checks
 - [ ] **Section 17** — Lucidity streak system
 - [ ] **Section 18** — Difficulty tiers
 - [ ] **Section 19** — Balancing, polish → Alpha
+
 ## Controls
- 
+
 - `SPACE` — flip between Reality and Dream lanes
 - `ESC` — close window
- 
