@@ -8,6 +8,8 @@
 */
 package main
 
+import "core:math/rand"
+
 // A single obstacle event within a pattern, in time relative to pattern start.
 PatternEvent :: struct {
 	time_offset: f32, // seconds since the pattern started
@@ -48,9 +50,28 @@ pattern_double_switch := Pattern {
 	exit_lane  = .Real,
 }
 
+// Two obstacles requiring a flip mid-pattern: Dream first, then Real.
+// Mirror of pattern_double_switch — without this, the generator's lane
+// graph has a dead end (Real can never lead back to Dream).
+pattern_double_switch_reverse := Pattern {
+	events     = []PatternEvent {
+		{time_offset = 0.8, lane = .Dream},
+		{time_offset = 1.8, lane = .Real},
+	},
+	duration   = 2.6,
+	entry_lane = .Real,
+	exit_lane  = .Dream,
+}
+
 // Pool of hand-authored patterns for the Real World (Design Doc, section 7).
-// Section 10 will pick from this pool randomly; for now we use it in a fixed order.
-real_world_patterns := []Pattern{pattern_steady_real, pattern_steady_dream, pattern_double_switch}
+// Every entry_lane must have at least one pattern leading back to the
+// other lane, or the generator can get stuck (see pattern_double_switch_reverse).
+real_world_patterns := []Pattern {
+	pattern_steady_real,
+	pattern_steady_dream,
+	pattern_double_switch,
+	pattern_double_switch_reverse,
+}
 
 // Expands a sequence of patterns into concrete, time-based obstacles,
 // chaining each pattern's duration after the previous one.
@@ -68,4 +89,75 @@ build_obstacles_from_patterns :: proc(patterns: []Pattern, start_time: f32) -> [
 	}
 
 	return obstacles
+}
+
+// Picks a random pattern from the pool whose entry_lane matches the lane
+// the player is currently required to be safe in — this is what guarantees
+// two chained patterns never force an unfair flip at their boundary.
+pick_next_pattern :: proc(pool: []Pattern, required_entry_lane: Lane) -> Pattern {
+	candidates: [dynamic]Pattern
+	defer delete(candidates)
+
+	for pattern in pool {
+		if pattern.entry_lane == required_entry_lane {
+			append(&candidates, pattern)
+		}
+	}
+
+	if len(candidates) == 0 {
+		// Safety net: shouldn't happen with a well-designed pool
+		// (every lane should have at least one matching pattern),
+		// but avoids a crash if it ever does.
+		return pool[0]
+	}
+
+	index := int(rand.float32() * f32(len(candidates)))
+	if index >= len(candidates) {
+		index = len(candidates) - 1
+	}
+	return candidates[index]
+}
+
+// How far ahead (in seconds of game time) we keep obstacles generated.
+// Large enough that the player never sees the generation "catch up".
+GENERATION_LOOKAHEAD :: 6.0
+
+PatternGenerator :: struct {
+	pool:            []Pattern,
+	generated_until: f32, // world time up to which obstacles already exist
+	next_entry_lane: Lane, // lane required for the next pattern, for chain continuity
+}
+
+new_pattern_generator :: proc(
+	pool: []Pattern,
+	start_time: f32,
+	start_lane: Lane,
+) -> PatternGenerator {
+	return PatternGenerator {
+		pool = pool,
+		generated_until = start_time,
+		next_entry_lane = start_lane,
+	}
+}
+
+// Appends new obstacles as needed, keeping the generated horizon at least
+// GENERATION_LOOKAHEAD seconds ahead of current_time. Call this every frame.
+generate_ahead :: proc(
+	generator: ^PatternGenerator,
+	obstacles: ^[dynamic]Obstacle,
+	current_time: f32,
+) {
+	for generator.generated_until < current_time + GENERATION_LOOKAHEAD {
+		pattern := pick_next_pattern(generator.pool, generator.next_entry_lane)
+
+		for event in pattern.events {
+			append(
+				obstacles,
+				new_obstacle(generator.generated_until + event.time_offset, event.lane),
+			)
+		}
+
+		generator.generated_until += pattern.duration
+		generator.next_entry_lane = pattern.exit_lane
+	}
 }

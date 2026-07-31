@@ -17,7 +17,7 @@ odin run .
 ```
 
 ## Project structure
-
+ 
 ```
 main.odin      — entry point, game loop
 lane.odin      — shared two-lane concepts (Lane enum, screen size, lane-to-position math)
@@ -27,9 +27,9 @@ obstacle.odin  — obstacle as a time-based event, position derivation, drawing
 pattern.odin   — hand-authored obstacle patterns, chaining into obstacle lists
 game.odin      — game state (Playing/GameOver), collision checks
 ```
-
+ 
 ## Development Progress
-
+ 
 - [x] **Section 0** — Project setup, Odin + raylib window, 60 FPS game loop
 - [x] **Section 1** — Player struct, drawn as placeholder rectangle, anchored to floor
 - [x] **Section 2** — Flip mechanic (instant lane switch via Space)
@@ -43,7 +43,10 @@ game.odin      — game state (Playing/GameOver), collision checks
   - Obstacles now store an `arrival_time` instead of a mutable x position; on-screen position is derived every frame from `world.elapsed_time` and `scroll_speed`. Keeps timing correct if `scroll_speed` changes later.
 - [x] **Section 9** — Patterns + pool
   - Hand-authored `Pattern`s (sequences of `PatternEvent`s with entry/exit lane hooks) chained into a concrete `[dynamic]Obstacle` list via `build_obstacles_from_patterns`. 3 patterns for the Real World pool so far, played in fixed order (random selection comes in Section 10).
-- [ ] **Section 10** — Procedural pattern generator
+- [x] **Section 10** — Procedural pattern generator
+  - `pick_next_pattern` selects randomly among pool patterns whose `entry_lane` matches the current chain state; `generate_ahead` keeps a rolling horizon of obstacles generated `GENERATION_LOOKAHEAD` seconds in advance.
+  - **Lesson learned**: the pattern pool forms a lane graph (entry_lane → exit_lane). If no pattern leads back from a given lane, the generator gets permanently stuck in that lane. Fixed by adding `pattern_double_switch_reverse` to close the graph. Any future pattern additions must keep both lanes reachable from each other.
+  - No explicit RNG seed yet — each run uses a different sequence. Fine for now; revisit if a shared-seed mode (daily challenge, replay) is ever needed post-MVP.
 - [ ] **Section 11** — Multiple obstacle types + Dream World
 - [ ] **Section 12** — Score (Dream Depth)
 - [ ] **Section 13** — UI: Menu, HUD, Pause
@@ -53,8 +56,8 @@ game.odin      — game state (Playing/GameOver), collision checks
 - [ ] **Section 17** — Lucidity streak system
 - [ ] **Section 18** — Difficulty tiers
 - [ ] **Section 19** — Balancing, polish → Alpha
-
 ## Controls
-
+ 
 - `SPACE` — flip between Reality and Dream lanes
 - `ESC` — close window
+ 

@@ -23,9 +23,12 @@ main :: proc() {
 	// create the world (scroll, state)
 	world := new_world()
 
-	// build the obstacle list by chaining the hand-authored pattern pool,
-	// giving the player 2 safe seconds before the first obstacle arrives
-	obstacles := build_obstacles_from_patterns(real_world_patterns, 2.0)
+	// obstacle list, filled in continuously by the pattern generator
+	obstacles: [dynamic]Obstacle
+
+	// pattern generator: starts 2 safe seconds in, requiring the player
+	// to be in the Dream lane first (matches pattern_steady_real's entry_lane)
+	generator := new_pattern_generator(real_world_patterns, 2.0, .Dream)
 
 	// overall game state
 	game_state := GameState.Playing
@@ -47,6 +50,9 @@ main :: proc() {
 			// update the player (input, state)
 			update_player(&player)
 
+			// keep generating obstacles ahead of the player
+			generate_ahead(&generator, &obstacles, world.elapsed_time)
+
 			// check collision against every obstacle
 			for obstacle in obstacles {
 				if check_player_obstacle_collision(player, obstacle, world) {
@@ -60,7 +66,8 @@ main :: proc() {
 				world = new_world()
 
 				delete(obstacles)
-				obstacles = build_obstacles_from_patterns(real_world_patterns, 2.0)
+				obstacles = nil
+				generator = new_pattern_generator(real_world_patterns, 2.0, .Dream)
 
 				game_state = .Playing
 			}
