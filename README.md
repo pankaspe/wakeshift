@@ -25,6 +25,7 @@ lane.odin      — shared two-lane concepts (Lane enum, screen size, lane-to-pos
 player.odin    — player state, flip mechanic, transition animation
 world.odin     — scroll state (elapsed time, scroll speed), floor/ceiling visuals
 obstacle.odin  — obstacle as a time-based event, position derivation, drawing
+pattern.odin   — hand-authored obstacle patterns, chaining into obstacle lists
 game.odin      — game state (Playing/GameOver), collision checks
 ```
 
@@ -41,7 +42,8 @@ game.odin      — game state (Playing/GameOver), collision checks
 - [x] **Section 7** — AABB collision + game over ("Awakening"), restart on ENTER
 - [x] **Section 8** — Obstacles as time-based events (refactor)
   - Obstacles now store an `arrival_time` instead of a mutable x position; on-screen position is derived every frame from `world.elapsed_time` and `scroll_speed`. Keeps timing correct if `scroll_speed` changes later.
-- [ ] **Section 9** — Patterns + pool
+- [x] **Section 9** — Patterns + pool
+  - Hand-authored `Pattern`s (sequences of `PatternEvent`s with entry/exit lane hooks) chained into a concrete `[dynamic]Obstacle` list via `build_obstacles_from_patterns`. 3 patterns for the Real World pool so far, played in fixed order (random selection comes in Section 10).
 - [ ] **Section 10** — Procedural pattern generator
 - [ ] **Section 11** — Multiple obstacle types + Dream World
 - [ ] **Section 12** — Score (Dream Depth)

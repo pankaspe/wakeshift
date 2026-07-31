@@ -23,9 +23,9 @@ main :: proc() {
 	// create the world (scroll, state)
 	world := new_world()
 
-	// create a single hardcoded obstacle for now, arriving 3 seconds into the run,
-	// in the Real lane (section 9+ will replace this with real pattern-driven spawning)
-	obstacle := new_obstacle(3.0, .Real)
+	// build the obstacle list by chaining the hand-authored pattern pool,
+	// giving the player 2 safe seconds before the first obstacle arrives
+	obstacles := build_obstacles_from_patterns(real_world_patterns, 2.0)
 
 	// overall game state
 	game_state := GameState.Playing
@@ -47,16 +47,21 @@ main :: proc() {
 			// update the player (input, state)
 			update_player(&player)
 
-			// check collision
-			if check_player_obstacle_collision(player, obstacle, world) {
-				game_state = .GameOver
+			// check collision against every obstacle
+			for obstacle in obstacles {
+				if check_player_obstacle_collision(player, obstacle, world) {
+					game_state = .GameOver
+				}
 			}
 		} else if game_state == .GameOver {
 			// restart the run
 			if rl.IsKeyPressed(.ENTER) {
 				player = new_player()
 				world = new_world()
-				obstacle = new_obstacle(3.0, .Real)
+
+				delete(obstacles)
+				obstacles = build_obstacles_from_patterns(real_world_patterns, 2.0)
+
 				game_state = .Playing
 			}
 		}
@@ -64,8 +69,10 @@ main :: proc() {
 		// draw the world (floor/ceiling marks)
 		draw_world(world)
 
-		// draw the obstacle
-		draw_obstacle(obstacle, world)
+		// draw every obstacle
+		for obstacle in obstacles {
+			draw_obstacle(obstacle, world)
+		}
 
 		// draw the player
 		draw_player(player)
