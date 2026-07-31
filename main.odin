@@ -23,9 +23,12 @@ main :: proc() {
 	// create the world (scroll, state)
 	world := new_world()
 
-	// create a single hardcoded obstacle for now, starting off-screen to the right,
-	// in the Real lane (section 7+ will replace this with real spawning)
-	obstacle := new_obstacle(SCREEN_WIDTH + 100, .Real)
+	// create a single hardcoded obstacle for now, arriving 3 seconds into the run,
+	// in the Real lane (section 9+ will replace this with real pattern-driven spawning)
+	obstacle := new_obstacle(3.0, .Real)
+
+	// overall game state
+	game_state := GameState.Playing
 
 	// start main loop until close
 	for !rl.WindowShouldClose() {
@@ -37,22 +40,39 @@ main :: proc() {
 		// clear background color for each frame
 		rl.ClearBackground(rl.BEIGE)
 
-		// update the world (scroll)
-		update_world(&world, rl.GetFrameTime())
+		if game_state == .Playing {
+			// update the world (scroll)
+			update_world(&world, rl.GetFrameTime())
 
-		// update the player (input, state)
-		update_player(&player)
+			// update the player (input, state)
+			update_player(&player)
 
-		// update the obstacle
-		update_obstacle(&obstacle, world, rl.GetFrameTime())
+			// check collision
+			if check_player_obstacle_collision(player, obstacle, world) {
+				game_state = .GameOver
+			}
+		} else if game_state == .GameOver {
+			// restart the run
+			if rl.IsKeyPressed(.ENTER) {
+				player = new_player()
+				world = new_world()
+				obstacle = new_obstacle(3.0, .Real)
+				game_state = .Playing
+			}
+		}
 
 		// draw the world (floor/ceiling marks)
 		draw_world(world)
 
 		// draw the obstacle
-		draw_obstacle(obstacle)
+		draw_obstacle(obstacle, world)
 
 		// draw the player
 		draw_player(player)
+
+		if game_state == .GameOver {
+			rl.DrawText("AWAKENED", 480, 300, 40, rl.RED)
+			rl.DrawText("Press ENTER to try again", 440, 350, 20, rl.DARKGRAY)
+		}
 	}
 }

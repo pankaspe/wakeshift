@@ -1,7 +1,10 @@
 /*
-* This is Obstacle file, obstacle.odin
-* holds obstacle state and draws it. For now: a single hardcoded block,
-* no collision logic yet (that's section 7).
+* Obstacle
+* Obstacles are described as events in time (when they should reach the
+* player), not as absolute pixel positions. Their on-screen x position is
+* derived every frame from the world's elapsed time and scroll speed.
+* This means changing scroll_speed later never breaks perceived timing
+* (Design Doc, section 6-7).
 */
 package main
 
@@ -11,28 +14,31 @@ import rl "vendor:raylib/v55"
 OBSTACLE_SIZE :: 45
 
 Obstacle :: struct {
-	position: rl.Vector2,
-	size:     rl.Vector2,
-	lane:     Lane,
+	arrival_time: f32, // world.elapsed_time value at which this obstacle reaches PLAYER_X
+	lane:         Lane,
+	size:         rl.Vector2,
 }
 
-// Creates a single obstacle at a fixed starting x, anchored to the given lane.
-new_obstacle :: proc(start_x: f32, lane: Lane) -> Obstacle {
-	size := rl.Vector2{OBSTACLE_SIZE, OBSTACLE_SIZE}
-
+// Creates an obstacle that will arrive at the player's x position at the given time.
+new_obstacle :: proc(arrival_time: f32, lane: Lane) -> Obstacle {
 	return Obstacle {
-		position = rl.Vector2{start_x, get_lane_y(lane, size)},
-		size = size,
+		arrival_time = arrival_time,
 		lane = lane,
+		size = rl.Vector2{OBSTACLE_SIZE, OBSTACLE_SIZE},
 	}
 }
 
-// Moves the obstacle left according to the world's scroll speed.
-update_obstacle :: proc(obstacle: ^Obstacle, world: World, delta_time: f32) {
-	obstacle.position.x -= world.scroll_speed * delta_time
+// Computes the obstacle's current on-screen position, derived from
+// how much time remains until (or has passed since) its arrival_time.
+get_obstacle_position :: proc(obstacle: Obstacle, world: World) -> rl.Vector2 {
+	time_until_arrival := obstacle.arrival_time - world.elapsed_time
+	x := PLAYER_X + time_until_arrival * world.scroll_speed
+	y := get_lane_y(obstacle.lane, obstacle.size)
+	return rl.Vector2{x, y}
 }
 
-// Draws the obstacle as a placeholder rectangle.
-draw_obstacle :: proc(obstacle: Obstacle) {
-	rl.DrawRectangleV(obstacle.position, obstacle.size, rl.RED)
+// Draws the obstacle as a placeholder rectangle at its current derived position.
+draw_obstacle :: proc(obstacle: Obstacle, world: World) {
+	position := get_obstacle_position(obstacle, world)
+	rl.DrawRectangleV(position, obstacle.size, rl.RED)
 }

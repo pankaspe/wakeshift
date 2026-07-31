@@ -23,8 +23,9 @@ odin run .
 main.odin      — entry point, game loop
 lane.odin      — shared two-lane concepts (Lane enum, screen size, lane-to-position math)
 player.odin    — player state, flip mechanic, transition animation
-world.odin     — scroll state, floor/ceiling visuals
-obstacle.odin  — obstacle struct, movement, drawing
+world.odin     — scroll state (elapsed time, scroll speed), floor/ceiling visuals
+obstacle.odin  — obstacle as a time-based event, position derivation, drawing
+game.odin      — game state (Playing/GameOver), collision checks
 ```
 
 ## Development Progress
@@ -37,8 +38,9 @@ obstacle.odin  — obstacle struct, movement, drawing
 - [x] **Section 5** — Scrolling world (floor/ceiling tick marks, constant scroll speed)
 - [x] **Section 6** — First obstacle (hardcoded, no collision yet)
   - [x] Refactor: extracted `Lane`, `SCREEN_WIDTH/HEIGHT`, `get_lane_y` into `lane.odin` (shared between player and obstacles)
-- [ ] **Section 7** — AABB collision + game over ("Awakening")
-- [ ] **Section 8** — Obstacles as time-based events (refactor)
+- [x] **Section 7** — AABB collision + game over ("Awakening"), restart on ENTER
+- [x] **Section 8** — Obstacles as time-based events (refactor)
+  - Obstacles now store an `arrival_time` instead of a mutable x position; on-screen position is derived every frame from `world.elapsed_time` and `scroll_speed`. Keeps timing correct if `scroll_speed` changes later.
 - [ ] **Section 9** — Patterns + pool
 - [ ] **Section 10** — Procedural pattern generator
 - [ ] **Section 11** — Multiple obstacle types + Dream World
