@@ -5,7 +5,7 @@ A minimalist endless runner about flipping between two worlds — Reality and th
 Full design reference: `WakeShift_Design_Doc.md`
 Full development plan: `WakeShift_Roadmap_Sviluppo.md`
 
-**Current status**: Alpha in progress — Section 13 of 19 complete. Core loop, procedural obstacle generation, and full menu/pause navigation are all in place.
+**Current status**: Alpha in progress — Section 14 of 19 complete. Core loop, procedural obstacle generation, full menu/pause navigation, and local high score persistence are all in place.
 
 ## Stack
 
@@ -39,6 +39,7 @@ game.odin      — game state (MainMenu/Playing/Paused/GameOver), collision chec
 score.odin     — Dream Depth score, lane-dependent growth rate
 menu.odin      — reusable navigable menu widget (used by Main Menu and Pause)
 ui.odin        — per-screen drawing (menu, HUD, pause overlay, game over)
+persistence.odin — local high score save/load (plain text file)
 ```
 
 ## Design notes & lessons learned
@@ -69,7 +70,9 @@ A running log of decisions and gotchas worth remembering, beyond what's in the D
   - 10 pts/s in Real lane, 25 pts/s in Dream lane. Real HUD styling still pending polish (Section 15+).
 - [x] **Section 13** — UI: Main Menu, HUD, Pause
   - Reusable `Menu` widget (UP/DOWN navigate, ENTER confirms), shared between Main Menu (Start Run / Quit) and Pause (Resume / Main Menu). Centered text throughout. `reset_run` centralizes the "start a fresh run" logic used by Main Menu, Game Over retry, and Pause → Main Menu.
-- [ ] **Section 14** — End-run report + local high score persistence
+- [x] **Section 14** — End-run report + local high score persistence
+  - `persistence.odin`: `load_high_score`/`save_high_score` read/write a plain text file (`highscore.txt`) next to the executable. High score is checked and saved once, exactly at the moment of collision — not every frame. Main Menu and Game Over both display it; Game Over shows "NEW BEST!" when the just-finished run ties or beats it.
+  - **Lesson learned (nightly Odin API drift)**: `core:os` file I/O signatures changed since older docs/tutorials — `read_entire_file`/`write_entire_file` now take an explicit allocator and return an `Error` union (check `err != nil`), not a `bool` (`ok`). Same category of gotcha as the `vendor:raylib` versioned path in Section 0: on a `dev-*` nightly compiler, don't trust remembered/tutorial signatures — check the compiler's own suggested overloads or pkg.odin-lang.org for the exact current API.
 - [ ] **Section 15** — Squash & stretch, base particles
 - [ ] **Section 16** — Audio (SFX + music crossfade)
 - [ ] **Section 17** — Lucidity streak system

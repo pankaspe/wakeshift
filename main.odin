@@ -22,6 +22,9 @@ main :: proc() {
 	// run score (Dream Depth)
 	score := new_score()
 
+	// personal best, loaded once at startup
+	high_score := load_high_score()
+
 	// navigable menus, shared widget (Design Doc, section 9)
 	main_menu := new_menu([]string{"Start Run", "Quit"})
 	pause_menu := new_menu([]string{"Resume", "Main Menu"})
@@ -85,6 +88,13 @@ main :: proc() {
 			for obstacle in obstacles {
 				if check_player_obstacle_collision(player, obstacle, world) {
 					game_state = .GameOver
+
+					// the run just ended: this is the one moment we check
+					// and persist a new personal best
+					if score.value > high_score {
+						high_score = score.value
+						save_high_score(high_score)
+					}
 				}
 			}
 
@@ -117,7 +127,7 @@ main :: proc() {
 
 		switch game_state {
 		case .MainMenu:
-			draw_main_menu(main_menu)
+			draw_main_menu(main_menu, high_score)
 
 		case .Playing:
 			draw_world(world)
@@ -143,7 +153,7 @@ main :: proc() {
 				draw_obstacle(obstacle, world)
 			}
 			draw_player(player)
-			draw_game_over(score)
+			draw_game_over(score, high_score)
 		}
 	}
 }

@@ -8,10 +8,12 @@ package main
 import "core:fmt"
 import rl "vendor:raylib/v55"
 
-draw_main_menu :: proc(menu: Menu) {
+draw_main_menu :: proc(menu: Menu, high_score: f32) {
 	draw_centered_text("WAKE SHIFT", 220, 50, rl.BLACK)
 	draw_menu(menu, 340, 50, 28)
-	draw_centered_text("SPACE to flip, once in a run", 500, 18, rl.DARKGRAY)
+
+	best_text := fmt.ctprintf("Best Depth: %.0f", high_score)
+	draw_centered_text(best_text, 470, 20, rl.DARKGRAY)
 }
 
 // In-game score readout. Real HUD polish (Design Doc section 9 styling)
@@ -28,12 +30,21 @@ draw_pause_overlay :: proc(menu: Menu) {
 	draw_menu(menu, 340, 50, 28)
 }
 
-// Drawn on top of the frozen gameplay frame on game over.
-draw_game_over :: proc(score: Score) {
+// Drawn on top of the frozen gameplay frame on game over — a small
+// Dream Report (Design Doc, section 8-9): final depth, and whether it's
+// a new personal best.
+draw_game_over :: proc(score: Score, high_score: f32) {
 	draw_centered_text("AWAKENED", 260, 40, rl.RED)
 
 	final_score_text := fmt.ctprintf("Depth reached: %.0f", score.value)
 	draw_centered_text(final_score_text, 320, 20, rl.DARKGRAY)
 
-	draw_centered_text("Press ENTER to try again", 360, 20, rl.DARKGRAY)
+	if score.value >= high_score {
+		draw_centered_text("NEW BEST!", 350, 22, rl.RED)
+	} else {
+		best_text := fmt.ctprintf("Best Depth: %.0f", high_score)
+		draw_centered_text(best_text, 350, 20, rl.DARKGRAY)
+	}
+
+	draw_centered_text("Press ENTER to try again", 390, 20, rl.DARKGRAY)
 }
