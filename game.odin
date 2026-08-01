@@ -6,8 +6,13 @@ package main
 
 import rl "vendor:raylib/v55"
 
+// Application-level screen state — separate from the player's own state
+// machine (Section 3). This one governs which screen is shown and which
+// input is being listened for (Design Doc, section 9).
 GameState :: enum {
+	MainMenu,
 	Playing,
+	Paused,
 	GameOver,
 }
 
@@ -33,4 +38,23 @@ check_player_obstacle_collision :: proc(player: Player, obstacle: Obstacle, worl
 	obstacle_rect := to_rect(obstacle_position, obstacle_size)
 
 	return rl.CheckCollisionRecs(player_rect, obstacle_rect)
+}
+
+// Resets player, world, score, obstacles and generator to a fresh run.
+// Shared by every path that starts a new run: Main Menu confirm,
+// Game Over retry, and returning to the Main Menu from Pause.
+reset_run :: proc(
+	player: ^Player,
+	world: ^World,
+	score: ^Score,
+	obstacles: ^[dynamic]Obstacle,
+	generator: ^PatternGenerator,
+) {
+	player^ = new_player()
+	world^ = new_world()
+	score^ = new_score()
+
+	delete(obstacles^)
+	obstacles^ = nil
+	generator^ = new_pattern_generator(all_patterns, 2.0, .Dream)
 }
