@@ -32,6 +32,7 @@ odin run .
 main.odin      — entry point, game loop (update + draw, run every frame)
 lane.odin      — shared two-lane concepts (Lane enum, screen size, lane-to-position math)
 player.odin    — player state, flip mechanic, transition animation
+player_render.odin — player silhouette rendering (Real/Dream color schemes, eyes)
 world.odin     — scroll state (elapsed time, scroll speed), floor/ceiling visuals
 obstacle.odin  — obstacle as a time-based event, position derivation, drawing
 pattern.odin   — hand-authored obstacle patterns, procedural generator, pool validation
@@ -73,7 +74,19 @@ A running log of decisions and gotchas worth remembering, beyond what's in the D
 - [x] **Section 14** — End-run report + local high score persistence
   - `persistence.odin`: `load_high_score`/`save_high_score` read/write a plain text file (`highscore.txt`) next to the executable. High score is checked and saved once, exactly at the moment of collision — not every frame. Main Menu and Game Over both display it; Game Over shows "NEW BEST!" when the just-finished run ties or beats it.
   - **Lesson learned (nightly Odin API drift)**: `core:os` file I/O signatures changed since older docs/tutorials — `read_entire_file`/`write_entire_file` now take an explicit allocator and return an `Error` union (check `err != nil`), not a `bool` (`ok`). Same category of gotcha as the `vendor:raylib` versioned path in Section 0: on a `dev-*` nightly compiler, don't trust remembered/tutorial signatures — check the compiler's own suggested overloads or pkg.odin-lang.org for the exact current API.
-- [ ] **Section 15** — Squash & stretch, base particles
+- [ ] **Section 15** — Visual identity pass (Hollow Knight–inspired silhouette style, Design Doc section 12). Split into sub-sections, each with its own test:
+  - [x] **15.1** — Player: proper shape + silhouette/rim light (replaces the placeholder square)
+    - `player_render.odin` (split from `player.odin`: state/logic vs rendering). Rounded body + rim light (drawn twice, larger silhouette behind a smaller one — no shader needed) + two eyes shifted toward the direction of travel.
+    - Real lane: light body, dark rim, dark eyes. Dream lane: full negative (dark body, light rim, light eyes), eyes mirrored top-to-bottom to read as upside-down (hanging from the ceiling).
+    - Known minor imprecision (same category as Section 12's score): color/eye scheme switches on `player.lane`, which only updates when a transition *completes* — so during the ~0.12s flip the old scheme briefly persists, then snaps. Candidate for animating in 15.2.
+  - [x] **15.2** — Player: squash & stretch (now meaningful on a real shape, not a square)
+    - Two-phase deformation in `player_render.odin`: a sine-based stretch (taller/thinner) peaking mid-flip, followed by a decaying cosine "bounce" (squash → slight overshoot → settle) over `SETTLE_DURATION` seconds after landing. Volume-preservation is approximate (opposite X/Y scaling), not physically simulated — a standard animation shortcut.
+    - Shape scales anchored to the surface being touched (floor/ceiling) via `get_player_anchor_lane`, not from center, so it doesn't visually "float" while deforming. Eyes now take the already-scaled `body_rect` so they move with the deformation instead of staying fixed.
+  - [ ] **15.3** — Obstacles: distinct silhouettes per type (Block/Chasm/PulsingShape/DreamHole stop being interchangeable rectangles)
+  - [ ] **15.4** — Terrain: floor/ceiling get an irregular profile instead of flat tick marks
+  - [ ] **15.5** — Particles: impact, flip, ambient
+  - [ ] **15.6** — Light & shadow: rim light, Dream-lane glow, contact shadows
+  - All vector-drawn (no external sprites/images) for now. Folder-based modularity if any single file grows unwieldy (e.g. a `visuals/` or `fx/` folder), rather than forcing everything into the existing per-system files.
 - [ ] **Section 16** — Audio (SFX + music crossfade)
 - [ ] **Section 17** — Lucidity streak system
 - [ ] **Section 18** — Difficulty tiers

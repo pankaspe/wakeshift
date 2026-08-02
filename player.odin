@@ -45,6 +45,7 @@ Player :: struct {
 	transition_start_y:    f32, // y position when the transition began
 	is_invulnerable:       bool,
 	invulnerability_timer: f32, // seconds elapsed since invulnerability started
+	settle_timer:          f32, // seconds since landing, drivers the post flip squash bounce
 }
 
 // Creates a player anchored to the floor, in the Real lane.
@@ -60,11 +61,6 @@ new_player :: proc() -> Player {
 		lane     = .Real,
 		state    = .Real,
 	}
-}
-
-// Draws the player as a placeholder rectangle (silhouette style comes in section 15).
-draw_player :: proc(player: Player) {
-	rl.DrawRectangleV(player.position, player.size, rl.BLACK)
 }
 
 // Ease-out quadratic: starts fast, slows down towards the end.
@@ -105,6 +101,9 @@ update_player :: proc(player: ^Player) {
 			player.lane = player.target_lane
 			player.state = .Real if player.lane == .Real else .Dream
 			player.position.y = target_y
+
+			// landing moment: start the squash bounce from zero
+			player.settle_timer = 0
 		}
 	}
 
@@ -116,4 +115,6 @@ update_player :: proc(player: ^Player) {
 			player.is_invulnerable = false
 		}
 	}
+
+	player.settle_timer += rl.GetFrameTime()
 }
