@@ -9,10 +9,11 @@
 package main
 
 import "core:math"
+import "core:math/rand"
 import rl "vendor:raylib/v55"
 
 // Obstacle reference size in pixels — same footprint as the player for now.
-OBSTACLE_SIZE :: 45
+OBSTACLE_SIZE :: 54
 
 // The four obstacle types for the MVP (Design Doc, section 5).
 // Block/Chasm belong to the Real lane ("full" theme), PulsingShape/DreamHole
@@ -44,12 +45,33 @@ Obstacle :: struct {
 	obstacle_type: ObstacleType,
 }
 
+
+// Chasm width variants (Design Doc concept: cracks can be short, medium, or
+// long). Picked randomly at creation time — purely cosmetic/difficulty
+// flavor, not something we need to hand-author per pattern.
+CHASM_WIDTH_SHORT :: OBSTACLE_SIZE * 1.0
+CHASM_WIDTH_MEDIUM :: OBSTACLE_SIZE * 1.6
+CHASM_WIDTH_LONG :: OBSTACLE_SIZE * 2.2
+
 // Creates an obstacle that will arrive at the player's x position at the given time.
 new_obstacle :: proc(arrival_time: f32, lane: Lane, obstacle_type: ObstacleType) -> Obstacle {
+	width: f32 = OBSTACLE_SIZE
+	if obstacle_type == .Chasm {
+		roll := rand.float32()
+		switch {
+		case roll < 0.4:
+			width = CHASM_WIDTH_SHORT
+		case roll < 0.75:
+			width = CHASM_WIDTH_MEDIUM
+		case:
+			width = CHASM_WIDTH_LONG
+		}
+	}
+
 	return Obstacle {
 		arrival_time = arrival_time,
 		lane = lane,
-		size = rl.Vector2{OBSTACLE_SIZE, OBSTACLE_SIZE},
+		size = rl.Vector2{width, OBSTACLE_SIZE},
 		obstacle_type = obstacle_type,
 	}
 }
@@ -84,19 +106,4 @@ get_obstacle_position :: proc(obstacle: Obstacle, world: World) -> rl.Vector2 {
 	size := get_obstacle_size(obstacle, world)
 	y := get_lane_y(obstacle.lane, size)
 	return rl.Vector2{x, y}
-}
-
-// Draws the obstacle, distinguishing "full" obstacles (something appears,
-// solid) from "void" obstacles (something is missing, drawn as an outline
-// only) — the pieno/vuoto principle from Design Doc, section 5.
-draw_obstacle :: proc(obstacle: Obstacle, world: World) {
-	position := get_obstacle_position(obstacle, world)
-	size := get_obstacle_size(obstacle, world)
-
-	switch obstacle.obstacle_type {
-	case .Block, .PulsingShape:
-		rl.DrawRectangleV(position, size, rl.RED)
-	case .Chasm, .DreamHole:
-		rl.DrawRectangleLinesEx(rl.Rectangle{position.x, position.y, size.x, size.y}, 2, rl.RED)
-	}
 }

@@ -35,6 +35,7 @@ player.odin    — player state, flip mechanic, transition animation
 player_render.odin — player silhouette rendering (Real/Dream color schemes, eyes)
 world.odin     — scroll state (elapsed time, scroll speed), floor/ceiling visuals
 obstacle.odin  — obstacle as a time-based event, position derivation, drawing
+obstacle_render.odin — obstacle silhouette rendering (Block/Chasm/PulsingShape/DreamHole)
 pattern.odin   — hand-authored obstacle patterns, procedural generator, pool validation
 game.odin      — game state (MainMenu/Playing/Paused/GameOver), collision checks, run reset
 score.odin     — Dream Depth score, lane-dependent growth rate
@@ -82,7 +83,11 @@ A running log of decisions and gotchas worth remembering, beyond what's in the D
   - [x] **15.2** — Player: squash & stretch (now meaningful on a real shape, not a square)
     - Two-phase deformation in `player_render.odin`: a sine-based stretch (taller/thinner) peaking mid-flip, followed by a decaying cosine "bounce" (squash → slight overshoot → settle) over `SETTLE_DURATION` seconds after landing. Volume-preservation is approximate (opposite X/Y scaling), not physically simulated — a standard animation shortcut.
     - Shape scales anchored to the surface being touched (floor/ceiling) via `get_player_anchor_lane`, not from center, so it doesn't visually "float" while deforming. Eyes now take the already-scaled `body_rect` so they move with the deformation instead of staying fixed.
-  - [ ] **15.3** — Obstacles: distinct silhouettes per type (Block/Chasm/PulsingShape/DreamHole stop being interchangeable rectangles)
+  - [x] **15.3** — Obstacles: distinct silhouettes per type (Block/Chasm/PulsingShape/DreamHole stop being interchangeable rectangles)
+    - `obstacle_render.odin` (split from `obstacle.odin`, same logic/rendering separation as player). Real lane obstacles read as natural: Block = irregular stone (hand-authored polygon, filled via `DrawTriangleFan`), Chasm = layered dark crack with jagged top edge, variable width (short/medium/long, randomized at creation). Dream lane obstacles read as unnatural: PulsingShape = organic violet-to-pink membrane (stacked tapering circles), DreamHole = jagged violet/glowing tear in the ceiling.
+    - Shared `OBSTACLE_RIM_THICKNESS` (= `PLAYER_RIM_THICKNESS`) and `draw_polygon_outline` helper keep border weight consistent across every silhouette in the game (player + all 4 obstacle types).
+    - **Lesson learned**: `rl.DrawTriangleFan`/`rl.DrawTriangle` only fill when vertices are wound counter-clockwise — clockwise winding silently draws nothing (only outlines drawn separately remain visible). Same category of gotcha as the player's horns in 15.1; worth checking first whenever a custom polygon renders as an empty outline.
+    - Future idea (parked for the final polish pass, once terrain/light/particles exist too): consider replacing these hand-coded vector shapes with proper vector illustrations (self-made or sourced) once the overall visual language is fully settled.
   - [ ] **15.4** — Terrain: floor/ceiling get an irregular profile instead of flat tick marks
   - [ ] **15.5** — Particles: impact, flip, ambient
   - [ ] **15.6** — Light & shadow: rim light, Dream-lane glow, contact shadows
