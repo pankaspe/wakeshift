@@ -2,63 +2,78 @@
 * Wake Shift
 * main.odin
 * game built with Odin and Raylib
+*
+* Structure of this file:
+*   1. Window + one-time setup
+*   2. State declarations (one variable per subsystem, roughly in the
+*      order each subsystem was introduced across the roadmap sections)
+*   3. Main loop, split into two switches over game_state:
+*      - UPDATE: reads input, advances logic, may change game_state
+*      - DRAW:   renders whatever state UPDATE just settled on
 */
 package main
 
 import rl "vendor:raylib/v55"
 
 main :: proc() {
-	// set window size but need to do dynamic for full screen and adapt resolution
+	// --- Window + one-time setup ---
 	rl.InitWindow(1280, 720, "Wake Shift")
 	defer rl.CloseWindow()
-	// set fps
 	rl.SetTargetFPS(60)
 	// disable raylib's default ESC-closes-window behavior: we use ESC to pause instead
 	rl.SetExitKey(.KEY_NULL)
 
-	// catch any pattern-authoring mistakes immediately at startup
+	// catch any pattern-authoring mistakes immediately at startup (section 11)
 	validate_pattern_pool(all_patterns)
 
-	// run score (Dream Depth)
-	score := new_score()
+	// --- Persistent state (survives across runs, not reset by reset_run) ---
 
-	// personal best, loaded once at startup
+	// personal best, loaded once at startup, saved on every new record (section 14)
 	high_score := load_high_score()
 
-	// navigable menus, shared widget (Design Doc, section 9)
+	// navigable menus, shared widget (section 13)
 	main_menu := new_menu([]string{"Start Run", "Quit"})
 	pause_menu := new_menu([]string{"Resume", "Main Menu"})
 
 	should_quit := false
 
-	// create the player, anchored to the floor in the Real lane
+	// overall application screen state — starts at the main menu (section 13)
+	game_state := GameState.MainMenu
+
+	// --- Per-run state (all reset together by reset_run, section 13/17) ---
+
+	// player: position, lane, flip/transition state (sections 1-4, 15)
 	player := new_player()
 
-	// create the world (scroll state)
+	// world: scroll speed and elapsed time (section 5, 8)
 	world := new_world()
 
-	// obstacle list, filled in continuously by the pattern generator
+	// obstacle list, filled in continuously by the pattern generator (section 9-10)
 	obstacles: [dynamic]Obstacle
 
 	// pattern generator: starts 2 safe seconds in, requiring the player
 	// to be in the Dream lane first (matches pattern_steady_real's entry_lane)
 	generator := new_pattern_generator(all_patterns, 2.0, .Dream)
 
-	// overall game state — starts at the main menu
-	game_state := GameState.MainMenu
+	// run score, Dream Depth (section 12)
+	score := new_score()
 
-	// start main loop until close
+	// near-miss streak, drives the score multiplier (section 17)
+	lucidity := new_lucidity()
+
+	// --- Main loop ---
 	for !rl.WindowShouldClose() && !should_quit {
 
 		// ============================================================
 		// UPDATE — one switch, reads input and advances game logic.
 		// Runs once per frame, BEFORE anything is drawn.
+		// Add new per-frame gameplay logic inside the .Playing case.
 		// ============================================================
 		switch game_state {
 		case .MainMenu:
 			if update_menu(&main_menu) {
 				if main_menu.selected == 0 {
-					reset_run(&player, &world, &score, &obstacles, &generator)
+					reset_run(&player, &world, &score, &obstacles, &generator, &lucidity)
 					game_state = .Playing
 				} else {
 					should_quit = true
@@ -72,14 +87,15 @@ main :: proc() {
 				game_state = .Paused
 			}
 
-			// update the world (scroll)
+			// update the world (scroll) — must run before update_player,
+			// since update_player now reads world.elapsed_time (section 17)
 			update_world(&world, rl.GetFrameTime())
 
-			// update the player (input, state)
-			update_player(&player)
+			// update the player (input, flip/transition state)
+			update_player(&player, world)
 
-			// update the score
-			update_score(&score, player, rl.GetFrameTime())
+			// update the score, scaled by the current Lucidity multiplier
+			update_score(&score, player, rl.GetFrameTime(), get_score_multiplier(lucidity))
 
 			// keep generating obstacles ahead of the player
 			generate_ahead(&generator, &obstacles, world.elapsed_time)
@@ -88,12 +104,26 @@ main :: proc() {
 			for obstacle in obstacles {
 				if check_player_obstacle_collision(player, obstacle, world) {
 					game_state = .GameOver
+					reset_lucidity(&lucidity)
 
 					// the run just ended: this is the one moment we check
 					// and persist a new personal best
 					if score.value > high_score {
 						high_score = score.value
 						save_high_score(high_score)
+					}
+				}
+			}
+
+			// mark obstacles that just passed the player as resolved,
+			// registering a near-miss into the Lucidity streak when
+			// deserved (only if the run didn't just end above)
+			if game_state == .Playing {
+				for i in 0 ..< len(obstacles) {
+					obstacle := &obstacles[i]
+					if !obstacle.lucidity_resolved && world.elapsed_time >= obstacle.arrival_time {
+						obstacle.lucidity_resolved = true
+						register_obstacle_passed(&lucidity, player, obstacle^)
 					}
 				}
 			}
@@ -111,7 +141,7 @@ main :: proc() {
 
 		case .GameOver:
 			if rl.IsKeyPressed(.ENTER) {
-				reset_run(&player, &world, &score, &obstacles, &generator)
+				reset_run(&player, &world, &score, &obstacles, &generator, &lucidity)
 				game_state = .Playing
 			}
 		}
@@ -120,6 +150,7 @@ main :: proc() {
 		// DRAW — separate switch, only draws what's already been decided
 		// above. Never changes game state or game logic, only pixels.
 		// Runs once per frame, AFTER update, between BeginDrawing/EndDrawing.
+		// Add new visual elements inside the relevant case(s) below.
 		// ============================================================
 		rl.BeginDrawing()
 		defer rl.EndDrawing()
@@ -135,7 +166,7 @@ main :: proc() {
 				draw_obstacle(obstacle, world)
 			}
 			draw_player(player)
-			draw_hud(score)
+			draw_hud(score, lucidity)
 
 		case .Paused:
 			// draw the frozen gameplay frame underneath, then the overlay on top
@@ -144,7 +175,7 @@ main :: proc() {
 				draw_obstacle(obstacle, world)
 			}
 			draw_player(player)
-			draw_hud(score)
+			draw_hud(score, lucidity)
 			draw_pause_overlay(pause_menu)
 
 		case .GameOver:

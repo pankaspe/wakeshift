@@ -40,19 +40,18 @@ check_player_obstacle_collision :: proc(player: Player, obstacle: Obstacle, worl
 	return rl.CheckCollisionRecs(player_rect, obstacle_rect)
 }
 
-// Resets player, world, score, obstacles and generator to a fresh run.
-// Shared by every path that starts a new run: Main Menu confirm,
-// Game Over retry, and returning to the Main Menu from Pause.
 reset_run :: proc(
 	player: ^Player,
 	world: ^World,
 	score: ^Score,
 	obstacles: ^[dynamic]Obstacle,
 	generator: ^PatternGenerator,
+	lucidity: ^Lucidity,
 ) {
 	player^ = new_player()
 	world^ = new_world()
 	score^ = new_score()
+	lucidity^ = new_lucidity()
 
 	delete(obstacles^)
 	obstacles^ = nil

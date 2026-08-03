@@ -16,12 +16,22 @@ draw_main_menu :: proc(menu: Menu, high_score: f32) {
 	draw_centered_text(best_text, 470, 20, rl.DARKGRAY)
 }
 
-// In-game score readout. Real HUD polish (Design Doc section 9 styling)
-// comes later; for now this replaces the plain text that used to live
-// directly in main.odin.
-draw_hud :: proc(score: Score) {
+// In-game score readout, plus the Lucidity streak when it's active.
+// Real HUD polish (Design Doc section 9 styling) comes later; for now
+// this replaces the plain text that used to live directly in main.odin.
+draw_hud :: proc(score: Score, lucidity: Lucidity) {
 	score_text := fmt.ctprintf("Depth: %.0f", score.value)
 	rl.DrawText(score_text, 20, 20, 24, rl.BLACK)
+
+	if lucidity.streak > 0 {
+		multiplier := get_score_multiplier(lucidity)
+		streak_text := fmt.ctprintf(
+			"Lucidity x%d  (+%.0f%%)",
+			lucidity.streak,
+			(multiplier - 1) * 100,
+		)
+		rl.DrawText(streak_text, 20, 50, 20, rl.Color{180, 60, 200, 255})
+	}
 }
 
 // Drawn on top of the frozen gameplay frame when paused.

@@ -39,10 +39,11 @@ expected_lane_for_type :: proc(obstacle_type: ObstacleType) -> Lane {
 }
 
 Obstacle :: struct {
-	arrival_time:  f32, // world.elapsed_time value at which this obstacle reaches PLAYER_X
-	lane:          Lane,
-	size:          rl.Vector2,
-	obstacle_type: ObstacleType,
+	arrival_time:      f32, // world.elapsed_time value at which this obstacle reaches PLAYER_X
+	lane:              Lane,
+	size:              rl.Vector2,
+	obstacle_type:     ObstacleType,
+	lucidity_resolved: bool, // true once this obstacle has been checked for a near-miss (section 17)
 }
 
 

@@ -46,6 +46,7 @@ Player :: struct {
 	is_invulnerable:       bool,
 	invulnerability_timer: f32, // seconds elapsed since invulnerability started
 	settle_timer:          f32, // seconds since landing, drivers the post flip squash bounce
+	lane_since:            f32,
 }
 
 // Creates a player anchored to the floor, in the Real lane.
@@ -53,13 +54,14 @@ new_player :: proc() -> Player {
 	player_size := rl.Vector2{PLAYER_SIZE, PLAYER_SIZE}
 
 	return Player {
-		position = rl.Vector2 {
+		position   = rl.Vector2 {
 			PLAYER_X,
 			SCREEN_HEIGHT - player_size.y, // bottom edge touches the floor
 		},
-		size     = player_size,
-		lane     = .Real,
-		state    = .Real,
+		size       = player_size,
+		lane       = .Real,
+		state      = .Real,
+		lane_since = 0,
 	}
 }
 
@@ -70,7 +72,7 @@ ease_out_quad :: proc(t: f32) -> f32 {
 }
 
 // Reads input and updates the player state machine.
-update_player :: proc(player: ^Player) {
+update_player :: proc(player: ^Player, world: World) {
 	// Start a flip only if we're not already mid-transition.
 	if rl.IsKeyPressed(.SPACE) && player.state != .Transitioning {
 		player.target_lane = .Dream if player.lane == .Real else .Real
@@ -102,8 +104,10 @@ update_player :: proc(player: ^Player) {
 			player.state = .Real if player.lane == .Real else .Dream
 			player.position.y = target_y
 
-			// landing moment: start the squash bounce from zero
+			// landing moment: start the squash bounce from zero, and mark
+			// when this lane was settled into (drives near-miss detection)
 			player.settle_timer = 0
+			player.lane_since = world.elapsed_time
 		}
 	}
 

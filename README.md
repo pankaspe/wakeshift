@@ -5,7 +5,7 @@ A minimalist endless runner about flipping between two worlds — Reality and th
 Full design reference: `WakeShift_Design_Doc.md`
 Full development plan: `WakeShift_Roadmap_Sviluppo.md`
 
-**Current status**: Alpha in progress — Section 15 complete (visual identity pass: player, obstacles, terrain). Section 17 (Lucidity streak) is next in the core loop — Section 16 no longer exists as a standalone step, folded into the new Section 20 (deferred assets/VFX/audio pass).
+**Current status**: Alpha in progress — Section 17 complete. Core loop, procedural generation, visual identity pass, and the Lucidity risk/reward layer are all in place. Section 18 (difficulty tiers) is next.
 
 ## Stack
 
@@ -39,7 +39,8 @@ obstacle.odin  — obstacle as a time-based event, position derivation, drawing
 obstacle_render.odin — obstacle silhouette rendering (Block/Chasm/PulsingShape/DreamHole)
 pattern.odin   — hand-authored obstacle patterns, procedural generator, pool validation
 game.odin      — game state (MainMenu/Playing/Paused/GameOver), collision checks, run reset
-score.odin     — Dream Depth score, lane-dependent growth rate
+score.odin     — Dream Depth score, lane-dependent growth rate, Lucidity multiplier
+lucidity.odin  — near-miss streak tracking, score multiplier
 menu.odin      — reusable navigable menu widget (used by Main Menu and Pause)
 ui.odin        — per-screen drawing (menu, HUD, pause overlay, game over)
 persistence.odin — local high score save/load (plain text file)
@@ -94,7 +95,12 @@ A running log of decisions and gotchas worth remembering, beyond what's in the D
     - Real and Dream terrain intentionally share the same look for now (color, profile); stylistic differentiation deferred to Section 20.
   - All vector-drawn (no external sprites/images) for now. Folder-based modularity if any single file grows unwieldy (e.g. a `visuals/` or `fx/` folder), rather than forcing everything into the existing per-system files.
   - **Section 15 closes after 15.4.** Particles and Light & Shadow (originally planned as 15.5/15.6) are deferred to the new Section 20 below, together with audio (originally Section 16) — all grouped into one dedicated assets/VFX/SFX pass, done together once real vector art replaces the current placeholder shapes.
-- [ ] **Section 17** — Lucidity streak system
+- [x] **Section 17** — Lucidity streak system
+  - Deliberately *not* a "survival distance" metric (Score, Section 12, already covers that) — Lucidity rewards genuine risk-taking: `lucidity.odin` tracks a streak that increases only when the player settles into the correct lane *late* (within `NEAR_MISS_TIME_THRESHOLD` seconds of an obstacle's arrival), not when playing it safe with margin. Resets to 0 on collision.
+  - Each obstacle is checked exactly once, the frame it passes the player (`Obstacle.lucidity_resolved` flag prevents double-counting). Transitioning obstacles (survived via invulnerability, not timing) don't count.
+  - Streak drives a direct score multiplier (`get_score_multiplier`, up to +100%, applied in `update_score`) — so risk-taking has a concrete numeric payoff, not just cosmetic feedback. Shown in the HUD only once `streak > 0`.
+  - `update_player` now takes `world` (needs `world.elapsed_time` to timestamp lane changes) — must be called after `update_world` each frame.
+  - **Parked ideas for later sections**: Section 18 could gate harder pattern tiers behind streak thresholds, not just time/score; Section 20 will connect `lucidity.streak` to particle density and audio pitch as originally envisioned in the Design Doc — no logic changes needed there, just new effects reading the existing value.
 - [ ] **Section 18** — Difficulty tiers
 - [ ] **Section 19** — Balancing, polish → Alpha
 - [ ] **Section 20** — Assets, VFX & Audio (dedicated restructuring pass)
