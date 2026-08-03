@@ -130,7 +130,7 @@ main :: proc() {
 			draw_main_menu(main_menu, high_score)
 
 		case .Playing:
-			draw_world(world)
+			draw_terrain(world)
 			for obstacle in obstacles {
 				draw_obstacle(obstacle, world)
 			}
@@ -139,7 +139,7 @@ main :: proc() {
 
 		case .Paused:
 			// draw the frozen gameplay frame underneath, then the overlay on top
-			draw_world(world)
+			draw_terrain(world)
 			for obstacle in obstacles {
 				draw_obstacle(obstacle, world)
 			}
@@ -148,7 +148,7 @@ main :: proc() {
 			draw_pause_overlay(pause_menu)
 
 		case .GameOver:
-			draw_world(world)
+			draw_terrain(world)
 			for obstacle in obstacles {
 				draw_obstacle(obstacle, world)
 			}

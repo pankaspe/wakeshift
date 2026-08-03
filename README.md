@@ -5,7 +5,7 @@ A minimalist endless runner about flipping between two worlds — Reality and th
 Full design reference: `WakeShift_Design_Doc.md`
 Full development plan: `WakeShift_Roadmap_Sviluppo.md`
 
-**Current status**: Alpha in progress — Section 14 of 19 complete. Core loop, procedural obstacle generation, full menu/pause navigation, and local high score persistence are all in place.
+**Current status**: Alpha in progress — Section 15 complete (visual identity pass: player, obstacles, terrain). Section 17 (Lucidity streak) is next in the core loop — Section 16 no longer exists as a standalone step, folded into the new Section 20 (deferred assets/VFX/audio pass).
 
 ## Stack
 
@@ -33,7 +33,8 @@ main.odin      — entry point, game loop (update + draw, run every frame)
 lane.odin      — shared two-lane concepts (Lane enum, screen size, lane-to-position math)
 player.odin    — player state, flip mechanic, transition animation
 player_render.odin — player silhouette rendering (Real/Dream color schemes, eyes)
-world.odin     — scroll state (elapsed time, scroll speed), floor/ceiling visuals
+world.odin     — scroll state (elapsed time, scroll speed), pure logic (no rendering)
+terrain.odin   — floor/ceiling rendering as a scrolling irregular profile
 obstacle.odin  — obstacle as a time-based event, position derivation, drawing
 obstacle_render.odin — obstacle silhouette rendering (Block/Chasm/PulsingShape/DreamHole)
 pattern.odin   — hand-authored obstacle patterns, procedural generator, pool validation
@@ -88,11 +89,16 @@ A running log of decisions and gotchas worth remembering, beyond what's in the D
     - Shared `OBSTACLE_RIM_THICKNESS` (= `PLAYER_RIM_THICKNESS`) and `draw_polygon_outline` helper keep border weight consistent across every silhouette in the game (player + all 4 obstacle types).
     - **Lesson learned**: `rl.DrawTriangleFan`/`rl.DrawTriangle` only fill when vertices are wound counter-clockwise — clockwise winding silently draws nothing (only outlines drawn separately remain visible). Same category of gotcha as the player's horns in 15.1; worth checking first whenever a custom polygon renders as an empty outline.
     - Future idea (parked for the final polish pass, once terrain/light/particles exist too): consider replacing these hand-coded vector shapes with proper vector illustrations (self-made or sourced) once the overall visual language is fully settled.
-  - [ ] **15.4** — Terrain: floor/ceiling get an irregular profile instead of flat tick marks
-  - [ ] **15.5** — Particles: impact, flip, ambient
-  - [ ] **15.6** — Light & shadow: rim light, Dream-lane glow, contact shadows
+  - [x] **15.4** — Terrain: floor/ceiling get an irregular profile instead of flat tick marks
+    - `terrain.odin`: floor/ceiling drawn as filled, scrolling strips (`DrawTriangleStrip`) following a hand-authored profile (`TERRAIN_PROFILE`), instead of flat tick marks — Chasm/DreamHole obstacles now interrupt real ground instead of floating over placeholder marks. `world.odin` stays pure logic (no raylib/rendering dependency), same split as player/obstacles.
+    - Real and Dream terrain intentionally share the same look for now (color, profile); stylistic differentiation deferred to Section 20.
   - All vector-drawn (no external sprites/images) for now. Folder-based modularity if any single file grows unwieldy (e.g. a `visuals/` or `fx/` folder), rather than forcing everything into the existing per-system files.
-- [ ] **Section 16** — Audio (SFX + music crossfade)
+  - **Section 15 closes after 15.4.** Particles and Light & Shadow (originally planned as 15.5/15.6) are deferred to the new Section 20 below, together with audio (originally Section 16) — all grouped into one dedicated assets/VFX/SFX pass, done together once real vector art replaces the current placeholder shapes.
 - [ ] **Section 17** — Lucidity streak system
 - [ ] **Section 18** — Difficulty tiers
 - [ ] **Section 19** — Balancing, polish → Alpha
+- [ ] **Section 20** — Assets, VFX & Audio (dedicated restructuring pass)
+  - Real vector illustrations (self-made or sourced, likely SVG) for player, all 4 obstacle types, and terrain — replacing the hand-coded placeholder shapes from Section 15.
+  - Particles (impact, flip, ambient) and Light & Shadow (rim light refinement, Dream-lane glow, contact shadows) — deferred from 15.5/15.6.
+  - Audio: SFX (flip, collision) + music crossfade between Real/Dream — deferred from the original Section 16.
+  - Treated as one cohesive pass rather than scattered across earlier sections, since visual and audio identity work best designed together once the full game loop (through Section 19) is already balanced and stable.
