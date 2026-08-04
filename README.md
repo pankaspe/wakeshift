@@ -5,7 +5,7 @@ A minimalist endless runner about flipping between two worlds — Reality and th
 Full design reference: `WakeShift_Design_Doc.md`
 Full development plan: `WakeShift_Roadmap_Sviluppo.md`
 
-**Current status**: Alpha in progress — Section 17 complete. Core loop, procedural generation, visual identity pass, and the Lucidity risk/reward layer are all in place. Section 18 (difficulty tiers) is next.
+**Current status**: Alpha in progress — Section 18 complete. Core loop, procedural generation, visual identity pass, Lucidity risk/reward, and difficulty tiers are all in place. Section 19 (balancing/polish → Alpha) is next — after that, only Section 20 (deferred assets/VFX/audio pass) remains.
 
 ## Stack
 
@@ -41,6 +41,7 @@ pattern.odin   — hand-authored obstacle patterns, procedural generator, pool v
 game.odin      — game state (MainMenu/Playing/Paused/GameOver), collision checks, run reset
 score.odin     — Dream Depth score, lane-dependent growth rate, Lucidity multiplier
 lucidity.odin  — near-miss streak tracking, score multiplier
+difficulty.odin — discrete difficulty tiers, cumulative pattern pools, scroll speed easing
 menu.odin      — reusable navigable menu widget (used by Main Menu and Pause)
 ui.odin        — per-screen drawing (menu, HUD, pause overlay, game over)
 persistence.odin — local high score save/load (plain text file)
@@ -101,7 +102,10 @@ A running log of decisions and gotchas worth remembering, beyond what's in the D
   - Streak drives a direct score multiplier (`get_score_multiplier`, up to +100%, applied in `update_score`) — so risk-taking has a concrete numeric payoff, not just cosmetic feedback. Shown in the HUD only once `streak > 0`.
   - `update_player` now takes `world` (needs `world.elapsed_time` to timestamp lane changes) — must be called after `update_world` each frame.
   - **Parked ideas for later sections**: Section 18 could gate harder pattern tiers behind streak thresholds, not just time/score; Section 20 will connect `lucidity.streak` to particle density and audio pitch as originally envisioned in the Design Doc — no logic changes needed there, just new effects reading the existing value.
-- [ ] **Section 18** — Difficulty tiers
+- [x] **Section 18** — Difficulty tiers
+  - `difficulty.odin`: discrete `Tier` structs (name, start_time, target scroll_speed, added_patterns) — not just a growing number, but a container future bonuses/maluses/obstacles can hang off per tier without restructuring. 3 tiers so far: Awake (0s) → Drifting (25s, unlocks `pattern_tight_double_switch`) → Deep Dream (55s, unlocks `pattern_triple_switch`).
+  - Cumulative per-tier pattern pools (`build_tier_pools`), each validated independently at startup (`validate_tier_pools`) — a pattern added at a high tier can still break the Section 10 lane graph, so every tier's pool gets checked, not just the base one.
+  - `world.scroll_speed` eases toward the current tier's target speed over `SCROLL_SPEED_EASE_TIME` (exponential smoothing, not an instant snap) — avoids a visible jump in already-generated obstacles' on-screen position (Section 8's time-based positioning would otherwise make speed changes look like a teleport). Tier name changes instantly in the HUD, by contrast — the perceptible "level up" moment is meant to be there, just not in the physics.
 - [ ] **Section 19** — Balancing, polish → Alpha
 - [ ] **Section 20** — Assets, VFX & Audio (dedicated restructuring pass)
   - Real vector illustrations (self-made or sourced, likely SVG) for player, all 4 obstacle types, and terrain — replacing the hand-coded placeholder shapes from Section 15.

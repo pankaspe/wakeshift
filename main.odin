@@ -23,8 +23,11 @@ main :: proc() {
 	// disable raylib's default ESC-closes-window behavior: we use ESC to pause instead
 	rl.SetExitKey(.KEY_NULL)
 
-	// catch any pattern-authoring mistakes immediately at startup (section 11)
-	validate_pattern_pool(all_patterns)
+	// build the cumulative per-tier pattern pools, then catch any
+	// pattern-authoring mistakes immediately at startup — for every tier,
+	// not just the base one
+	build_tier_pools()
+	validate_tier_pools()
 
 	// --- Persistent state (survives across runs, not reset by reset_run) ---
 
@@ -87,9 +90,17 @@ main :: proc() {
 				game_state = .Paused
 			}
 
-			// update the world (scroll) — must run before update_player,
-			// since update_player now reads world.elapsed_time (section 17)
-			update_world(&world, rl.GetFrameTime())
+			// figure out the current difficulty tier (based on last frame's
+			// elapsed_time — one frame of lag here is irrelevant in practice)
+			tier_index := get_current_tier_index(world.elapsed_time)
+
+			// keep the generator drawing from the pool unlocked so far
+			generator.pool = get_pool_for_tier(tier_index)
+
+			// update the world (scroll, easing toward this tier's target
+			// speed) — must run before update_player, since update_player
+			// now reads world.elapsed_time (section 17)
+			update_world(&world, rl.GetFrameTime(), tiers[tier_index].scroll_speed)
 
 			// update the player (input, flip/transition state)
 			update_player(&player, world)
@@ -166,8 +177,7 @@ main :: proc() {
 				draw_obstacle(obstacle, world)
 			}
 			draw_player(player)
-			draw_hud(score, lucidity)
-
+			draw_hud(score, lucidity, tiers[get_current_tier_index(world.elapsed_time)].name)
 		case .Paused:
 			// draw the frozen gameplay frame underneath, then the overlay on top
 			draw_terrain(world)
@@ -175,8 +185,7 @@ main :: proc() {
 				draw_obstacle(obstacle, world)
 			}
 			draw_player(player)
-			draw_hud(score, lucidity)
-			draw_pause_overlay(pause_menu)
+			draw_hud(score, lucidity, tiers[get_current_tier_index(world.elapsed_time)].name)
 
 		case .GameOver:
 			draw_terrain(world)

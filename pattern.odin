@@ -81,6 +81,32 @@ pattern_double_switch_reverse := Pattern {
 	exit_lane  = .Dream,
 }
 
+// --- Harder patterns, unlocked at higher difficulty tiers (section 18) ---
+
+// Tighter timing than pattern_double_switch_reverse: less reaction time
+// between the two obstacles.
+pattern_tight_double_switch := Pattern {
+	events     = []PatternEvent {
+		{time_offset = 0.5, lane = .Dream, obstacle_type = .PulsingShape},
+		{time_offset = 1.1, lane = .Real, obstacle_type = .Chasm},
+	},
+	duration   = 1.6,
+	entry_lane = .Real,
+	exit_lane  = .Real,
+}
+
+// Three obstacles in quick succession, alternating lanes each time.
+pattern_triple_switch := Pattern {
+	events     = []PatternEvent {
+		{time_offset = 0.6, lane = .Real, obstacle_type = .Block},
+		{time_offset = 1.3, lane = .Dream, obstacle_type = .PulsingShape},
+		{time_offset = 2.0, lane = .Real, obstacle_type = .Chasm},
+	},
+	duration   = 2.4,
+	entry_lane = .Dream,
+	exit_lane  = .Dream,
+}
+
 // Pool of hand-authored patterns (Design Doc, section 7).
 // Every entry_lane must have at least one pattern leading back to the
 // other lane, or the generator can get stuck (see pattern_double_switch_reverse).
