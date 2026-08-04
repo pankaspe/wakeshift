@@ -9,7 +9,9 @@
 *      order each subsystem was introduced across the roadmap sections)
 *   3. Main loop, split into two switches over game_state:
 *      - UPDATE: reads input, advances logic, may change game_state
-*      - DRAW:   renders whatever state UPDATE just settled on
+*      - DRAW:   renders whatever state UPDATE just settled on, onto the
+*        virtual canvas (display.odin), which is then scaled and
+*        presented to the real window/fullscreen once per frame
 */
 package main
 
@@ -17,11 +19,19 @@ import rl "vendor:raylib/v55"
 
 main :: proc() {
 	// --- Window + one-time setup ---
+	// resizable so the window can be dragged to any size; combined with
+	// Display's letterboxed scaling, the game always fills it correctly
+	rl.SetConfigFlags({.WINDOW_RESIZABLE})
 	rl.InitWindow(1280, 720, "Wake Shift")
 	defer rl.CloseWindow()
 	rl.SetTargetFPS(60)
 	// disable raylib's default ESC-closes-window behavior: we use ESC to pause instead
 	rl.SetExitKey(.KEY_NULL)
+
+	// virtual canvas the whole game draws to, scaled to fill the real
+	// window/fullscreen at the end of each frame (see display.odin)
+	display := new_display()
+	defer destroy_display(display)
 
 	// build the cumulative per-tier pattern pools, then catch any
 	// pattern-authoring mistakes immediately at startup — for every tier,
@@ -66,6 +76,10 @@ main :: proc() {
 
 	// --- Main loop ---
 	for !rl.WindowShouldClose() && !should_quit {
+
+		if rl.IsKeyPressed(.F11) {
+			rl.ToggleFullscreen()
+		}
 
 		// ============================================================
 		// UPDATE — one switch, reads input and advances game logic.
@@ -160,11 +174,12 @@ main :: proc() {
 		// ============================================================
 		// DRAW — separate switch, only draws what's already been decided
 		// above. Never changes game state or game logic, only pixels.
-		// Runs once per frame, AFTER update, between BeginDrawing/EndDrawing.
+		// Runs once per frame, AFTER update, onto the fixed-resolution
+		// virtual canvas (begin/end_game_canvas), which present_display
+		// then scales and letterboxes into the real window/fullscreen.
 		// Add new visual elements inside the relevant case(s) below.
 		// ============================================================
-		rl.BeginDrawing()
-		defer rl.EndDrawing()
+		begin_game_canvas(display)
 		rl.ClearBackground(rl.BEIGE)
 
 		switch game_state {
@@ -178,6 +193,7 @@ main :: proc() {
 			}
 			draw_player(player)
 			draw_hud(score, lucidity, tiers[get_current_tier_index(world.elapsed_time)].name)
+
 		case .Paused:
 			// draw the frozen gameplay frame underneath, then the overlay on top
 			draw_terrain(world)
@@ -186,6 +202,7 @@ main :: proc() {
 			}
 			draw_player(player)
 			draw_hud(score, lucidity, tiers[get_current_tier_index(world.elapsed_time)].name)
+			draw_pause_overlay(pause_menu)
 
 		case .GameOver:
 			draw_terrain(world)
@@ -195,5 +212,8 @@ main :: proc() {
 			draw_player(player)
 			draw_game_over(score, high_score)
 		}
+
+		end_game_canvas()
+		present_display(display)
 	}
 }
