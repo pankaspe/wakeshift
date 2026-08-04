@@ -2,7 +2,8 @@
 
 A minimalist 2D endless runner built with **Odin** and **raylib**, featuring a dual-world flip mechanic between Reality and the Dream.
 
-![Project Status](https://img.shields.io/badge/Status-Alpha%20in%20Progress-orange)
+![Version](https://img.shields.io/badge/Version-v0.1.0--alpha-blue)
+![Build](https://img.shields.io/badge/Status-Alpha%20Milestone-green)
 ![Language](https://img.shields.io/badge/Language-Odin-blue)
 ![Library](https://img.shields.io/badge/Library-Raylib%20v5.5-green)
 
@@ -16,7 +17,7 @@ A minimalist 2D endless runner built with **Odin** and **raylib**, featuring a d
 
 ### Key Features
 - **Dual-Lane Flipping**: Switch gravity and lane position instantly (`SPACE`).
-- **Lucidity Multiplier**: Risk/reward mechanics that reward late lane switches (near-misses) up to +100% score bonus.
+- **Lucidity Multiplier**: Risk/reward mechanics rewarding late lane switches (near-misses) with up to +100% score bonus.
 - **Time-Based Procedural Generation**: Obstacles are calculated as time events, guaranteeing smooth speed scaling without positional desync.
 - **Adaptive Difficulty Tiers**: Easing scroll speed updates and expanding pattern pools as runs progress.
 - **Local Persistence**: Save/load system for tracking high scores across runs.
@@ -41,62 +42,8 @@ Ensure you have the [Odin compiler](https://odin-lang.org/docs/install/) install
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/wake-shift.git
+git clone [https://github.com/your-username/wake-shift.git](https://github.com/your-username/wake-shift.git)
 cd wake-shift
 
 # Compile and run immediately
 odin run .
-```
-
----
-
-## 🕹️ Controls
-
-| Key | Action |
-| :--- | :--- |
-| `UP` / `DOWN` | Navigate menu options |
-| `ENTER` | Confirm menu selection / Retry after Game Over |
-| `SPACE` | Flip between Real (floor) and Dream (ceiling) lanes |
-| `ESC` | Pause / Resume run |
-
----
-
-## 📁 Project Structure
-
-```text
-├── main.odin             # Entry point, core game loop (Update & Draw execution)
-├── game.odin             # Game state machine (MainMenu, Playing, Paused, GameOver), collisions
-├── player.odin           # Player state, flip logic, invulnerability timers
-├── player_render.odin    # Player rendering, silhouette shaders/rim light, squash & stretch
-├── world.odin            # Scroll state, world elapsed time, spatial speed logic
-├── terrain.odin          # Procedural floor/ceiling profile rendering
-├── obstacle.odin         # Time-based obstacle data structures & lifecycle
-├── obstacle_render.odin  # Custom silhouette rendering for Block, Chasm, PulsingShape, DreamHole
-├── pattern.odin          # Pattern pools & procedural lane-graph generator
-├── lucidity.odin         # Near-miss detection & score multiplier calculations
-├── difficulty.odin       # Difficulty tiers, pattern pool expansion, speed easing
-├── score.odin            # Lane-dependent scoring calculations
-├── menu.odin             # Reusable UI menu widget
-├── ui.odin               # HUD, pause overlays, end-run screens
-└── persistence.odin      # Text-based local high score save/load logic
-```
-
----
-
-## 🗺️ Roadmap & Current Status
-
-Current state: **Alpha in Progress** (Section 18 complete).
-
-- [x] **Core Game Loop & Engine**: 60 FPS update/draw decoupling, collision system.
-- [x] **Procedural Generation**: Graph-validated pattern pools, time-based event scrolling.
-- [x] **Visual Identity Baseline**: Custom vector silhouettes, squash & stretch animations, irregular terrain profiles.
-- [x] **Scoring & Risk Engine**: Dream Depth scoring, Lucidity streak multi-system.
-- [x] **Progression System**: Difficulty tiers (Awake → Drifting → Deep Dream) with smooth scroll-speed easing.
-- [ ] **Alpha Polish (Section 19)**: Balancing obstacle frequency, score scaling, and hitboxes.
-- [ ] **Assets & VFX Pass (Section 20)**: Real vector illustrations, particle systems (impact/flip), lighting & audio crossfading.
-
----
-
-## 📜 License
-
-Distributed under the MIT License. See `LICENSE` for details.
