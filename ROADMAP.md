@@ -50,7 +50,7 @@ Verificato sul codice, 2 settembre 2026 — aggiornato a chiusura Fase 1.
 - Pattern concatenati con `entry_lane`/`exit_lane`: il generatore non può produrre sequenze irrisolvibili
 - Lucidity: streak di near-miss → moltiplicatore fino a +100%
 - 3 tier di difficoltà con pool cumulative
-- Canvas virtuale 1280×720 letterboxato → fullscreen pulito su qualsiasi monitor
+- Canvas virtuale 1280×720 letterboxato → il gioco è già indipendente dalla risoluzione, nessun codice di gameplay sa che monitor c'è
 - Menu, pausa, game over, salvataggio record
 - **[Fase 1]** Codice riorganizzato nei package (`core/platform/game/render/ui`; `fx` e `audio` non ancora creati) con grafo di dipendenze aciclico; `main.odin` ricablato, `draw_gameplay` estratto
 - **[Fase 2]** Salvataggio cifrato (CBOR + XChaCha20-Poly1305) nella directory dati utente, che rifiuta file corrotti o manomessi senza mai far crashare il gioco
@@ -65,6 +65,7 @@ Verificato sul codice, 2 settembre 2026 — aggiornato a chiusura Fase 1.
 - Sfondo `rl.ClearBackground(rl.BEIGE)`, contorni neri da 1.8px
 - Nessuna particella, nessun bloom, nessun parallax, nessun audio
 - Nessun replay o ghost visibile in gioco: il `RunManifest` viene registrato e salvato, ma non ancora rigiocato dall'interfaccia
+- **Presentazione da prototipo**: la finestra nasce a 1280×720 fissi, `F11` fa da interruttore fullscreen e basta. Nessuna schermata opzioni, nessuna impostazione ricordata fra un avvio e l'altro, e il canvas 720p viene ingrandito in raster su schermi più grandi (Fase 2.5)
 
 ---
 
@@ -207,6 +208,7 @@ main      ← tutti
 | `src/display/display.odin` | `src/platform/display.odin` | `platform` |
 | `src/persistence.odin` | `src/platform/save.odin` | `platform` |
 | — nuovo — | `src/platform/input.odin`, `src/platform/paths.odin` | `platform` |
+| — nuovo — | `src/platform/settings.odin` (Fase 2.5) | `platform` |
 | `src/world.odin` | `src/game/world.odin` | `game` |
 | `src/player.odin` | `src/game/player.odin` | `game` |
 | `src/obstacle.odin` | `src/game/obstacle.odin` | `game` |
@@ -290,6 +292,44 @@ Note utili da rileggere, non riassunti dei task:
 #### Cosa questo sblocca
 
 Il determinismo è verificato, non solo progettato: stessa sequenza di step → stato bit-identico su profili di frame da 60 Hz, 240 Hz e irregolari; rigiocare un manifesto salvato riproduce il punteggio esatto; spostare un solo flip di un tick lo cambia. Da qui derivano, senza altro lavoro di fondo: validazione lato server della leaderboard, replay e ghost, e bilanciamento riproducibile (Fase 10).
+
+---
+
+### Fase 2.5 — Presentazione e finestra
+
+**Obiettivo**: il gioco si comporta come un gioco vero — parte a schermo pieno alla risoluzione del monitor, ha una schermata opzioni, e ricorda come lo hai lasciato. Nessun cambiamento al gameplay.
+
+**Perché "2.5" e non una rinumerazione**: ci sono 11 riferimenti a fasi e task dentro i commenti del codice (`roadmap T5.1`, `phase 3`, `T12.4`) e decine nei documenti. Rinumerare le fasi da 3 a 13 li renderebbe tutti falsi *in silenzio*, senza un solo errore di compilazione. Inserire mezza fase costa zero.
+
+**Perché prima della Fase 3 e non alla 13, dove stava**
+
+1. **Le opzioni vanno salvate.** Toccare `SaveData` fa scattare il bump di `SAVE_FORMAT_VERSION`, e il decoder rifiuta di proposito le versioni che non conosce: **ogni salvataggio esistente diventa illeggibile**. Farlo adesso costa un highscore di prova. Farlo alla Fase 13 costa lo storico delle run.
+2. **È un prerequisito del bloom (Fase 4).** Lo shader di bright-pass e blur lavora sui texel del render target. Decidere la risoluzione del target *dopo* aver scritto lo shader significa rifare la matematica dei texel.
+3. **Dalla Fase 3 in poi ogni playtest è un giudizio visivo.** Palette, glow, parallax e particelle vanno giudicati a schermo pieno alla risoluzione vera, non in una finestra 1280×720.
+
+#### Le tre decisioni prese
+
+**Fullscreen borderless, mai fullscreen esclusivo.** Niente cambio del modo video del monitor: con il canvas virtuale non si guadagna né campo visivo né performance, e si paga in alt-tab lento, sfarfallio, desktop che resta a 720p se il gioco crasha, e comportamento inaffidabile su Wayland. `ToggleBorderlessWindowed()` esiste già nelle bindings v55.
+
+**Il canvas passa alla risoluzione nativa.** Oggi il canvas 1280×720 è un upscale *raster*: su un 1080p viene ingrandito ×1.5, su un 4K ×3, e l'immagine è morbida — proprio dove silhouette e rim light dovrebbero essere taglienti. Ma Wake Shift disegna primitive vettoriali, non pixel art: il render target viene allocato alla risoluzione reale dell'output e alle coordinate si applica una scala, così **il codice di gioco continua a ragionare in 1280×720** e non cambia una riga, mentre i pixel sono nativi. Il letterbox resta, per i monitor non 16:9. Da qui esce anche, gratis, la leva per una voce "Qualità" quando arriva il bloom.
+
+**La risoluzione in opzioni è la dimensione della finestra**, non il modo video: si applica in windowed, filtrata su quelle che entrano nel monitor corrente. In fullscreen la voce è disattivata, perché lì la risoluzione è quella del desktop.
+
+| Task | Descrizione | Modello |
+|---|---|---|
+| T2.5.1 | `platform/display.odin`: render target dimensionato sull'output reale, con le coordinate di gioco che restano 1280×720. Riallocazione al cambio di dimensione | **Opus** |
+| T2.5.2 | `DisplayMode` (Fullscreen borderless / Windowed) e cambio a caldo che non perturba la simulazione — il frame lungo è già tagliato da `MAX_FRAME_TIME`, il render target no | **Opus** |
+| T2.5.3 | Query monitor: lista di risoluzioni finestra valide sul monitor corrente, più una voce "adatta al monitor"; gestione multi-monitor | Sonnet |
+| T2.5.4 | `Settings` (modalità, dimensione finestra, vsync) persistite dentro `SaveData` → `SAVE_FORMAT_VERSION` a 3 | Sonnet |
+| T2.5.5 | Avvio: impostazioni lette **prima** di `InitWindow` (non serve una finestra per leggerle), così la finestra nasce già giusta invece di lampeggiare; primo lancio = fullscreen sul monitor primario | Sonnet |
+| T2.5.6 | `ui/menu.odin` esteso: voce con valore che cicla con ←/→. Due campi nuovi in `core.Input` (`menu_left`, `menu_right`), **meta-input**: fuori dalla simulazione e fuori dal `RunManifest`, come `pause` e `toggle_fullscreen` | **Opus** |
+| T2.5.7 | `GameState.Options`, raggiungibile dal menu principale e dalla pausa, ESC per tornare indietro | Sonnet |
+| T2.5.8 | VSync on/off e limite FPS (60 / monitor / illimitato). La simulazione resta a 60 Hz fissi: cambia solo la frequenza di disegno, e `interpolated_world` in `main.odin` c'è già. Attenzione a non lasciare `SetTargetFPS` e vsync attivi insieme | Sonnet |
+| T2.5.9 ⚑ | Playtest: fullscreen, windowed, cambio a caldo durante una run, riavvio con le impostazioni ricordate | — |
+
+**Test di verifica**: il gioco si apre a schermo pieno alla prima esecuzione senza lampeggiare; le impostazioni sopravvivono al riavvio; un cambio di modalità durante una run non fa saltare né la fisica né il punteggio; `odin check src` verde dopo ogni task.
+
+**Ricaduta sulla Fase 13**: la `T13.3` smette di essere "costruire la schermata opzioni" e diventa "ridisegnarla sulla palette definitiva". La `T13.4` resta, ma le si toglie la parte sulle opzioni: le rimane lo storico delle ultime run.
 
 ---
 
@@ -453,8 +493,8 @@ Qui il determinismo della Fase 2 ripaga: si rigioca la stessa run identica dopo 
 |---|---|---|
 | T13.1 | HUD definitivo coerente con la palette | Sonnet |
 | T13.2 | **Referto Onirico**: profondità, Lucidity massima, tempo per stato, strato raggiunto — screenshottabile | **Opus** |
-| T13.3 | Schermata opzioni | Sonnet |
-| T13.4 | Persistenza estesa: opzioni e storico delle ultime run | Sonnet |
+| T13.3 | Schermata opzioni **ridisegnata** sulla palette definitiva (costruita nella Fase 2.5) | Sonnet |
+| T13.4 | Persistenza estesa: storico delle ultime run (le opzioni sono già persistite dalla Fase 2.5) | Sonnet |
 | T13.5 | Passata finale di coerenza visiva | **Opus** |
 | T13.6 ⚑ | Playtest completo end-to-end | — |
 
@@ -466,6 +506,7 @@ Fasi 0-2 completate. Il conteggio qui sotto è **quel che resta**.
 
 | Fase | Sonnet | Opus |
 |---|---|---|
+| 2.5 — Presentazione e finestra | 5 | 3 |
 | 3 — Palette, corpo, primo strato | 3 | 5 |
 | 4 — Bloom | 1 | 2 |
 | 5 — Il Limine | 2 | 4 |
@@ -477,9 +518,9 @@ Fasi 0-2 completate. Il conteggio qui sotto è **quel che resta**.
 | 11 — Game feel | 1 | 2 |
 | 12 — Audio | 2 | 3 |
 | 13 — UI e rifinitura | 3 | 2 |
-| **Totale rimanente** | **25** | **32** |
+| **Totale rimanente** | **30** | **35** |
 
-Il rapporto si è spostato verso Opus rispetto al piano iniziale, ed è corretto che sia così: le fasi che restano decidono *come si gioca* (il gesto del Limine, le regole di collisione, gli archetipi anticipatori, il bilanciamento) invece di spostare file. Le fasi economiche da mandare in Sonnet restano la **9** (preset di particelle, molto ripetitivi) e la **13** (UI).
+Il rapporto si è spostato verso Opus rispetto al piano iniziale, ed è corretto che sia così: le fasi che restano decidono *come si gioca* (il gesto del Limine, le regole di collisione, gli archetipi anticipatori, il bilanciamento) invece di spostare file. Le fasi economiche da mandare in Sonnet restano la **9** (preset di particelle, molto ripetitivi), la **13** (UI) e buona parte della **2.5**, dove l'unico lavoro davvero aperto è la pipeline del render target e il widget di menu con valore.
 
 Dove conviene spendere Opus, in ordine: la **5** (il gesto nuovo — se sbagliato lì, tutto il resto poggia male), la **6** (regole di collisione: un errore non dà errore di compilazione, dà un gioco che *sembra* ingiusto) e la **3** (la convergenza delle palette, che è insieme identità visiva e curva di difficoltà).
 
@@ -498,6 +539,7 @@ Dove conviene spendere Opus, in ordine: la **5** (il gesto nuovo — se sbagliat
 - [ ] Bonus di luce raccolti per posizione, piazzati dove costa qualcosa prenderli
 - [ ] **Due strati e la transizione fra loro**, come evento che non ferma il gioco
 - [ ] Audio: due mix sincronizzati + traccia per strato + i SFX principali
+- [ ] Avvio a schermo pieno alla risoluzione del monitor, con modalità finestra e impostazioni ricordate fra un avvio e l'altro
 - [ ] Menu, pausa, opzioni, Referto Onirico
 - [ ] **60 FPS stabili** con tutti gli effetti attivi
 - [ ] Run media 45-90 secondi, curva di difficoltà leggibile

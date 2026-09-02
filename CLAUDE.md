@@ -59,8 +59,11 @@ order before touching anything:
 **Where the project stands:** phases 0-2 are complete. The code is split into packages with
 an acyclic dependency graph, saves are encrypted in the OS user data directory, and the
 simulation is deterministic and verified (seeded generation, input as data, fixed timestep,
-run manifests recorded). Phase 3 — palette, the character's body, and the first layer — is
-next and has not been started. The game still renders on `rl.ClearBackground(rl.BEIGE)`.
+run manifests recorded). Phase 2.5 — presentation and window: borderless fullscreen by
+default, a native-resolution render target, an options screen and persisted settings — is
+next and has not been started; phase 3 (palette, the character's body, the first layer)
+follows it. The game still renders on `rl.ClearBackground(rl.BEIGE)`, in a fixed 1280x720
+window.
 
 **How verification works here:** `odin check src` after every edit, `odin build src` and a
 short launch before reporting a task done. For anything with real logic, write a throwaway
