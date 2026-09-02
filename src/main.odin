@@ -22,6 +22,7 @@
 package main
 
 import "core"
+import "fx"
 import "game"
 import "platform"
 import "render"
@@ -94,6 +95,13 @@ main :: proc() {
 	// resolution and rebuilt whenever that changes (platform/display.odin).
 	disp := platform.new_display()
 	defer platform.destroy_display(disp)
+
+	// Bloom runs on the finished frame, between the canvas closing and
+	// the blit to the window (fx/bloom.odin). It allocates its own
+	// buffers on the first frame and re-allocates them whenever the
+	// frame's size changes, so nothing here has to tell it about resizes.
+	bloom := fx.new_bloom()
+	defer fx.destroy_bloom(bloom)
 
 	// build the cumulative per-tier pattern pools, then catch any
 	// pattern-authoring mistakes immediately at startup — for every tier,
@@ -536,6 +544,12 @@ main :: proc() {
 		}
 
 		platform.end_game_canvas()
+
+		// The light, added after everything that emits it has been drawn.
+		// It reads the same two variables the palette does, so the bloom
+		// and the colors describe one world rather than two.
+		fx.apply_bloom(&bloom, disp.render_target, fx.bloom_for_world(palettes.world_t, palettes.depth_t))
+
 		platform.present_display(disp)
 	}
 }

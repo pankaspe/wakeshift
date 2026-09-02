@@ -48,7 +48,7 @@ Quello che si scopre strada facendo non si butta, si **sposta dove verrà rilett
 
 ## Stato attuale
 
-Verificato sul codice, 2 settembre 2026 — aggiornato a chiusura Fase 5. La Fase 4 (bloom) era stata scavalcata per scelta ed è la prossima.
+Verificato sul codice, 2 settembre 2026 — aggiornato a chiusura Fase 4. Prossima: Fase 6, ostacoli veri.
 
 **Funziona**
 - Loop one-button: corsa automatica, `SPACE` inverte la gravità, due corsie
@@ -63,6 +63,7 @@ Verificato sul codice, 2 settembre 2026 — aggiornato a chiusura Fase 5. La Fas
 - **[Fase 2]** Simulazione deterministica: seed esplicito, input come dato, timestep fisso a 60 Hz. Ogni record salva il `RunManifest` della run che l'ha ottenuto — seed più i tick di ogni flip
 - **[Fase 2.5]** Presentazione: parte a schermo pieno senza lampeggiare e senza toccare il modo video del monitor, render target alla risoluzione nativa del monitor (il codice di gioco continua a ragionare in 1280×720), schermata opzioni raggiungibile da menu e pausa, impostazioni salvate dentro il salvataggio cifrato
 - **[Fase 3]** Identità visiva avviata: nessun colore scritto a mano fuori da `core/palette.odin`, i due mondi disegnati insieme con l'orizzonte in mezzo, la convergenza che li avvicina col passare della run, il personaggio con un corpo che corre e frusta nel flip, glow additivo da primitive, HUD e menu ricolorati sulla palette
+- **[Fase 4]** Bloom vero: bright-pass + blur gaussiano separabile su shader, intensità e soglia guidate da `world_t` e `depth_t` come la palette. 0.17 ms a frame nel caso peggiore
 - **[Fase 5]** **Il Limine è giocabile**: tap e hold sullo stesso tasto, il viaggio si ferma a metà e riparte nella direzione in cui stavi andando, Lucidity che si spende invece di accumularsi soltanto, ritmo di punteggio a 40/s al centro, barra della risorsa nell'HUD
 
 **Non funziona / manca**
@@ -70,7 +71,7 @@ Verificato sul codice, 2 settembre 2026 — aggiornato a chiusura Fase 5. La Fas
 - I 4 tipi di ostacolo sono **un tipo solo con 4 skin**: `Chasm` e `DreamHole` usano la stessa identica collisione di `Block`
 - Il "pieno vs vuoto" non esiste: la voragine è disegnata a `y = 720 - 54 = 666`, la linea del pavimento sta a ~690-706 → **sporge dal terreno di 25-40px, è un blocco in piedi, non un buco**
 - **Il centro è sicuro**: dalla Fase 5 la fascia centrale è il terzo stato, ma tutti gli ostacoli sono ancora attaccati alle pareti, quindi restarci non rischia niente se non il carburante. Squilibrio previsto, si chiude in T6.6
-- Nessuna particella, nessun parallax, nessun audio. Il bloom non è vero bloom: è glow additivo impilato da primitive, non un bright-pass sul frame (Fase 4)
+- Nessuna particella, nessun parallax, nessun audio
 - Nessun replay o ghost visibile in gioco: il `RunManifest` viene registrato e salvato, ma non ancora rigiocato dall'interfaccia
 - Menu e opzioni prendono ora i colori dalla palette, ma usano ancora il font bitmap di default di raylib: tutto quello che è disegnato da primitive è nitido alla risoluzione nativa, il testo no (T13.3)
 
@@ -138,7 +139,7 @@ Fatta nella Fase 1; la tabella di migrazione ha esaurito il suo scopo. La strutt
 
 **Perché non seguiamo la struttura del design doc originale.** La v1.0 prevedeva `player/`, `obstacles/`, `patterns/`, `world/` come package separati. In Odin non funziona: import ciclici vietati, e una cartella è esattamente un package. Quelle entità si guardano continuamente (`score` legge `Player`, `lucidity` legge `Player` *e* `Obstacle`, le collisioni leggono tutto). Il taglio giusto è **per livello di astrazione, non per entità**. Correzione già recepita nel design doc v1.1, sez. 14.
 
-**Ancora da creare**: `fx/` (Fase 9, particelle e bloom — parametrico, non sa niente del gioco) e `audio/` (Fase 12).
+**Creato nella Fase 4**: `fx/` — parametrico, non sa niente del gioco. Oggi contiene il bloom; le particelle ci si aggiungono nella Fase 9. **Ancora da creare**: `audio/` (Fase 12).
 
 ---
 
@@ -204,16 +205,20 @@ Il gioco ha smesso di essere disegnato su fondo beige. I due mondi sono ora semp
 
 ---
 
-### Fase 4 — Bloom reale
+### ✅ Fase 4 — Bloom reale
 
-| Task | Descrizione | Modello |
-|---|---|---|
-| T4.1 | Shader GLSL: bright-pass + blur gaussiano separabile | **Opus** |
-| T4.2 | Composite additivo, intensità modulata da `world_t`: duro nel Reale, invadente nell'Onirico, sovraesposto nel Limine | **Opus** |
-| T4.3 | Verifica 60 FPS stabili con bloom attivo | Sonnet |
-| T4.4 ⚑ | Playtest di leggibilità a 400 px/s | — |
+Nasce `fx/`, il package parametrico che non sa niente del gioco: prende una render texture e dei numeri. Dentro c'è il bloom vero — bright-pass con soglia morbida, blur gaussiano separabile a 9 tap su due iterazioni a offset crescenti, composite additivo di ritorno sul frame. Costo misurato nel caso peggiore (2560×1440, 51 ostacoli, 400 px/s, giocatore sospeso, due passate di composite): **0.17 ms di bloom su 1.42 ms di frame, il 9% del budget dei 60 FPS.**
 
-**Test di verifica**: se devo scegliere tra bello e leggibile, vince leggibile.
+**Le decisioni che restano vincolanti**
+
+- **Il post-processing gira sul frame finito**, tra la chiusura del canvas e il blit: `end_game_canvas` → `apply_bloom` → `present_display`. `apply_bloom` ricompone dentro la texture che ha letto, così `platform` non sa che il bloom esiste e `fx` non sa che esiste un gioco.
+- **Le render texture sono memorizzate dal basso verso l'alto, e il flip avviene una volta sola** in `present_display`. Tutte le passate intermedie disegnano con source rect positivo, che porta avanti la convenzione invariata. Un secondo flip in mezzo specchia la luce lontano da ciò che l'ha emessa, in silenzio.
+- **Il bloom è LDR**: il frame è RGBA8, quindi "luminoso" vuol dire "vicino al bianco", e **le soglie vanno tarate su quello che arriva al frame, non sulla palette**. Un bordo disegnato al 70% di alpha su fondo scuro atterra a ~0.66, non allo 0.91 che il suo colore dichiara. Tarato sulla palette, il bloom del Reale era invisibile.
+- **Luce e colore devono descrivere un mondo solo**: `bloom_for_world` interpola sugli stessi due segmenti di `sample_palette` e converge verso il Limine della stessa quantità (`core.CONVERGENCE_MAX`). Se i due sistemi divergono, l'immagine smette di essere d'accordo con sé stessa.
+- **Gli shader stanno dentro il binario**, non su disco: il gioco resta un eseguibile solo, e un `.fs` mancante sarebbe un crash all'avvio in cambio di niente. Uno shader che non compila **disabilita il bloom** invece di far cadere il gioco — stessa regola del salvataggio.
+- **I due glow si sommano.** Quello da primitive (`render/glow.odin`) era il sostituto del bloom e ora lo alimenta: un alone disegnato è luminoso, quindi il bright-pass lo riprende e lo rifiora. Da tenere presente nella Fase 9 — anche le particelle passeranno di lì. Dove un alone sembra doppio si toglie quello da primitive, non si abbassa il bloom.
+
+**Come si verifica un effetto GPU**: rileggendo i pixel. `rl.LoadImageFromTexture` sul render target trasforma "il bloom si vede giusto?" in aritmetica — stesso frame due volte, con e senza, confronto della luminosità riga per riga. Ha stabilito che il composite non è capovolto (la luce cade sulla riga che l'ha emessa, non sul suo specchio) e ha trovato il bloom invisibile del Reale. Il soggetto del test deve essere **asimmetrico**: la prima versione usava il frame del gioco, la cui banda più luminosa è l'orizzonte, che sta al centro esatto — dove un capovolgimento è indistinguibile. La lezione è in `CLAUDE.md`.
 
 ---
 

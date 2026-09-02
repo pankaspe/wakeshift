@@ -56,8 +56,7 @@ order before touching anything:
 2. **`docs/design_doc.md`** — binding on *what* to build. v1.3 is current.
 3. The rest of this file — architecture rules and conventions.
 
-**Where the project stands:** phases 0-3 and 5 are complete (phase 4, real bloom, was
-skipped over on the user's call and is still open). The code is split into packages with an acyclic dependency
+**Where the project stands:** phases 0-5 are complete. The code is split into packages with an acyclic dependency
 graph, saves are encrypted in the OS user data directory, and the simulation is
 deterministic and verified (seeded generation, input as data, fixed timestep, run
 manifests recorded). The game opens in fullscreen at the monitor's own resolution, has an
@@ -71,7 +70,18 @@ has a body that runs and whips through the flip. What is still missing there is 
 short launch before reporting a task done. For anything with real logic, write a throwaway
 program that exercises the module directly and run it — that habit has caught several bugs
 type-checking could not (`make_directory_all` returning `.Exist`, the input latch, the
-AEAD size assertions, a window call that silently changed the desktop's resolution).
+AEAD size assertions, a window call that silently changed the desktop's resolution, a
+near-miss rule that paid for dodges that never happened).
+
+**When the thing to verify is pixels, read the pixels back.** `rl.LoadImageFromTexture` on
+the render target turns "does the bloom look right" into arithmetic: draw the frame twice,
+once with the effect and once without, and compare per-row brightness. That is how phase 4
+established that the composite is not upside down (the light lands on the row that emitted
+it, not its mirror) and that the Real world's bloom was invisible before it was retuned —
+neither of which any amount of staring at the code would have shown. Give a readback test
+an *asymmetric* subject: the first version of that check used the game's own frame, whose
+brightest band is the horizon, and the horizon sits at the exact middle where a flip is
+undetectable.
 
 Build it as a package *inside* `src/` — `src/scratch_check/`, `odin build src/scratch_check
 -out:<scratchpad>/sc` — not in the scratchpad, because the relative imports (`../core`)
@@ -128,7 +138,7 @@ render    ← core, game
 ui        ← core, game
 main      ← everything
 
-fx        ← core          (roadmap phase 8, not created yet)
+fx        ← core          (created in phase 4: bloom. Particles join it in phase 9)
 audio     ← core, game    (roadmap phase 11, not created yet)
 ```
 
@@ -181,6 +191,14 @@ is only where those coordinates land.
   single `rl.GetFrameTime()` call) for things that are drawn but not simulated — the menu's
   drift between worlds, the horizon's breathing. It must never reach the simulation, which
   advances only in whole `core.FIXED_TIMESTEP` steps out of the accumulator.
+- **Post-processing runs on the finished frame, between the canvas closing and the blit.**
+  `fx.apply_bloom` reads the render target and composites back into it in place, so
+  `platform` never learns that bloom exists and `fx` never learns that a game does. The
+  order in `main` is: `end_game_canvas` -> `apply_bloom` -> `present_display`.
+- **Render textures are stored bottom-up, and the flip happens exactly once**, in
+  `present_display`. Every intermediate pass in `fx/` draws with a positive source rect,
+  which carries that convention through the chain unchanged. A second flip anywhere in the
+  middle silently mirrors the light away from whatever emitted it.
 - Drawing rate is a setting; the simulation rate is not. Whatever vsync and the frame
   limit are set to, the simulation advances at `core.TICK_RATE` in fixed steps.
 
@@ -333,8 +351,14 @@ Tracked here so they are not rediscovered. Each is scheduled in `ROADMAP.md`.
   drain is tuned harder than it should end up being.
 - `Lucidity` changed meaning in phase 5: it is a spendable resource in 0..LUCIDITY_MAX, not
   a streak counter. Anything that used to read `lucidity.streak` wants `lucidity.value`.
-- The glow is drawn with stacked additive primitives, not a shader. It is deliberately
-  cheap and does not bloom the whole frame — a bright-pass and separable blur replace it
-  in phase 4, after which most of `render/glow.odin` stays useful only for local halos.
+- There are now two glows: the real frame-wide bloom in `fx/bloom.odin`, and the stacked
+  additive primitives in `render/glow.odin` that predate it. The second was a stand-in for
+  the first and now feeds it — a primitive halo is bright, so the bright pass picks it up
+  and blooms it again. Worth knowing before phase 9: particles will go through the same
+  pass. Where a halo looks doubled, remove the primitive one rather than lowering the bloom.
+- Bloom is LDR: the frame is an RGBA8 texture, so "bright" means "near white", and the
+  thresholds in `fx/bloom.odin` are tuned against **what reaches the frame**, not against
+  the palette. A rim drawn at 0.7 alpha over a dark background lands near 0.66, not at the
+  0.91 its color names.
 - Recorded run manifests are saved but never played back — there is no replay or ghost in
   the game yet, only the data needed for one. (Phase 13 / post-MVP)
