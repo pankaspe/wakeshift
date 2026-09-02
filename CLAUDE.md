@@ -61,16 +61,27 @@ user's). The code is split into packages with an acyclic dependency graph, saves
 encrypted in the OS user data directory, and the simulation is deterministic and verified
 (seeded generation, input as data, fixed timestep, run manifests recorded). The game opens
 in fullscreen at the monitor's own resolution, has an options screen reachable from the
-main menu and the pause menu, and remembers what was set there. Phase 3 — palette, the character's body,
-the first layer — is next and has not been started. The game still renders on
-`rl.ClearBackground(rl.BEIGE)`: the visual identity has not begun.
+main menu and the pause menu, and remembers what was set there. Phase 3 — palette, the
+character's body, the first layer — is next and has not been started. The game still
+renders on `rl.ClearBackground(rl.BEIGE)`: the visual identity has not begun.
 
 **How verification works here:** `odin check src` after every edit, `odin build src` and a
 short launch before reporting a task done. For anything with real logic, write a throwaway
-program in the scratchpad that exercises the module directly and run it — that habit has
-caught several bugs that type-checking could not (`make_directory_all` returning `.Exist`,
-the input latch, the AEAD size assertions). Never claim anything about how the game looks
-or feels; the user judges that.
+program that exercises the module directly and run it — that habit has caught several bugs
+type-checking could not (`make_directory_all` returning `.Exist`, the input latch, the
+AEAD size assertions, a window call that silently changed the desktop's resolution).
+
+Build it as a package *inside* `src/` — `src/scratch_check/`, `odin build src/scratch_check
+-out:<scratchpad>/sc` — not in the scratchpad, because the relative imports (`../core`)
+only resolve from there. It is invisible to `odin build src`, which compiles only what
+`main.odin` imports, so it cannot break the game; delete the directory before committing.
+
+When a check involves the window rather than the simulation, do not trust what raylib
+reports about itself: read the live window's state from the outside (`wmctrl -lG`,
+`xprop -id <id> _NET_WM_STATE`). raylib claimed `IsWindowFullscreen() = true` for a window
+the compositor had maximized into the work area with the panel still on top of it.
+
+Never claim anything about how the game looks or feels; the user judges that.
 
 ---
 
@@ -279,7 +290,8 @@ Tracked here so they are not rediscovered. Each is scheduled in `ROADMAP.md`.
   `arrival_time`, so identical patterns can present a 55px wall or an ignorable 8px stub.
   (T6.4)
 - The player silhouette inverts body and rim colors between worlds, contradicting the
-  design doc's "same character, different lighting" rule. (T3.5)
+  design doc's "same character, different lighting" rule. Fixed as part of giving the
+  character a body. (T3.6)
 - The background is still `rl.ClearBackground(rl.BEIGE)` with hard black outlines: the
   visual identity has not been started. (Phase 3)
 - Menus, HUD and the options screen use raylib's default bitmap font and system colors.
