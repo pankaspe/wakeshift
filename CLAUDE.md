@@ -353,6 +353,16 @@ raise it with the user before writing code.
 
 Tracked here so they are not rediscovered. Each is scheduled in `ROADMAP.md`.
 
+- **The player and the obstacles are sunk into the ground.** `core.get_lane_y` anchors the
+  Real lane to the screen edge (`SCREEN_HEIGHT - size.y`), so the player's feet are at
+  y=720, while the terrain's surface runs at y=690-706 — 14 to 30 px of a 45 px character
+  is below the ground it is supposed to be running on, and the same on the ceiling. It
+  dates from the terrain gaining an irregular profile; nothing was ever changed to follow
+  it. Fixing it properly means the *simulation* knowing where the ground is: the profile
+  moves to `core`, `get_lane_y` samples it, and the player rides the terrain instead of the
+  screen edge — which also makes the flip's endpoints and `world_t` move with the ground,
+  so it is a scheduled change, not a constant to nudge. Scheduled with the layer work
+  (phase 10), where the terrain is regenerated anyway.
 - A pattern's `entry_lane`/`exit_lane` contract does not know the Limen exists. A pattern
   solved by suspending comes out in the opposite lane to the one solved by flipping, so
   `exit_lane` names the flipping answer and the pattern carries a second of slack

@@ -71,6 +71,7 @@ Verificato sul codice, 2 settembre 2026 — aggiornato a chiusura Fase 6.
 - La curva di difficoltà viene ancora quasi solo dalla velocità (270 → 330 → 400 px/s): le letture ora sono sei, ma la tabella dei tier cambia solo quanto in fretta arrivano (T7.3)
 - Il contratto `entry_lane`/`exit_lane` dei pattern non sa che esiste il Limine: un pattern risolto sospendendosi esce nella corsia opposta a quello risolto con i flip (T7.1)
 - Pochi pattern: 11 in tutto su tre tier, contro i 12-16 previsti (T7.2)
+- **Il giocatore e gli ostacoli sono affondati nel terreno.** `get_lane_y` ancora la corsia Reale al bordo dello schermo (y=675, piedi a 720), ma la superficie del terreno sta a y=690-706: **da 14 a 30px di un personaggio alto 45 stanno sotto il suolo su cui dovrebbe correre**, e lo stesso al soffitto. Viene da quando il terreno ha preso un profilo irregolare e nessuno ha aggiornato le corsie. Vedi la nota nella Fase 10
 - Nessuna particella, nessun parallax, nessun audio
 - Nessun replay o ghost visibile in gioco: il `RunManifest` viene registrato e salvato, ma non ancora rigiocato dall'interfaccia
 - Menu e opzioni prendono ora i colori dalla palette, ma usano ancora il font bitmap di default di raylib: tutto quello che è disegnato da primitive è nitido alla risoluzione nativa, il testo no (T13.3)
@@ -305,8 +306,17 @@ Sei tipi, e finalmente sei letture invece di una regola con sei pelli. Le voragi
 
 **Obiettivo**: validare l'intera idea degli strati su **uno solo**, prima di produrne quattro. Riferimento: Design Doc sez. 3.
 
+**Direzione artistica della Foresta** — indicazione del committente, da approfondire quando ci arriviamo:
+
+> Il *mood* è quello di **Zangarmarsh** (WoW, Terrallenword): foresta umida e luminescente, funghi giganti, luce che filtra, atmosfera satura. Una foresta che da **reale** diventa **onirica** giocando sui colori — palette blu/viola — con il bloom a fare gran parte del lavoro. Il personaggio non resta una figura astratta: **uno scoiattolo, uno spiritello, qualcosa che appartiene alla foresta**.
+
+Due note tecniche da tenere presenti quando si progetta:
+- È **compatibile con l'identità già costruita**, non un cambio di rotta: la palette Onirico è già viola/magenta e il Reale già blu freddo, e "silhouette + luce" con bloom è esattamente il linguaggio di una foresta luminescente. Non servono asset esterni.
+- Il personaggio è già uno **scheletro di giunti** (`render/player.odin`): dargli proporzioni da scoiattolo e una coda è un cambio di costanti più un osso in più, non una riscrittura. La regola della silhouette unica resta — corpo scuro, cambia solo la luce.
+
 | Task | Descrizione | Modello |
 |---|---|---|
+| T10.0 | **Il terreno diventa geometria di gioco, non decorazione**: il profilo si sposta in `core`, `get_lane_y` lo campiona, e il giocatore corre *sopra* il suolo invece che dentro. Tocca la simulazione — gli estremi del viaggio del flip e `world_t` si muovono col terreno — quindi è un task, non una costante da ritoccare | **Opus** |
 | T10.1 | Generazione procedurale dei layer di parallax (sagome da rumore, non PNG) | **Opus** |
 | T10.2 | Scroll multi-layer a velocità diverse; i layer campionano dalla palette | Sonnet |
 | T10.3 | **Sistema di strati**: uno strato è palette + parallax + pool di ostacoli + traccia | **Opus** |
