@@ -56,10 +56,20 @@ CHASM_WIDTH_MEDIUM :: OBSTACLE_SIZE * 1.6
 CHASM_WIDTH_LONG :: OBSTACLE_SIZE * 2.2
 
 // Creates an obstacle that will arrive at the player's x position at the given time.
-new_obstacle :: proc(arrival_time: f32, lane: core.Lane, obstacle_type: ObstacleType) -> Obstacle {
+//
+// Takes the caller's random generator rather than reaching for the global
+// one: chasm width is a random choice, and every random choice a run makes
+// has to come from the run's own seed to stay reproducible (see
+// PatternGenerator in pattern.odin).
+new_obstacle :: proc(
+	arrival_time: f32,
+	lane: core.Lane,
+	obstacle_type: ObstacleType,
+	rng: rand.Generator,
+) -> Obstacle {
 	width: f32 = OBSTACLE_SIZE
 	if obstacle_type == .Chasm {
-		roll := rand.float32()
+		roll := rand.float32(rng)
 		switch {
 		case roll < 0.4:
 			width = CHASM_WIDTH_SHORT
@@ -108,4 +118,46 @@ get_obstacle_position :: proc(obstacle: Obstacle, world: World) -> rl.Vector2 {
 	size := get_obstacle_size(obstacle, world)
 	y := core.get_lane_y(obstacle.lane, size)
 	return rl.Vector2{x, y}
+}
+
+// Extra distance past the left edge an obstacle must travel before it is
+// discarded. Nothing needs the margin — it is slack, so that a future
+// change to how far left something is drawn (a trailing particle, a
+// shadow) cannot silently start culling things that are still visible.
+OBSTACLE_CULL_MARGIN :: 200
+
+// True once an obstacle can no longer affect anything: it is well past
+// the left edge of the screen, and its near-miss has already been counted.
+//
+// Both conditions matter. Position alone would be enough for collision and
+// drawing, but the Lucidity streak is registered the moment an obstacle
+// passes the player (see register_obstacle_passed), and dropping one before
+// that happened would silently lose a point of streak.
+is_obstacle_finished :: proc(obstacle: Obstacle, world: World) -> bool {
+	if !obstacle.lucidity_resolved {
+		return false
+	}
+	position := get_obstacle_position(obstacle, world)
+	size := get_obstacle_size(obstacle, world)
+	return position.x + size.x < -OBSTACLE_CULL_MARGIN
+}
+
+// Drops obstacles that are finished with, keeping the list from growing
+// for the whole length of a run — without it a five-minute run leaves a
+// few hundred dead entries to be walked on every single step.
+//
+// Compacts in place and keeps the survivors in their original order.
+// Order is preserved deliberately: nothing downstream currently depends on
+// it, but obstacles are generated in ascending arrival_time and quietly
+// scrambling that would be an unpleasant surprise for anything that later
+// assumes it.
+remove_finished_obstacles :: proc(obstacles: ^[dynamic]Obstacle, world: World) {
+	kept := 0
+	for index in 0 ..< len(obstacles) {
+		if !is_obstacle_finished(obstacles[index], world) {
+			obstacles[kept] = obstacles[index]
+			kept += 1
+		}
+	}
+	resize(obstacles, kept)
 }

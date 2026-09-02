@@ -21,14 +21,17 @@ new_menu :: proc(options: []string) -> Menu {
 
 // Handles UP/DOWN navigation, wrapping around at the ends.
 // Returns true on the frame ENTER is pressed to confirm the current selection.
-update_menu :: proc(menu: ^Menu) -> bool {
-	if rl.IsKeyPressed(.DOWN) {
+//
+// Takes input as an argument for the same reason gameplay does (see
+// core/input.odin): exactly one place in the project reads the keyboard.
+update_menu :: proc(menu: ^Menu, input: core.Input) -> bool {
+	if input.menu_down {
 		menu.selected = (menu.selected + 1) % len(menu.options)
 	}
-	if rl.IsKeyPressed(.UP) {
+	if input.menu_up {
 		menu.selected = (menu.selected - 1 + len(menu.options)) % len(menu.options)
 	}
-	return rl.IsKeyPressed(.ENTER)
+	return input.confirm
 }
 
 // Draws text horizontally centered on screen at the given y.

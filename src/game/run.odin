@@ -17,6 +17,11 @@ GameState :: enum {
 	GameOver,
 }
 
+// Starts a fresh run. The seed arrives from the caller rather than being
+// drawn in here: it is an *input* to the run, the thing that decides which
+// level the player gets, and it has to be recorded alongside the input log
+// for the run to be reproducible later (Design Doc, section 10). A replay
+// passes the recorded seed; a live run passes a fresh one.
 reset_run :: proc(
 	player: ^Player,
 	world: ^World,
@@ -24,6 +29,7 @@ reset_run :: proc(
 	obstacles: ^[dynamic]Obstacle,
 	generator: ^PatternGenerator,
 	lucidity: ^Lucidity,
+	seed: u64,
 ) {
 	player^ = new_player()
 	world^ = new_world()
@@ -32,5 +38,5 @@ reset_run :: proc(
 
 	delete(obstacles^)
 	obstacles^ = nil
-	generator^ = new_pattern_generator(all_patterns, 2.0, .Dream)
+	generator^ = new_pattern_generator(all_patterns, 2.0, .Dream, seed)
 }

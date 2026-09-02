@@ -120,30 +120,17 @@ all_patterns := []Pattern {
 	pattern_double_switch_reverse,
 }
 
-// Expands a sequence of patterns into concrete, time-based obstacles,
-// chaining each pattern's duration after the previous one.
-// start_time shifts the whole sequence (e.g. give the player a couple
-// of safe seconds before the first obstacle arrives).
-build_obstacles_from_patterns :: proc(patterns: []Pattern, start_time: f32) -> [dynamic]Obstacle {
-	obstacles := make([dynamic]Obstacle)
-
-	cursor_time := start_time
-	for pattern in patterns {
-		for event in pattern.events {
-			append(
-				&obstacles,
-				new_obstacle(cursor_time + event.time_offset, event.lane, event.obstacle_type),
-			)
-		}
-		cursor_time += pattern.duration
-	}
-	return obstacles
-}
-
 // Picks a random pattern from the pool whose entry_lane matches the lane
 // the player is currently required to be safe in — this is what guarantees
 // two chained patterns never force an unfair flip at their boundary.
-pick_next_pattern :: proc(pool: []Pattern, required_entry_lane: core.Lane) -> Pattern {
+//
+// Draws from the caller's generator rather than the global one, so the
+// same seed always yields the same sequence of patterns.
+pick_next_pattern :: proc(
+	pool: []Pattern,
+	required_entry_lane: core.Lane,
+	rng: rand.Generator,
+) -> Pattern {
 	candidates: [dynamic]Pattern
 	defer delete(candidates)
 
@@ -160,7 +147,7 @@ pick_next_pattern :: proc(pool: []Pattern, required_entry_lane: core.Lane) -> Pa
 		return pool[0]
 	}
 
-	index := int(rand.float32() * f32(len(candidates)))
+	index := int(rand.float32(rng) * f32(len(candidates)))
 	if index >= len(candidates) {
 		index = len(candidates) - 1
 	}
@@ -175,18 +162,39 @@ PatternGenerator :: struct {
 	pool:            []Pattern,
 	generated_until: f32, // world time up to which obstacles already exist
 	next_entry_lane: core.Lane, // lane required for the next pattern, for chain continuity
+
+	// Every random choice a run makes — which pattern comes next, how wide
+	// a chasm is — comes from here and nowhere else. Two runs given the
+	// same seed generate byte-identical level content, which is what makes
+	// a run replayable from seed plus input log (Design Doc, section 10).
+	seed:            u64,
+	rng_state:       rand.Default_Random_State,
 }
 
 new_pattern_generator :: proc(
 	pool: []Pattern,
 	start_time: f32,
 	start_lane: core.Lane,
+	seed: u64,
 ) -> PatternGenerator {
 	return PatternGenerator {
 		pool = pool,
 		generated_until = start_time,
 		next_entry_lane = start_lane,
+		seed = seed,
+		rng_state = rand.create(seed),
 	}
+}
+
+// Wraps the generator's own PRNG state as a Generator to draw from.
+//
+// Built fresh on each call rather than cached in the struct on purpose:
+// a Generator holds a pointer to its state, and PatternGenerator is
+// assigned by value (see reset_run), so a stored one would keep pointing
+// at the state of whichever copy it was built from.
+@(private)
+generator_rng :: proc(generator: ^PatternGenerator) -> rand.Generator {
+	return rand.default_random_generator(&generator.rng_state)
 }
 
 // Appends new obstacles as needed, keeping the generated horizon at least
@@ -196,8 +204,10 @@ generate_ahead :: proc(
 	obstacles: ^[dynamic]Obstacle,
 	current_time: f32,
 ) {
+	rng := generator_rng(generator)
+
 	for generator.generated_until < current_time + GENERATION_LOOKAHEAD {
-		pattern := pick_next_pattern(generator.pool, generator.next_entry_lane)
+		pattern := pick_next_pattern(generator.pool, generator.next_entry_lane, rng)
 
 		for event in pattern.events {
 			append(
@@ -206,6 +216,7 @@ generate_ahead :: proc(
 					generator.generated_until + event.time_offset,
 					event.lane,
 					event.obstacle_type,
+					rng,
 				),
 			)
 		}

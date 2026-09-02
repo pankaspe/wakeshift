@@ -1,42 +1,120 @@
 /*
 * Save
-* Saves and loads the player's personal best "Dream Depth" so it survives
-* closing and reopening the game (Design Doc, section 10).
+* Reads and writes the player's persistent data (Design Doc, section 10).
 *
-* Deliberately still the original plain-text, working-directory-relative
-* implementation: roadmap phase 2 replaces it wholesale with a CBOR payload
-* sealed with ChaCha20-Poly1305, living in the OS user data directory.
-* Moving it here first keeps that replacement a single-package change.
+* The path a save takes, and the exact reverse on load:
+*
+*   SaveData -> encode_save_data  (CBOR, save_data.odin)
+*            -> seal_bytes        (XChaCha20-Poly1305, seal.odin)
+*            -> <user data dir>/save.dat  (paths.odin)
+*
+* Loading never fails in a way the caller has to handle. A missing,
+* unreadable, corrupted, tampered, or unrecognized save all yield
+* defaults: losing a personal best is annoying, but it must never stop
+* someone from playing.
 */
 package platform
 
+import "../core"
 import "core:fmt"
 import "core:os"
-import "core:strconv"
 
-HIGH_SCORE_FILE :: "highscore.txt"
+SAVE_FILE_NAME :: "save.dat"
 
-// Reads the saved high score from disk. Returns 0 if the file doesn't
-// exist yet (first run ever) or its contents can't be parsed.
-load_high_score :: proc() -> f32 {
-	data, err := os.read_entire_file(HIGH_SCORE_FILE, context.allocator)
-	if err != nil {
-		return 0
+@(private)
+get_save_file_path :: proc(allocator := context.allocator) -> (path: string, ok: bool) {
+	dir, dir_ok := get_save_dir(allocator)
+	if !dir_ok {
+		return "", false
 	}
-	defer delete(data)
+	defer delete(dir, allocator)
 
-	value, parse_ok := strconv.parse_f32(string(data))
-	if !parse_ok {
-		return 0
+	joined, join_err := os.join_path({dir, SAVE_FILE_NAME}, allocator)
+	if join_err != nil {
+		return "", false
 	}
-	return value
+	return joined, true
 }
 
-// Writes the given value to disk, overwriting whatever was there before.
-save_high_score :: proc(value: f32) {
-	text := fmt.tprintf("%.0f", value)
-	err := os.write_entire_file(HIGH_SCORE_FILE, transmute([]byte)text)
-	if err != nil {
-		fmt.println("WARNING: failed to save high score to disk:", err)
+// Loads persistent data, always successfully: anything that goes wrong
+// falls back to a fresh SaveData rather than reporting an error upward.
+load_save :: proc() -> SaveData {
+	path, path_ok := get_save_file_path()
+	if !path_ok {
+		return new_save_data()
+	}
+	defer delete(path)
+
+	// No save yet: first launch.
+	if !os.exists(path) {
+		return new_save_data()
+	}
+
+	sealed, read_err := os.read_entire_file(path, context.allocator)
+	if read_err != nil {
+		return new_save_data()
+	}
+	defer delete(sealed)
+
+	plaintext, open_ok := open_bytes(sealed)
+	if !open_ok {
+		return new_save_data()
+	}
+	defer delete(plaintext)
+
+	data, decode_ok := decode_save_data(plaintext)
+	if !decode_ok {
+		return new_save_data()
+	}
+	return data
+}
+
+// Writes data to disk, sealed. Returns false if it couldn't be written;
+// callers may warn, but must carry on — a failed save is not a reason to
+// interrupt a run.
+store_save :: proc(data: SaveData) -> bool {
+	path, path_ok := get_save_file_path()
+	if !path_ok {
+		return false
+	}
+	defer delete(path)
+
+	encoded, encode_ok := encode_save_data(data)
+	if !encode_ok {
+		return false
+	}
+	defer delete(encoded)
+
+	sealed, seal_ok := seal_bytes(encoded)
+	if !seal_ok {
+		return false
+	}
+	defer delete(sealed)
+
+	return os.write_entire_file(path, sealed) == nil
+}
+
+// Reads just the personal best, for the menus that only show a number.
+load_high_score :: proc() -> f32 {
+	data := load_save()
+	defer destroy_save_data(&data)
+	return data.high_score
+}
+
+// Records a new personal best together with the recording of the run that
+// set it (core/manifest.odin), preserving whatever else the save holds.
+//
+// manifest borrows its tick log from the live recorder, so it is stored
+// immediately and never freed here — note the destroy below happens
+// *before* it is assigned in, releasing what loading allocated rather
+// than what the caller lent us.
+save_best_run :: proc(value: f32, manifest: core.RunManifest) {
+	data := load_save()
+	destroy_save_data(&data)
+
+	data.high_score = value
+	data.best_run = manifest
+	if !store_save(data) {
+		fmt.println("WARNING: failed to save high score to disk")
 	}
 }

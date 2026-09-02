@@ -58,10 +58,15 @@ new_player :: proc() -> Player {
 	}
 }
 
-// Reads input and updates the player state machine.
-update_player :: proc(player: ^Player, world: World) {
+// Advances the player state machine for one frame.
+//
+// Both input and delta_time arrive as arguments rather than being polled
+// from raylib in here: the same input and the same timestep must always
+// produce the same run, which is what makes a run recordable and
+// replayable (see core/input.odin).
+update_player :: proc(player: ^Player, world: World, input: core.Input, delta_time: f32) {
 	// Start a flip only if we're not already mid-transition.
-	if rl.IsKeyPressed(.SPACE) && player.state != .Transitioning {
+	if input.flip && player.state != .Transitioning {
 		player.target_lane = .Dream if player.lane == .Real else .Real
 		player.state = .Transitioning
 		player.transition_timer = 0
@@ -72,7 +77,7 @@ update_player :: proc(player: ^Player, world: World) {
 	}
 
 	if player.state == .Transitioning {
-		player.transition_timer += rl.GetFrameTime()
+		player.transition_timer += delta_time
 
 		// Compute normalized progress (0 to 1), clamped so it never overshoots.
 		t := player.transition_timer / TRANSITION_DURATION
@@ -101,11 +106,11 @@ update_player :: proc(player: ^Player, world: World) {
 	// Invulnerability runs on its own timer, independent from the transition state,
 	// since the two durations may end up different after playtesting.
 	if player.is_invulnerable {
-		player.invulnerability_timer += rl.GetFrameTime()
+		player.invulnerability_timer += delta_time
 		if player.invulnerability_timer >= INVULNERABILITY_DURATION {
 			player.is_invulnerable = false
 		}
 	}
 
-	player.settle_timer += rl.GetFrameTime()
+	player.settle_timer += delta_time
 }

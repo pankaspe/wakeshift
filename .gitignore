@@ -4,9 +4,7 @@ build/
 wakeshift
 wakeshift.exe
 
-# Local player data (save files live in the OS user data directory,
-# but keep the legacy path ignored so old checkouts stay clean)
-highscore.txt
+# Local player data (save files live in the OS user data directory)
 *.dat
 
 # Editor / OS noise
