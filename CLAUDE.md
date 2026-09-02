@@ -56,15 +56,27 @@ order before touching anything:
 2. **`docs/design_doc.md`** — binding on *what* to build. v1.3 is current.
 3. The rest of this file — architecture rules and conventions.
 
-**Where the project stands:** phases 0-6 are complete. The code is split into packages with an acyclic dependency
-graph, saves are encrypted in the OS user data directory, and the simulation is
-deterministic and verified (seeded generation, input as data, fixed timestep, run
-manifests recorded). The game opens in fullscreen at the monitor's own resolution, has an
-options screen reachable from the main menu and the pause menu, and remembers what was set
-there. The visual identity has begun: every color on screen is sampled from the three-world
-palette, the two worlds are drawn at once with a horizon between them, and the character
-has a body that runs and whips through the flip. What is still missing there is real bloom
-(phase 4), particles (phase 9) and parallax scenery (phase 10).
+**Where the project stands: phases 0-6 are complete, and phase 7 is next.**
+
+The game is playable end to end and all three states work. A flip is a journey from wall to
+wall and holding stops it halfway in the Limen, paid for out of Lucidity — one resource
+that is simultaneously the score multiplier. Six obstacle types ask genuinely different
+questions: a presence kills whoever touches it, an absence kills only whoever is resting on
+it, and three of them anticipate the obvious answer instead of reacting to the real one.
+Every colour on screen is sampled from the three-world palette, both worlds are drawn at
+once with a horizon between them, real bloom runs on the finished frame, and palette and
+bloom converge toward the Limen together as a run gets deeper.
+
+Underneath: packages with an acyclic dependency graph, saves encrypted in the OS user data
+directory, and a simulation that is deterministic and verified — seeded generation, input
+as data, a fixed timestep, and every record storing the manifest that reproduces it.
+
+**What is missing, in the order the roadmap tackles it:** difficulty still comes almost
+entirely from scroll speed and there are only 11 patterns (phase 7); no light pickups
+(phase 8); no particles (phase 9); no parallax scenery, and the terrain is still
+decoration the simulation cannot see (phase 10, T10.0 — which is also why the player is
+drawn sunk into the ground); no game feel pass (phase 11); no audio at all (phase 12); no
+Dream Report and still raylib's default bitmap font (phase 13).
 
 **How verification works here:** `odin check src` after every edit, `odin build src` and a
 short launch before reporting a task done. For anything with real logic, write a throwaway

@@ -3,7 +3,7 @@
 A one-button reflex arcade game about being suspended between two worlds — written in
 [Odin](https://odin-lang.org/) with [raylib](https://www.raylib.com/), no engine.
 
-![Version](https://img.shields.io/badge/version-0.1.0--alpha-blue)
+![Version](https://img.shields.io/badge/version-0.2.0--alpha-blue)
 ![Language](https://img.shields.io/badge/Odin-dev--2026--07-blue)
 ![Library](https://img.shields.io/badge/raylib-5.5-green)
 ![Status](https://img.shields.io/badge/status-playable%20alpha-orange)
@@ -23,16 +23,19 @@ three places to be.
 
 Playable alpha, and honest about it.
 
-**Working:** the core loop, time-based procedural generation, the Lucidity streak,
-difficulty tiers, an encrypted save, an options screen, and a fully deterministic
-simulation that can record and replay a run exactly.
+**Working:** the core loop and all three states, six obstacle types with genuinely
+different readings, time-based procedural generation, Lucidity as a spendable resource,
+difficulty tiers, the three-world palette with real bloom, an encrypted save, an options
+screen, and a fully deterministic simulation that can record and replay a run exactly.
 
-**Not there yet:** audio, particles, bloom, parallax, and the Limen itself. The game
-currently looks like what it is — a prototype on a beige background. Making it look like
-something is the next milestone.
+**Not there yet:** audio, particles, and the parallax scenery — so the world is lit but
+empty, and the layered descent the design is built around has not been built. The
+difficulty curve also still comes mostly from scroll speed rather than from the obstacles
+themselves.
 
 If you are here to read code rather than to play, the interesting parts are the
-deterministic simulation and the package layout.
+deterministic simulation, the package layout, and how the palette and the bloom are driven
+by the same two numbers.
 
 ---
 
@@ -40,7 +43,7 @@ deterministic simulation and the package layout.
 
 | Key | Action |
 | --- | --- |
-| `SPACE` | Flip gravity |
+| `SPACE` | Tap to flip · **hold to stop halfway**, suspended in the Limen |
 | `ESC` | Pause / back |
 | `↑` `↓` | Navigate menus |
 | `←` `→` | Change a setting |
@@ -51,17 +54,45 @@ deterministic simulation and the package layout.
 
 ## How it plays
 
-**Two lanes, one question.** Obstacles only ever occupy one lane. Being in the other one
-is always the answer; the difficulty is entirely in seeing it coming and committing in
-time.
+**One question, three answers.** *Where should I be right now?* — the floor, the ceiling,
+or the threshold between them. Never more than three, and the difficulty is entirely in
+seeing the answer coming and committing in time.
 
-**Risk is where the points are.** The Dream lane scores 25 points per second against the
-Real lane's 10 — and it is also where obstacles move on sine curves instead of standing
-still.
+**A flip is a journey, and holding stops it halfway.** That single sentence is the whole
+control scheme, and the code says it literally: holding freezes the journey's own clock at
+its midpoint, releasing resumes it, and the journey always finishes where it was already
+going. Nothing anywhere has to remember which wall you came from.
 
-**Lucidity rewards nerve, not caution.** Settling into the safe lane *late* — within 0.35s
-of an obstacle arriving — counts as a near miss and builds a streak worth up to +100%
-score. Playing it safe scores less than cutting it fine.
+**Risk is where the points are.** 10 points per second on the floor, 25 on the ceiling, 40
+in the Limen — which is also the only one that costs something to stay in.
+
+**Lucidity is one resource with two faces.** It is earned by getting out of the way *late*
+— when an obstacle arrives in the lane you had just left — and spent staying suspended,
+while simultaneously being the score multiplier. So the third state asks a question no
+amount of reflex answers: bank the multiplier, or burn it to stand where the score runs
+fastest?
+
+**Presence and absence are different rules, not different pictures.** A block kills
+whoever touches it. A chasm is the floor failing to be there, so it kills only whoever is
+still standing on it — which means being mid-flip, suspended, or on the ceiling all answer it
+equally. One asks "move, now"; the other asks "do not be down here for this stretch".
+
+**Obstacles anticipate, they never react.** Nothing reads the player's position: an
+obstacle that adapts feels stolen even when it is survivable. What makes one feel
+intelligent is being authored to expect the obvious answer — the lane you would flee into
+closing half a second later, a threat that is a bluff and retracts before it arrives, a
+patroller sweeping the whole column on a cycle you can read but not out-react.
+
+**The level is written in time, not pixels.** Obstacles are authored as "arrives 1.8
+seconds into this pattern", and their screen position is derived each frame from the
+current scroll speed. Speeding the game up never desynchronises a hand-authored pattern.
+
+**The two worlds converge as you descend.** Palette and bloom both interpolate on the same
+two variables — where the player is, and how deep the run has gone — so past about thirty
+seconds the Real and the Dream start washing toward the same overexposed threshold. The
+colour you were reading the game by fades exactly as the speed peaks. Position and type of
+motion are what carry you from there, which is also why they were never allowed to be
+redundant with colour.
 
 **The level is written in time, not pixels.** Obstacles are authored as "arrives 1.8
 seconds into this pattern", and their screen position is derived each frame from the
@@ -113,12 +144,13 @@ src/
 ├── core/          shared vocabulary: lanes, geometry, easing, input, time, settings
 ├── platform/      the OS: window, render target, keyboard, save files
 ├── game/          the simulation: player, world, obstacles, patterns, scoring, collision
-├── render/        drawing only: player, obstacles, terrain
+├── render/        drawing only: player, obstacles, terrain, background, palette
+├── fx/            post-processing, knows nothing about the game: bloom
 └── ui/            menus, HUD, screens
 ```
 
-Dependencies run strictly one way, with no cycles: `core` ← `platform`, `game`; `game` ←
-`render`, `ui`; everything ← `main`. Two rules hold it together — **`game/` never draws**
+Dependencies run strictly one way, with no cycles: `core` ← `platform`, `game`, `fx`;
+`game` ← `render`, `ui`; everything ← `main`. Two rules hold it together — **`game/` never draws**
 (no `rl.Draw*` call exists under it) and **`render/` never mutates** (it takes state by
 value and produces pixels). Which means the entire simulation runs without a window, and
 that is what makes the determinism tests possible.
@@ -135,8 +167,9 @@ exactly one procedure polls the keyboard), and **a fixed timestep** (1/60s steps
 the frame rate, with input latched until a step consumes it). Miss one and the other two
 are worthless.
 
-The payoff is that a run can be recorded as `(seed, [ticks it was flipped on])` and
-replayed exactly — simultaneously a replay system, a ghost system, a way to re-run a
+The payoff is that a run can be recorded as `(seed, [ticks the key went down], [ticks it
+came back up])` — the releases matter as much as the presses now that holding is half the
+control scheme — and replayed exactly — simultaneously a replay system, a ghost system, a way to re-run a
 balance change against the identical run, and the only honest way to validate a
 leaderboard score: the server replays the submission and computes the score itself rather
 than believing the client. Every record you set already stores that manifest. Nothing
@@ -173,6 +206,17 @@ A learning project, and a few things cost real time to work out:
 - **Import identifiers come from the directory, not the package declaration.**
   `import "core:encoding/cbor"` is referenced as `cbor.*`, though its files declare
   `package encoding_cbor`.
+- **Constant folding also refuses a lossy cast you did not know you wrote.**
+  `i32(SCREEN_HEIGHT * 0.30)` fails, because 0.30 is not representable and 215.999… cannot
+  become an `i32`. Assigning through a typed variable first makes it a runtime cast; better
+  still, write the integer arithmetic you actually meant.
+- **Render textures are stored bottom-up, and the flip belongs at the very end.** Chaining
+  render textures with positive source rects carries that convention through unchanged, so
+  the one negative-height blit that presents the frame is still correct. Add a second flip
+  in the middle and the post-processing silently mirrors the light away from whatever
+  emitted it — with no error, and nothing that reading the code will show you. The way to
+  catch it is to read the pixels back and check that the light landed on the row that
+  emitted it.
 
 ---
 

@@ -369,45 +369,43 @@ Qui il determinismo della Fase 2 ripaga: si rigioca la stessa run identica dopo 
 
 ## Riepilogo carico per modello
 
-Fasi 0-2.5 completate. Il conteggio qui sotto è **quel che resta**.
+Fasi 0-6 completate. Il conteggio qui sotto è **quel che resta**.
 
 | Fase | Sonnet | Opus |
 |---|---|---|
-| 3 — Palette, corpo, primo strato | 3 | 5 |
-| 4 — Bloom | 1 | 2 |
-| 5 — Il Limine | 2 | 4 |
-| 6 — Ostacoli veri | 1 | 5 |
 | 7 — Pattern e difficoltà | 2 | 2 |
 | 8 — Bonus di luce | 3 | 3 |
 | 9 — Particelle | 5 | 1 |
-| 10 — Strati e transizione | 2 | 3 |
+| 10 — Strati e transizione (+ T10.0) | 2 | 4 |
 | 11 — Game feel | 1 | 2 |
 | 12 — Audio | 2 | 3 |
 | 13 — UI e rifinitura | 3 | 2 |
-| **Totale rimanente** | **25** | **32** |
+| **Totale rimanente** | **18** | **17** |
 
-Il rapporto si è spostato verso Opus rispetto al piano iniziale, ed è corretto che sia così: le fasi che restano decidono *come si gioca* (il gesto del Limine, le regole di collisione, gli archetipi anticipatori, il bilanciamento) invece di spostare file. Le fasi economiche da mandare in Sonnet restano la **9** (preset di particelle, molto ripetitivi) e la **13** (UI).
+Il piano è a metà: erano 25 Sonnet e 32 Opus a chiusura della Fase 2.5. Le fasi più pesanti in Opus — il gesto del Limine, le regole di collisione, la convergenza delle palette, la matematica dello shader — sono fatte, ed è per questo che il rapporto si è riequilibrato.
 
-Dove conviene spendere Opus, in ordine: la **5** (il gesto nuovo — se sbagliato lì, tutto il resto poggia male), la **6** (regole di collisione: un errore non dà errore di compilazione, dà un gioco che *sembra* ingiusto) e la **3** (la convergenza delle palette, che è insieme identità visiva e curva di difficoltà).
+Dove conviene spendere Opus da qui, in ordine: la **10** (il sistema degli strati e la transizione come evento, più T10.0 che sposta il terreno dentro la simulazione), la **11** (bilanciamento numerico, dove il determinismo della Fase 2 finalmente ripaga: si rigioca la stessa run identica dopo ogni modifica) e la **8** (il piazzamento dei bonus nella corsia pericolosa, che è una decisione di design non una funzione). Le fasi economiche da mandare in Sonnet restano la **9** (preset di particelle, molto ripetitivi) e la **13** (UI).
 
 ---
 
 ## Definition of Done — Alpha
 
+`[x]` fatto · `[~]` c'è ma non nella forma finale · `[ ]` non iniziato
+
 - [x] Salvataggio cifrato nella directory dati utente, con manifesto della run migliore
 - [x] Run riproducibile da seed + log input (base della leaderboard e dei replay)
-- [ ] Tre stati giocabili, con costo e ricompensa bilanciati — nessuno è la scelta ovvia sempre
-- [ ] Il personaggio ha un corpo e due pose leggibili: la frustata del tap, il galleggiamento dell'hold
-- [ ] Sistema visivo a tre palette con blending continuo, bloom, particelle e parallax attivi insieme
-- [ ] **La convergenza funziona**: scendendo, i due mondi si somigliano sempre di più, e il gioco resta giocabile perché posizione e movimento reggono da soli
-- [ ] Almeno 6 tipi di ostacolo con **letture distinte**, di cui almeno uno che minaccia il Limine e almeno uno anticipatorio (Eco / Finta / Pattugliatore)
+- [~] Tre stati giocabili: ci sono e hanno costi diversi, il bilanciamento vero è la Fase 11
+- [x] Il personaggio ha un corpo e due pose leggibili: la frustata del tap, il galleggiamento dell'hold
+- [~] Sistema visivo a tre palette con blending continuo e bloom attivi insieme; mancano particelle e parallax
+- [x] **La convergenza funziona**: scendendo, i due mondi si somigliano sempre di più — palette *e* bloom convergono insieme — e posizione e movimento reggono da soli
+- [x] Almeno 6 tipi di ostacolo con **letture distinte**, di cui almeno uno che minaccia il Limine e almeno uno anticipatorio (Eco / Finta / Pattugliatore)
 - [ ] 12-16 pattern distribuiti su tre tier
 - [ ] Bonus di luce raccolti per posizione, piazzati dove costa qualcosa prenderli
 - [ ] **Due strati e la transizione fra loro**, come evento che non ferma il gioco
 - [ ] Audio: due mix sincronizzati + traccia per strato + i SFX principali
-- [ ] Avvio a schermo pieno alla risoluzione del monitor, con modalità finestra e impostazioni ricordate fra un avvio e l'altro
-- [ ] Menu, pausa, opzioni, Referto Onirico
-- [ ] **60 FPS stabili** con tutti gli effetti attivi
+- [x] Avvio a schermo pieno alla risoluzione del monitor, con modalità finestra e impostazioni ricordate fra un avvio e l'altro
+- [~] Menu, pausa e opzioni ci sono; manca il Referto Onirico (T13.2)
+- [~] **60 FPS stabili**: misurati 705 con bloom sul frame peggiore, ma particelle e parallax non ci sono ancora
 - [ ] Run media 45-90 secondi, curva di difficoltà leggibile
-- [ ] Un giocatore nuovo capisce il gesto tap/hold entro 30 secondi senza istruzioni
-- [ ] Tre stati distinguibili senza affidarsi al colore
+- [~] Un giocatore nuovo capisce il gesto tap/hold entro 30 secondi senza istruzioni — da riverificare con qualcuno che non sia l'autore
+- [x] Tre stati distinguibili senza affidarsi al colore: posizione, e tipo di movimento (corsa a terra, deriva nell'onirico, corpo aperto e oscillante nel Limine)
