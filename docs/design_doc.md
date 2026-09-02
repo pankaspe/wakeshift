@@ -1,5 +1,5 @@
 # WAKE SHIFT
-### Game Design Document — v1.1
+### Game Design Document — v1.2
 
 *(già "Hypnagogia" nelle versioni precedenti — rinominato per evitare sovrapposizioni con titoli già pubblicati, vedi sezione 11)*
 
@@ -14,6 +14,16 @@
 > - **Identità visiva** riscritta attorno a un sistema a **tre palette con blending continuo**.
 > - **Struttura del codice** corretta per i vincoli reali di Odin (niente import ciclici tra package).
 > - **Persistenza**: formato binario firmato, e il determinismo della simulazione come vera base dell'anti-cheat.
+>
+> ### Revisione v1.2 — 2 settembre 2026
+>
+> Il gioco acquista un mondo. La v1.1 aveva definito i tre stati e la loro identità visiva in astratto; questa versione decide *dove* si svolge e *come cresce*. Modifiche segnate con **[v1.2]**:
+>
+> - **Gli strati**: il mondo non scorre di lato, si scende. Foresta → pietraia → ghiacciaio → dissoluzione (sez. 3).
+> - **La convergenza**: più si scende, meno i due mondi si distinguono. È insieme la curva di difficoltà e l'arco narrativo (sez. 12).
+> - **Il personaggio ha un corpo**: testa, torso, arti. Due pose chiave — la frustata del tap, il galleggiamento dell'hold (sez. 12).
+> - **Ostacoli anticipatori, non reattivi**: cosa li rende "intelligenti" senza renderli ingiusti (sez. 5).
+> - **I bonus sono fatti di luce** e si raccolgono con la posizione, non con un tasto (sez. 8).
 >
 > Questo documento dice *cosa* e *perché*. Il *come e in che ordine* sta in `ROADMAP.md`; le regole operative di sviluppo in `CLAUDE.md`.
 
@@ -101,6 +111,21 @@ Durata media di una run: **15–45 secondi** nelle fasi iniziali di gioco, fino 
 - **Ricompensa**: il ritmo di punteggio più alto dei tre
 - **Audio**: come sentire i due mondi da sott'acqua — filtro passa-basso e riverbero che salgono con la permanenza
 
+### Gli strati: dove si svolge **[v1.2]**
+
+Il punteggio si chiama **Profondità Onirica**. Non è una metafora da riempire dopo: è la struttura del mondo. Il giocatore non viaggia in orizzontale attraverso luoghi diversi, **scende attraverso strati**.
+
+| Strato | Quando | Identità | Cosa introduce meccanicamente |
+|---|---|---|---|
+| **Foresta** | 0-30s | Densa, organica, verticale | Il vocabolario base: pieno vs vuoto |
+| **Pietraia** | 30-60s | La foresta si dirada, roccia esposta | Il *timing*: detriti che cadono, cornici che cedono |
+| **Ghiacciaio** | 60-100s | Freddo, riflettente, silenzioso | La *quantità di moto*: campi che modulano il flip |
+| **Dissoluzione** | 100s+ | La geometria smette di essere un luogo | I due mondi smettono di distinguersi (sez. 12) |
+
+**Principio vincolante**: ogni strato deve introdurre o enfatizzare **un comportamento di ostacolo**, non solo una palette. Uno strato che cambia soltanto i colori è carta da parati, e viola il pilastro 4 ("il tema non è decorazione"). Lo strato è vocabolario meccanico prima che estetico.
+
+**Le transizioni sono momenti, non dissolvenze.** La volta della foresta si apre e si sbuca sulla roccia: 2-3 secondi in cui il parallax si scambia *mentre il gioco continua*. Non si ferma mai nulla — è il pezzo più condivisibile che il gioco produrrà, e va trattato come tale.
+
 ### Perché la tripartizione funziona **[v1.1]**
 Con due stati il giocatore impara due skill in parallelo (spaziale e temporale) senza aggiungere bottoni — già più di un runner classico. Il terzo stato aggiunge la dimensione che mancava: **una decisione economica**. Non più solo "dove devo essere per sopravvivere", ma "quanto rischio per quanto rendimento". È ciò che impedisce alla difficoltà di crescere solo aumentando la velocità.
 
@@ -171,6 +196,24 @@ Ostacoli "irregolari" ma mai casuali, letti attraverso il ritmo più che la posi
 | **Specchio/ombra fluttuante** | Elemento che si muove lungo la corsia | Moto ondulatorio, non lineare — difficile da "calcolare" a colpo d'occhio, va letto a ritmo |
 | **Entità onirica pattugliante** | L'unico vero "nemico" del set — una presenza che pattuglia la sua corsia | Movimento avanti/indietro con pattern regolare ma non banale. Aggiunge presenza narrativa senza introdurre azioni di combattimento: resta comunque un ostacolo da evitare col solo switch |
 | **Buco onirico (dissolvenza)** | L'equivalente della voragine, ma nel soffitto | Una porzione di soffitto si dissolve gradualmente e scompare, obbligando il giocatore a scendere |
+
+### Cosa rende un ostacolo "intelligente" **[v1.2]**
+
+Il set attuale è troppo docile: la risposta giusta è sempre immediatamente ovvia. La tentazione naturale è renderli **reattivi** — che ti inseguano, che si adattino a dove sei. **Va scartata.** Un ostacolo che si adatta rende la risposta instabile: qualunque cosa scegli, lui cambia. Si percepisce come ingiusto anche quando è tecnicamente risolvibile, e viola il pilastro 3 ("ogni run è giusta").
+
+Ciò che fa *sembrare* intelligente un ostacolo è l'opposto: **anticipa la risposta ovvia**. L'informazione è sempre disponibile prima del momento in cui ti impegni, ma la reazione istintiva è quella sbagliata. Il giocatore impara a leggere invece che a reagire — ed è esattamente la skill che la Lucidità già premia.
+
+| Archetipo | Comportamento | Cosa insegna |
+|---|---|---|
+| **Eco** | Compare nella corsia in cui stai *entrando*, mezzo secondo dopo il flip | Punisce il flip di panico |
+| **Finta** | Sembra occupare una corsia, si ritrae, e si chiude l'altra | Costringe ad aspettare l'ultimo momento utile |
+| **Pattugliatore** | Si muove tra le fasce con un ciclo leggibile | Nessuna decisione istantanea funziona: va letto il ritmo |
+
+### I campi: forze che non tolgono il controllo **[v1.2]**
+
+Un campo gravitazionale che *trascina* il giocatore è pericoloso su un gioco a un tasto: puoi finire addosso a un ostacolo nonostante tu abbia scelto correttamente, e quello si percepisce come rubato.
+
+La forma che funziona: **il campo non muove il giocatore, modula il suo flip**. Dentro la sua influenza il salto verso il campo è più rapido, quello contro più lento. Non toglie controllo, cambia i tempi — e i tempi sono già la valuta del gioco. Resta a un tasto, resta leggibile, e sul ghiacciaio ha una giustificazione fisica immediata.
 
 ### Coppie concettuali (Reale ↔ Onirico)
 
@@ -273,6 +316,27 @@ Invece di un punteggio anonimo, il tema dà forma alle statistiche mostrate a fi
 - **Profondità Onirica** (punteggio principale): cresce nel tempo, più velocemente mentre si è nel Mondo Onirico rispetto al Reale → incentiva il rischio nella zona meccanicamente più instabile
 - **Lucidità** **[v1.1]**: non più un semplice contatore, ma una **risorsa a due facce**. Si accumula con i near-miss (evitare un ostacolo sistemandosi nella fascia giusta *tardi*, non in anticipo comodo) e si **consuma** restando sospesi nel Limine. Alimenta il moltiplicatore di punteggio *e* il carburante della sospensione: da qui nasce la tensione centrale del gioco — *banco il moltiplicatore o lo brucio per stare dove rende di più?* Oltre certe soglie sblocca anche effetti visivi progressivi, in particolare a livello di sistema particellare (vedi sezione 12)
 
+### I bonus di luce **[v1.2]**
+
+Con un solo tasto nasce un problema che va risolto prima di progettare qualsiasi potere: **come si raccoglie un bonus?**
+
+La risposta: **non si preme, si occupa il posto giusto**. Il bonus attraversa una corsia, e o sei lì o l'hai perso. Nessun input aggiuntivo, nessuna eccezione al pilastro 1.
+
+E la scelta che dà profondità: **il bonus va piazzato nella corsia pericolosa**. La domanda "dove devo essere?" smette di essere solo evasione e diventa *questo bonus vale il rischio?*. Profondità decisionale a costo zero di input.
+
+**Come si distinguono a colpo d'occhio a 400 px/s**: gli ostacoli sono sagome scure, i bonus sono **fatti di luce**. È lo stesso linguaggio visivo del gioco — "Silhouette + Luce" — usato per dire due cose opposte. Non c'è niente da imparare.
+
+**Una sola risorsa.** Raccogliere luce significa guadagnare **Lucidità**, che è già il carburante del Limine e il moltiplicatore di punteggio. Un sistema, non cinque.
+
+| Potere | Mondo | Effetto |
+|---|---|---|
+| **Timeshift** | Onirico | Rallenta il tempo per N secondi — coerente con la lettura temporale del sogno |
+| **Forza della natura** | Reale | Immunità agli ostacoli per N secondi — coerente con la concretezza del reale |
+
+Sono le due facce della stessa coppia concettuale già teorizzata in sezione 5.
+
+**Sui malus — decisione presa**: niente pickup negativi. In un gioco dove si muore in un colpo la punizione è già sufficiente, e un malus subito senza poterlo evitare è solo frustrazione. Il costo di un bonus è **il rischio corso per prenderlo**, più la Lucidità spesa per attivarlo. Se serve un elemento avverso, va messo **nell'ambiente** (nebbia, visibilità ridotta, accelerazione dello strato): ambientale è prevedibile e leggibile, addosso al giocatore è arbitrario.
+
 ### Ritmi di punteggio **[v1.1]**
 
 | Stato | Punti/s | Rischio |
@@ -352,6 +416,10 @@ A differenza del salvataggio locale, una leaderboard condivisa richiede protezio
 3. **Timestep fisso** — a passo variabile la stessa sequenza di input non produce la stessa run
 
 Un solo investimento con quattro ritorni: validazione della leaderboard, replay, ghost delle run migliori, e bilanciamento riproducibile (stessa run rigiocabile identica dopo una modifica ai numeri).
+
+> **Stato: costruito e verificato** (Fase 2 della roadmap). Tutte e tre le condizioni sono in piedi, e il determinismo è dimostrato, non solo progettato: la stessa sequenza di step produce stati bit-identici su profili di frame a 60 Hz, 240 Hz e irregolari; rigiocare un manifesto salvato riproduce il punteggio esatto; spostare un solo flip di un tick lo cambia.
+>
+> Ogni record salva già il proprio `RunManifest` — seed, versione del gioco, frequenza di tick, durata, e il tick di ogni singolo flip. Quello che manca è solo il consumo: nessuna schermata rigioca ancora quei dati.
 
 ---
 
@@ -442,6 +510,33 @@ world_t = 1 - (player_center_y / SCREEN_HEIGHT)
 
 Con `world_t ≤ 0.5` si interpola Reale→Limine su `world_t * 2`; con `world_t > 0.5` si interpola Limine→Onirico su `(world_t - 0.5) * 2`. Ogni elemento a schermo campiona da qui: non esistono colori scritti a mano fuori dalla definizione delle palette.
 
+### La convergenza: l'arco della run **[v1.2]**
+
+L'idea centrale della v1.2, e insieme curva di difficoltà e arco narrativo:
+
+> **Più si scende, meno i due mondi si distinguono.** Le palette del Reale e dell'Onirico virano progressivamente verso lo slavato del Limine, finché nello strato di Dissoluzione il Reale ha ormai proprietà oniriche.
+
+Meccanicamente è spietato: il riferimento cromatico su cui il giocatore si appoggiava si indebolisce proprio quando la velocità è massima. Tematicamente è esatto: sta perdendo la capacità di distinguere la veglia dal sogno, che è letteralmente il soggetto del gioco. E dà alla run **un arco** invece di una semplice accelerazione.
+
+Costo di implementazione: quasi nullo. Il sistema di interpolazione su `world_t` esiste già; basta interpolare *anche* le palette dei due mondi verso quella del Limine in funzione della profondità raggiunta.
+
+**Il vincolo di accessibilità diventa una risorsa.** Il principio "mai il colore da solo" (più sotto) qui smette di essere un obbligo e diventa la ragione per cui la convergenza è giocabile: quando il colore svanisce, **posizione** e **tipo di movimento** restano, e sono loro a portare il giocatore fino in fondo. Chi non distingue bene i colori non è penalizzato dalla convergenza — semplicemente arriva prima a giocare come ci arriveranno tutti.
+
+### Il personaggio: un corpo, due pose **[v1.2]**
+
+L'entità non è più una forma astratta: è una **silhouette con testa, torso e arti**, che corre, salta e ruota. Resta interamente costruita con primitive — 4-5 forme animate per rotazione e interpolazione, nessuno sprite.
+
+Il momento chiave del gioco è il flip, e ha **due letture diverse a seconda del gesto**:
+
+| Gesto | Posa | Perché |
+|---|---|---|
+| **Tap** | *La frustata* — rotazione completa in ~7 frame, che si legge come impulso più che come figura | Deve restare reattivo: allungarlo eroderebbe le finestre di reazione (sez. 6) |
+| **Hold** | *Il galleggiamento* — la rotazione si completa e si assesta in sospensione: braccia aperte, oscillazione lenta, aura slavata | È qui che l'animazione si mostra, e il giocatore **sceglie** di guardarla pagandola in Lucidità |
+
+Questa è la ragione per cui il Limine non è solo una meccanica: è il momento in cui il gioco rallenta abbastanza da farsi guardare. Non serve scegliere tra un salto bello e un salto reattivo — si hanno entrambi, e la scelta è del giocatore.
+
+**Aura**: il colore dell'aura segue il mondo corrente (fredda nel Reale, violacea nell'Onirico, slavata nel Limine), mentre il corpo resta scuro. È il rispetto operativo della regola qui sotto.
+
 ### La regola della silhouette unica
 
 Mantenere lo **stesso personaggio** (stessa silhouette, corpo sempre scuro) in tutti e tre gli stati è importante: a cambiare deve essere solo l'illuminazione — rim light e glow prendono il colore del mondo corrente. Rinforza l'idea che è la stessa persona sospesa tra stati diversi, non tre personaggi diversi.
@@ -495,6 +590,19 @@ Un cambio musicale netto ad ogni flip rischierebbe di risultare fastidioso, spec
 | **Collisione / Risveglio** | Suono netto ma non scoraggiante: il giocatore lo sentirà molto spesso nei primi minuti, deve invitare a riprovare subito |
 | **Streak / Lucidità** | Un breve "ding"/arpeggio che sale di tono ad ogni switch corretto consecutivo — rinforza sonoramente il senso di flow, in parallelo alla crescita visiva delle particelle (sezione 12) |
 | **Respiro/movimento del personaggio** | Leggero whoosh/respiro continuo durante la corsa, con timbro diverso tra i due mondi (più fisico nel Reale, più eterico nell'Onirico) |
+
+### Musica e strati **[v1.2]**
+
+Il cambio di traccia è legato **allo strato raggiunto**, non alla fine del file audio: agganciare il cambio alla durata di una traccia lo slega dal progresso del giocatore e prima o poi lo fa scattare nel momento sbagliato. Il crossfade avviene sull'evento di transizione dello strato (sez. 3).
+
+Tutti gli strati condividono **BPM e tonalità** (o tonalità affini), così nessun passaggio stona.
+
+**Il problema di produzione, dichiarato**: la sez. 13 prevede già due mix sincronizzati per il flip. Con quattro strati diventano **otto tracce**, che per uno sviluppatore solista è molto. Due strategie per rientrare:
+
+1. **Mix onirico generato a runtime** — un passa-basso più riverbero applicati alla stessa traccia (raylib espone `AttachAudioStreamProcessor`). Dimezza il materiale da produrre, al costo di scrivere DSP.
+2. **Stem invece di tracce complete** — una base ritmica continua per tutto il gioco, e ogni strato aggiunge o sostituisce un livello sopra. Più coeso all'ascolto e meno materiale da produrre.
+
+**Sull'aumento di velocità**: non alzare il pitch. Sposta la tonalità e suona economico. L'accelerazione si comunica **aggiungendo uno strato percussivo** — la stessa musica che si infittisce.
 
 ### Fonti asset audio per il prototipo
 
@@ -666,8 +774,8 @@ Ordine suggerito per le fasi successive alla validazione del prototipo minimo:
 
 ---
 
-*Documento di design — **Versione 1.1**, 2 settembre 2026.*
+*Documento di design — **Versione 1.2**, 2 settembre 2026.*
 
-*La v1.0 conteneva il concept completo ma era stata scritta prima dell'inizio dello sviluppo: portava ancora lo stack Haxe, una struttura a cartelle incompatibile con Odin, e un modello a due soli stati di gioco. La v1.1 corregge questi punti alla luce dell'Alpha effettivamente costruita e della revisione di design che ne è seguita.*
+*La v1.0 conteneva il concept completo ma era stata scritta prima dell'inizio dello sviluppo: portava ancora lo stack Haxe, una struttura a cartelle incompatibile con Odin, e un modello a due soli stati di gioco. La v1.1 ha corretto questi punti alla luce dell'Alpha effettivamente costruita. La v1.2 aggiunge il mondo in cui il gioco si svolge — gli strati, la convergenza, il corpo del personaggio, gli ostacoli anticipatori e i bonus di luce — trasformando un loop funzionante in un'esperienza con un arco.*
 
 *Questo documento dice **cosa** e **perché**. Per il **come e in che ordine** vedi `ROADMAP.md`; per le **regole operative di sviluppo** (architettura, convenzioni, workflow) vedi `CLAUDE.md`.*

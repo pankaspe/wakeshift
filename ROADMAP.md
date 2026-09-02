@@ -52,7 +52,9 @@ Verificato sul codice, 2 settembre 2026 — aggiornato a chiusura Fase 1.
 - 3 tier di difficoltà con pool cumulative
 - Canvas virtuale 1280×720 letterboxato → fullscreen pulito su qualsiasi monitor
 - Menu, pausa, game over, salvataggio record
-- **[Fase 1]** Codice riorganizzato nei sette package (`core/platform/fx/game/render/ui/audio`, `fx` e `audio` ancora vuoti) con grafo di dipendenze aciclico; `main.odin` ricablato, `draw_gameplay` estratto
+- **[Fase 1]** Codice riorganizzato nei package (`core/platform/game/render/ui`; `fx` e `audio` non ancora creati) con grafo di dipendenze aciclico; `main.odin` ricablato, `draw_gameplay` estratto
+- **[Fase 2]** Salvataggio cifrato (CBOR + XChaCha20-Poly1305) nella directory dati utente, che rifiuta file corrotti o manomessi senza mai far crashare il gioco
+- **[Fase 2]** Simulazione deterministica: seed esplicito, input come dato, timestep fisso a 60 Hz. Ogni record salva il `RunManifest` della run che l'ha ottenuto — seed più i tick di ogni flip
 
 **Non funziona / manca**
 - Ogni ostacolo pone la stessa domanda: l'unica leva di difficoltà è la velocità (270 → 330 → 400 px/s)
@@ -62,7 +64,7 @@ Verificato sul codice, 2 settembre 2026 — aggiornato a chiusura Fase 1.
 - La fascia centrale (40% dello schermo) è inutilizzata
 - Sfondo `rl.ClearBackground(rl.BEIGE)`, contorni neri da 1.8px
 - Nessuna particella, nessun bloom, nessun parallax, nessun audio
-- Salvataggio in chiaro (`highscore.txt`) nella cartella di lavoro
+- Nessun replay o ghost visibile in gioco: il `RunManifest` viene registrato e salvato, ma non ancora rigiocato dall'interfaccia
 
 ---
 
@@ -255,95 +257,105 @@ main      ← tutti
 
 ---
 
-### Fase 2 — Salvataggio sicuro e determinismo
+### Fase 2 — Salvataggio sicuro e determinismo *(T2.1-T2.9 completati)*
 
 **Obiettivo**: le fondamenta invisibili. Nessun cambiamento a schermo, ma senza queste la leaderboard di domani è impossibile e il bilanciamento di dopodomani è cieco.
 
 | Task | Descrizione | Modello |
 |---|---|---|
-| T2.1 | `platform/paths.odin`: directory dati utente per SO, con creazione della cartella | Sonnet |
-| T2.2 | `SaveData` + serializzazione CBOR, versionata | Sonnet |
-| T2.3 | Cifratura ChaCha20-Poly1305, nonce per salvataggio, gestione del file corrotto/manomesso senza crash | **Opus** |
-| T2.4 | Migrazione trasparente dal vecchio `highscore.txt`, poi rimozione | Sonnet |
-| T2.5 | **Input come struct** `platform.Input` passato dall'esterno; via `rl.IsKeyPressed` da dentro la logica | **Opus** |
-| T2.6 | RNG con seed esplicito filtrato nel generatore di pattern | Sonnet |
-| T2.7 | **Timestep fisso** con accumulatore | **Opus** |
-| T2.8 | `RunManifest`: seed, versione, tick rate, log input, punteggio dichiarato — registrato durante la run e salvato per il record | **Opus** |
-| T2.9 | Rimozione degli ostacoli ormai passati dalla lista (oggi non vengono mai eliminati: dopo 5 minuti ne cicli ~300 a frame) | Sonnet |
-| T2.10 ⚑ | Verifica: due run con lo stesso seed e lo stesso log input producono lo stesso punteggio | Sonnet |
+| T2.1 | `platform/paths.odin`: directory dati utente per SO, con creazione della cartella | Sonnet ✅ |
+| T2.2 | `SaveData` + serializzazione CBOR, versionata | Sonnet ✅ |
+| T2.3 | Cifratura ChaCha20-Poly1305, nonce per salvataggio, gestione del file corrotto/manomesso senza crash | **Opus** ✅ |
+| T2.4 | Migrazione trasparente dal vecchio `highscore.txt`, poi rimozione | Sonnet ✅ |
+| T2.5 | **Input come struct** `core.Input` passato dall'esterno; via `rl.IsKeyPressed` da dentro la logica | **Opus** ✅ |
+| T2.6 | RNG con seed esplicito filtrato nel generatore di pattern | Sonnet ✅ |
+| T2.7 | **Timestep fisso** con accumulatore | **Opus** ✅ |
+| T2.8 | `RunManifest`: seed, versione, tick rate, log input, punteggio dichiarato — registrato durante la run e salvato per il record | **Opus** ✅ |
+| T2.9 | Rimozione degli ostacoli ormai passati dalla lista | Sonnet ✅ |
+| T2.10 ⚑ | Verifica finale a mano: giocare qualche run e confermare che nulla è regredito | Sonnet |
 
-**Perché T2.5 e T2.7 sono Opus**: toccano entrambi la macchina a stati del player, e T2.5 è il prerequisito diretto del gesto tap/hold della Fase 5. Il timestep fisso cambia sottilmente il *feel* — va fatto con attenzione all'interpolazione del rendering.
+**Perché T2.5 e T2.7 erano Opus**: toccano entrambi la macchina a stati del player, e T2.5 è il prerequisito diretto del gesto tap/hold della Fase 5. Il timestep fisso cambia sottilmente il *feel* — andava fatto con attenzione all'interpolazione del rendering.
+
+#### Cosa è emerso strada facendo
+
+Note utili da rileggere, non riassunti dei task:
+
+- **`Input` sta in `core`, non in `platform`** come diceva la tabella. Se stesse in `platform`, `ui` dovrebbe importarlo per il menu — un arco che il grafo delle dipendenze non prevede. È vocabolario condiviso, come `Lane`; a leggere la tastiera è `platform/input.odin`, unico punto del progetto.
+- **`make_directory_all` non è idempotente**: su ogni backend ritorna `.Exist` invece di `nil` quando la cartella c'è già. Scoperto solo testando due avvii di fila.
+- **Le funzioni AEAD di Odin usano `ensure()`** sulle dimensioni degli slice, che *aborta il processo*. Ogni controllo di lunghezza in `open_bytes` avviene prima di qualsiasi chiamata crittografica: un file troncato deve essere rifiutato, non far chiudere il gioco.
+- **Il timestep fisso porta con sé tre problemi, non uno**: l'input che si perde o si duplica (risolto con `pending_input` latched), la spirale della morte (risolta con `MAX_FRAME_TIME`), e il micro-stutter visivo (risolto disegnando da una copia del mondo spinta avanti del resto dell'accumulatore).
+- **`TICK_RATE` è la costante primaria, `FIXED_TIMESTEP` deriva da lei.** Il contrario faceva fallire il cast a intero per deriva float — e il manifesto ha bisogno di una frequenza esatta.
+- **Il culling degli ostacoli non può assumere l'ordinamento**: la larghezza delle voragini varia da 54 a 118 px, quindi un ostacolo più recente ma stretto può uscire dallo schermo prima di uno precedente ma largo. Compattazione completa, non rimozione del prefisso.
+
+#### Cosa questo sblocca
+
+Il determinismo è verificato, non solo progettato: stessa sequenza di step → stato bit-identico su profili di frame da 60 Hz, 240 Hz e irregolari; rigiocare un manifesto salvato riproduce il punteggio esatto; spostare un solo flip di un tick lo cambia. Da qui derivano, senza altro lavoro di fondo: validazione lato server della leaderboard, replay e ghost, e bilanciamento riproducibile (Fase 10).
 
 ---
 
-### Fase 3 — Palette e fondamenta visive
+### Fase 3 — Palette, corpo, e il primo strato
 
-**Obiettivo**: il salto visivo più grande della roadmap, prima di qualsiasi shader. Riferimento: [Il sistema a tre mondi](#il-sistema-a-tre-mondi--riferimento-grafico-trasversale).
+**Obiettivo**: il salto visivo più grande della roadmap. Riferimento: [Il sistema a tre mondi](#il-sistema-a-tre-mondi--riferimento-grafico-trasversale) e Design Doc sez. 12.
 
 | Task | Descrizione | Modello |
 |---|---|---|
 | T3.1 | `render/palette.odin`: tre palette, `world_t`, interpolazione continua | **Opus** |
-| T3.2 | `render/background.odin`: gradiente verticale Onirico→orizzonte→Reale, intensità e saturazione guidate da `world_t` | **Opus** |
-| T3.3 | Terreno ricolorato su palette, rim light per mondo | Sonnet |
-| T3.4 | Ostacoli ricolorati su palette | Sonnet |
-| T3.5 | Player: silhouette unica nei tre stati, rim light del mondo corrente (corregge l'inversione corpo/bordo attuale) | Sonnet |
-| T3.6 | Glow additivo economico: 3-4 draw sovrapposti in `BLEND_ADDITIVE` con alpha decrescente | **Opus** |
-| T3.7 | HUD e menu ricolorati, leggibilità su fondo scuro | Sonnet |
-| T3.8 ⚑ | Playtest visivo | — |
+| T3.2 | Interpolazione aggiuntiva per **profondità**: al crescere della profondità le palette dei due mondi virano verso quella del Limine (la convergenza, Design Doc sez. 12) | **Opus** |
+| T3.3 | `render/background.odin`: gradiente verticale Onirico→orizzonte→Reale guidato da `world_t` | **Opus** |
+| T3.4 | Terreno ricolorato su palette, rim light per mondo | Sonnet |
+| T3.5 | Ostacoli ricolorati su palette | Sonnet |
+| T3.6 | **Il personaggio prende un corpo**: testa, torso, arti da primitive; ciclo di corsa; la frustata del flip. Corregge anche l'inversione corpo/bordo attuale | **Opus** |
+| T3.7 | Glow additivo economico (`BLEND_ADDITIVE`, alpha decrescente) | **Opus** |
+| T3.8 | HUD e menu ricolorati, leggibilità su fondo scuro | Sonnet |
+| T3.9 ⚑ | Playtest visivo | — |
 
-**Nota**: `world_t` a questo punto varia solo durante i 0.12s del flip. Il sistema è già completo e continuo, ma brillerà davvero alla Fase 5, quando il giocatore potrà fermarsi nel mezzo.
-
-**Test di verifica**: uno screenshot deve smettere di sembrare un prototipo. Il flip deve *sentirsi* come un attraversamento, non come uno scatto.
+**Test di verifica**: uno screenshot deve smettere di sembrare un prototipo. Il flip deve *sentirsi* come un attraversamento.
 
 ---
 
 ### Fase 4 — Bloom reale
 
-**Obiettivo**: la direzione "Ori" vera, sul render target che già esiste in `platform/display.odin`.
-
 | Task | Descrizione | Modello |
 |---|---|---|
 | T4.1 | Shader GLSL: bright-pass + blur gaussiano separabile | **Opus** |
-| T4.2 | Composite additivo, intensità modulata da `world_t`: duro e contenuto nel Reale, morbido e invadente nell'Onirico, sovraesposto nel Limine | **Opus** |
+| T4.2 | Composite additivo, intensità modulata da `world_t`: duro nel Reale, invadente nell'Onirico, sovraesposto nel Limine | **Opus** |
 | T4.3 | Verifica 60 FPS stabili con bloom attivo | Sonnet |
 | T4.4 ⚑ | Playtest di leggibilità a 400 px/s | — |
 
-**Test di verifica**: il glow non deve compromettere la leggibilità alla massima velocità. Se devo scegliere tra bello e leggibile, vince leggibile.
+**Test di verifica**: se devo scegliere tra bello e leggibile, vince leggibile.
 
 ---
 
 ### Fase 5 — Il Limine: il terzo stato
 
-**Obiettivo**: il cuore dell'evoluzione. Qui il gioco smette di essere un clone di flip-gravity. Dipende da T2.5 (input come struct).
+**Obiettivo**: il cuore dell'evoluzione. Dipende da T2.5 (input come dato), già fatto.
 
 | Task | Descrizione | Modello |
 |---|---|---|
 | T5.1 | Riconoscimento tap vs hold sulla barra spaziatrice | **Opus** |
-| T5.2 | Fisica della sospensione: arresto a metà viaggio, ondeggio, completamento alla direzione di marcia al rilascio | **Opus** |
-| T5.3 | Lucidity come carburante: consumo nel Limine, accumulo dai near-miss, soglia minima | **Opus** |
-| T5.4 | Ritmo di punteggio del Limine (40/s) | Sonnet |
-| T5.5 | HUD: la Lucidity diventa una barra di risorsa, non un numero | Sonnet |
-| T5.6 | Feedback visivo della sospensione (luce, ondeggio, scia) | Sonnet |
+| T5.2 | Fisica della sospensione: arresto a metà viaggio, completamento nella direzione di marcia al rilascio | **Opus** |
+| T5.3 | **La posa del galleggiamento**: la rotazione si completa e si assesta, braccia aperte, oscillazione lenta (Design Doc sez. 12) | **Opus** |
+| T5.4 | Lucidity come carburante: consumo nel Limine, accumulo dai near-miss, soglia minima | **Opus** |
+| T5.5 | Ritmo di punteggio del Limine (40/s) | Sonnet |
+| T5.6 | HUD: la Lucidity diventa una barra di risorsa, non un numero | Sonnet |
 | T5.7 ⚑ | **Playtest decisivo**: il gesto deve risultare naturale entro 30 secondi senza spiegazioni | — |
 
-**Squilibrio noto e voluto**: a fine fase il centro è **sicuro**, perché tutti gli ostacoli attuali sono alti 54px e attaccati alle pareti. Il Limine sarà temporaneamente troppo forte; si chiude alla Fase 6 (T6.5). Nel frattempo il consumo di Lucidity va tarato aggressivo.
-
-**Se T5.7 non passa**, si ridiscute il gesto prima di costruirci sopra qualsiasi altra cosa.
+**Squilibrio noto e voluto**: a fine fase il centro è **sicuro**, perché tutti gli ostacoli sono attaccati alle pareti. Si chiude in T6.6. Nel frattempo il consumo di Lucidity va tarato aggressivo.
 
 ---
 
-### Fase 6 — Ostacoli veri: pieno vs vuoto
+### Fase 6 — Ostacoli veri
 
-**Obiettivo**: smettere di avere quattro skin dello stesso ostacolo, e recuperare l'idea tematica centrale del design doc.
+**Obiettivo**: smettere di avere quattro skin dello stesso ostacolo. Riferimento: Design Doc sez. 5, incluso il principio **anticipatori, non reattivi**.
 
 | Task | Descrizione | Modello |
 |---|---|---|
 | T6.1 | Terreno interrompibile: il disegno del suolo deve sapere dove sono i vuoti | **Opus** |
 | T6.2 | `Chasm` e `DreamHole` diventano **vere assenze**, disegnate come buchi reali | **Opus** |
 | T6.3 | Regole di collisione differenziate: il blocco uccide al contatto, la voragine solo se sei nella corsia bassa e appoggiato | **Opus** |
-| T6.4 | Fix `PulsingShape`: fase ancorata all'`arrival_time` invece che al tempo globale (oggi lo stesso pattern è a volte un muro da 55px, a volte uno stub da 8px ignorabile) | Sonnet |
-| T6.5 | **Ostacolo che minaccia il Limine** — chiude lo squilibrio della Fase 5. Candidati: spira che attraversa tutta l'altezza lasciando passaggio solo alto o basso; entità che pattuglia il centro | **Opus** |
-| T6.6 | Ostacoli rimanenti dal design doc: piattaforma sospesa, pistone, specchio fluttuante | Sonnet |
+| T6.4 | Fix `PulsingShape`: fase ancorata all'`arrival_time` invece che al tempo globale | Sonnet |
+| T6.5 | **Archetipi anticipatori**: Eco, Finta, Pattugliatore (Design Doc sez. 5) | **Opus** |
+| T6.6 | **Ostacolo che minaccia il Limine** — chiude lo squilibrio della Fase 5 | **Opus** |
 | T6.7 ⚑ | Playtest: due ostacoli diversi devono richiedere due **letture** diverse | — |
 
 ---
@@ -352,7 +364,7 @@ main      ← tutti
 
 | Task | Descrizione | Modello |
 |---|---|---|
-| T7.1 | Punti di aggancio estesi al Limine (un pattern può richiedere entrata/uscita dal centro) | **Opus** |
+| T7.1 | Punti di aggancio estesi al Limine | **Opus** |
 | T7.2 | 12-16 pattern su tre tier | Sonnet |
 | T7.3 | Curva di velocità e cadenza degli switch ribilanciate: la difficoltà non deve più venire solo dalla velocità | **Opus** |
 | T7.4 | Validazione automatica delle pool estesa ai nuovi vincoli | Sonnet |
@@ -360,105 +372,133 @@ main      ← tutti
 
 ---
 
-### Fase 8 — Sistema particellare
+### Fase 8 — I bonus di luce
 
-**Obiettivo**: quello che il design doc prevede da sempre e non è mai stato fatto. Con il bloom già attivo è l'elemento a miglior rapporto impatto/costo di tutta la roadmap.
+**Obiettivo**: profondità decisionale senza un secondo input. Dipende dalla Fase 5 (Lucidity come risorsa). Riferimento: Design Doc sez. 8.
 
 | Task | Descrizione | Modello |
 |---|---|---|
-| T8.1 | `fx/particles.odin`: pool fisso pre-allocato, emitter parametrico (colore start/end, velocità, gravità, spread, lifetime, drag) | **Opus** |
-| T8.2 | Preset **Reale**: polvere e scintille al contatto col pavimento, moto lineare, gravità verso il basso | Sonnet |
-| T8.3 | Preset **Onirico**: particelle che fluttuano, moto a spirale, dissolvenza graduale, scia di "polvere di sogno" | Sonnet |
-| T8.4 | Preset **Limine**: particelle che orbitano attorno al giocatore sospeso, quasi ferme — lì dentro il tempo sembra diverso | Sonnet |
-| T8.5 | Burst sul flip, con colori che sfumano dalla palette di partenza a quella di arrivo | Sonnet |
-| T8.6 | Densità e vivacità legate alla Lucidity | Sonnet |
-| T8.7 ⚑ | Playtest: nessun calo di framerate a densità massima | — |
+| T8.1 | Pickup raccolti **per posizione**, non con un tasto; piazzati nella corsia pericolosa | **Opus** |
+| T8.2 | Linguaggio visivo: gli ostacoli sono sagome scure, i bonus sono **fatti di luce** | Sonnet |
+| T8.3 | Raccogliere luce = guadagnare Lucidity (una sola risorsa, non cinque) | Sonnet |
+| T8.4 | **Timeshift** (Onirico): rallentamento del tempo per N secondi | **Opus** |
+| T8.5 | **Forza della natura** (Reale): immunità per N secondi | Sonnet |
+| T8.6 | Integrazione nei pattern: il generatore piazza i bonus con la stessa logica di aggancio degli ostacoli | **Opus** |
+| T8.7 ⚑ | Playtest: la domanda deve diventare "vale il rischio?", non "dove scappo?" | — |
+
+**Nota**: niente malus da raccogliere — decisione presa nel Design Doc sez. 8. Gli elementi avversi vanno nell'ambiente, dove sono prevedibili.
 
 ---
 
-### Fase 9 — Profondità: parallax procedurale
+### Fase 9 — Sistema particellare
 
 | Task | Descrizione | Modello |
 |---|---|---|
-| T9.1 | Generazione procedurale dei layer: sagome di alberi, rocce, forme oniriche costruite con rumore | **Opus** |
-| T9.2 | Scroll multi-layer a velocità diverse (3-4 livelli) | Sonnet |
-| T9.3 | I layer campionano dalla palette: salendo, i fondali reali sbiadiscono e quelli onirici emergono | Sonnet |
-| T9.4 ⚑ | Playtest: nessun fondale deve competere con player e ostacoli in primo piano | — |
-
-**Perché procedurale e non PNG gratuiti**: mescolare fondali dipinti da terzi con primitive geometriche disegnate da te dà quasi sempre un risultato incoerente, e ti lega a uno stile che non hai scelto. Restare "tutto via codice" è coerente con silhouette+luce e non richiede un'illustratrice.
+| T9.1 | `fx/particles.odin`: pool fisso pre-allocato, emitter parametrico | **Opus** |
+| T9.2 | Preset **Reale**: polvere e scintille al contatto, moto lineare | Sonnet |
+| T9.3 | Preset **Onirico**: particelle fluttuanti, moto a spirale, scia | Sonnet |
+| T9.4 | Preset **Limine**: particelle che orbitano attorno al giocatore sospeso | Sonnet |
+| T9.5 | Burst sul flip, colori che sfumano dalla palette di partenza a quella di arrivo | Sonnet |
+| T9.6 | Densità e vivacità legate alla Lucidity | Sonnet |
+| T9.7 ⚑ | Playtest: nessun calo di framerate a densità massima | — |
 
 ---
 
-### Fase 10 — Game feel e bilanciamento
+### Fase 10 — Il primo strato e la sua transizione
+
+**Obiettivo**: validare l'intera idea degli strati su **uno solo**, prima di produrne quattro. Riferimento: Design Doc sez. 3.
 
 | Task | Descrizione | Modello |
 |---|---|---|
-| T10.1 | Screen shake calibrato, hit-stop (2-3 frame di freeze sulla morte), flash cromatico sul flip | **Opus** |
-| T10.2 | Micro-movimenti di camera legati a `world_t` | Sonnet |
-| T10.3 | Bilanciamento numerico: ritmi di punteggio, consumo di Lucidity, soglie dei tier, finestre di reazione per tier | **Opus** |
-| T10.4 ⚑ | Sessioni cronometrate: una run media deve stare sui 45-90 secondi | — |
+| T10.1 | Generazione procedurale dei layer di parallax (sagome da rumore, non PNG) | **Opus** |
+| T10.2 | Scroll multi-layer a velocità diverse; i layer campionano dalla palette | Sonnet |
+| T10.3 | **Sistema di strati**: uno strato è palette + parallax + pool di ostacoli + traccia | **Opus** |
+| T10.4 | **La transizione come evento**: 2-3 secondi in cui il parallax si scambia senza fermare il gioco | **Opus** |
+| T10.5 | Contenuto di **due** strati soltanto: Foresta e Pietraia | Sonnet |
+| T10.6 ⚑ | **Decisione**: se la transizione emoziona, gli altri strati sono lavoro meccanico. Se no, si ridiscute prima di produrli | — |
+
+---
+
+### Fase 11 — Game feel e bilanciamento
+
+| Task | Descrizione | Modello |
+|---|---|---|
+| T11.1 | Screen shake, hit-stop sulla morte, flash cromatico sul flip | **Opus** |
+| T11.2 | Micro-movimenti di camera legati a `world_t` | Sonnet |
+| T11.3 | Bilanciamento numerico: punteggi, consumo Lucidity, soglie, finestre di reazione | **Opus** |
+| T11.4 ⚑ | Sessioni cronometrate: una run media sui 45-90 secondi | — |
 
 Qui il determinismo della Fase 2 ripaga: si rigioca la stessa run identica dopo ogni modifica ai numeri.
 
 ---
 
-### Fase 11 — Audio
+### Fase 12 — Audio
 
 | Task | Descrizione | Modello |
 |---|---|---|
-| T11.1 | Due tracce sullo stesso BPM e struttura ritmica, con crossfade sul flip | **Opus** |
-| T11.2 | Il Limine come terzo livello di mix: passa-basso e riverbero crescenti, come sentire i due mondi da sott'acqua | **Opus** |
-| T11.3 | SFX: flip (pitch che sale verso l'Onirico e scende verso il Reale), collisione, ding di Lucidity, respiro del personaggio | Sonnet |
-| T11.4 | Volumi separati musica/SFX, persistiti nelle opzioni | Sonnet |
-| T11.5 ⚑ | Playtest audio | — |
+| T12.1 | Due mix sincronizzati con crossfade sul flip | **Opus** |
+| T12.2 | Il Limine come terzo livello di mix: passa-basso e riverbero crescenti | **Opus** |
+| T12.3 | Traccia per strato, crossfade sull'evento di transizione (mai sulla fine del file) | **Opus** |
+| T12.4 | SFX: flip, collisione, ding di Lucidity, raccolta bonus | Sonnet |
+| T12.5 | Volumi separati musica/SFX, persistiti nelle opzioni | Sonnet |
+| T12.6 ⚑ | Playtest audio | — |
+
+**Nota di produzione**: due mix × N strati è molto per un solista. Valutare il mix onirico generato a runtime (`AttachAudioStreamProcessor`) o gli stem al posto di tracce complete — Design Doc sez. 13.
 
 ---
 
-### Fase 12 — UI, Referto Onirico, rifinitura
+### Fase 13 — UI, Referto Onirico, rifinitura
 
 | Task | Descrizione | Modello |
 |---|---|---|
-| T12.1 | HUD definitivo coerente con la palette | Sonnet |
-| T12.2 | **Referto Onirico**: profondità, Lucidity massima, tempo per stato, record — pensato per essere screenshottabile | **Opus** |
-| T12.3 | Schermata opzioni (volumi, luminosità, lingua) | Sonnet |
-| T12.4 | Persistenza estesa: opzioni e storico delle ultime run | Sonnet |
-| T12.5 | Passata finale di coerenza visiva | **Opus** |
-| T12.6 ⚑ | Playtest completo end-to-end | — |
+| T13.1 | HUD definitivo coerente con la palette | Sonnet |
+| T13.2 | **Referto Onirico**: profondità, Lucidity massima, tempo per stato, strato raggiunto — screenshottabile | **Opus** |
+| T13.3 | Schermata opzioni | Sonnet |
+| T13.4 | Persistenza estesa: opzioni e storico delle ultime run | Sonnet |
+| T13.5 | Passata finale di coerenza visiva | **Opus** |
+| T13.6 ⚑ | Playtest completo end-to-end | — |
 
 ---
 
 ## Riepilogo carico per modello
 
+Fasi 0-2 completate. Il conteggio qui sotto è **quel che resta**.
+
 | Fase | Sonnet | Opus |
 |---|---|---|
-| 1 — Struttura | 6 | 1 |
-| 2 — Salvataggio e determinismo | 6 | 4 |
-| 3 — Palette | 4 | 3 |
+| 3 — Palette, corpo, primo strato | 3 | 5 |
 | 4 — Bloom | 1 | 2 |
-| 5 — Limine | 3 | 3 |
-| 6 — Ostacoli | 2 | 4 |
-| 7 — Pattern | 2 | 2 |
-| 8 — Particelle | 5 | 1 |
-| 9 — Parallax | 2 | 1 |
-| 10 — Game feel | 1 | 2 |
-| 11 — Audio | 2 | 2 |
-| 12 — UI | 3 | 2 |
-| **Totale** | **37** | **27** |
+| 5 — Il Limine | 2 | 4 |
+| 6 — Ostacoli veri | 1 | 5 |
+| 7 — Pattern e difficoltà | 2 | 2 |
+| 8 — Bonus di luce | 3 | 3 |
+| 9 — Particelle | 5 | 1 |
+| 10 — Strati e transizione | 2 | 3 |
+| 11 — Game feel | 1 | 2 |
+| 12 — Audio | 2 | 3 |
+| 13 — UI e rifinitura | 3 | 2 |
+| **Totale rimanente** | **25** | **32** |
 
-Le fasi più economiche da mandare avanti in Sonnet sono la **1** (spostamenti), la **8** (preset di particelle, molto ripetitivi) e la **12** (UI). Le fasi dove conviene spendere Opus sono la **2** (determinismo: un errore qui si paga per tutto il resto del progetto), la **5** (il gesto nuovo) e la **6** (regole di collisione, dove un bug non dà errore di compilazione ma un gioco che sembra ingiusto).
+Il rapporto si è spostato verso Opus rispetto al piano iniziale, ed è corretto che sia così: le fasi che restano decidono *come si gioca* (il gesto del Limine, le regole di collisione, gli archetipi anticipatori, il bilanciamento) invece di spostare file. Le fasi economiche da mandare in Sonnet restano la **9** (preset di particelle, molto ripetitivi) e la **13** (UI).
+
+Dove conviene spendere Opus, in ordine: la **5** (il gesto nuovo — se sbagliato lì, tutto il resto poggia male), la **6** (regole di collisione: un errore non dà errore di compilazione, dà un gioco che *sembra* ingiusto) e la **3** (la convergenza delle palette, che è insieme identità visiva e curva di difficoltà).
 
 ---
 
 ## Definition of Done — Alpha
 
+- [x] Salvataggio cifrato nella directory dati utente, con manifesto della run migliore
+- [x] Run riproducibile da seed + log input (base della leaderboard e dei replay)
 - [ ] Tre stati giocabili, con costo e ricompensa bilanciati — nessuno è la scelta ovvia sempre
+- [ ] Il personaggio ha un corpo e due pose leggibili: la frustata del tap, il galleggiamento dell'hold
 - [ ] Sistema visivo a tre palette con blending continuo, bloom, particelle e parallax attivi insieme
-- [ ] Almeno 6 tipi di ostacolo con **letture distinte**, di cui almeno uno che minaccia il Limine
+- [ ] **La convergenza funziona**: scendendo, i due mondi si somigliano sempre di più, e il gioco resta giocabile perché posizione e movimento reggono da soli
+- [ ] Almeno 6 tipi di ostacolo con **letture distinte**, di cui almeno uno che minaccia il Limine e almeno uno anticipatorio (Eco / Finta / Pattugliatore)
 - [ ] 12-16 pattern distribuiti su tre tier
-- [ ] Audio: due tracce sincronizzate + i tre SFX principali
+- [ ] Bonus di luce raccolti per posizione, piazzati dove costa qualcosa prenderli
+- [ ] **Due strati e la transizione fra loro**, come evento che non ferma il gioco
+- [ ] Audio: due mix sincronizzati + traccia per strato + i SFX principali
 - [ ] Menu, pausa, opzioni, Referto Onirico
-- [ ] Salvataggio cifrato nella directory dati utente, con manifesto della run migliore
-- [ ] Run riproducibile da seed + log input (base della leaderboard e dei replay)
 - [ ] **60 FPS stabili** con tutti gli effetti attivi
 - [ ] Run media 45-90 secondi, curva di difficoltà leggibile
 - [ ] Un giocatore nuovo capisce il gesto tap/hold entro 30 secondi senza istruzioni

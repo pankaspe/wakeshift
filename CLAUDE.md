@@ -46,6 +46,31 @@ expectations differ.
 
 ---
 
+## Picking up in a new session
+
+Development runs one roadmap phase per session, so most sessions start cold. Read in this
+order before touching anything:
+
+1. **`ROADMAP.md`** — the phase table says exactly what is done (✅) and what is next. Each
+   phase lists numbered tasks with a recommended model.
+2. **`docs/design_doc.md`** — binding on *what* to build. v1.2 is current.
+3. The rest of this file — architecture rules and conventions.
+
+**Where the project stands:** phases 0-2 are complete. The code is split into packages with
+an acyclic dependency graph, saves are encrypted in the OS user data directory, and the
+simulation is deterministic and verified (seeded generation, input as data, fixed timestep,
+run manifests recorded). Phase 3 — palette, the character's body, and the first layer — is
+next and has not been started. The game still renders on `rl.ClearBackground(rl.BEIGE)`.
+
+**How verification works here:** `odin check src` after every edit, `odin build src` and a
+short launch before reporting a task done. For anything with real logic, write a throwaway
+program in the scratchpad that exercises the module directly and run it — that habit has
+caught several bugs that type-checking could not (`make_directory_all` returning `.Exist`,
+the input latch, the AEAD size assertions). Never claim anything about how the game looks
+or feels; the user judges that.
+
+---
+
 ## Workflow
 
 This is a long project, developed one phase at a time.
@@ -72,13 +97,19 @@ This is a long project, developed one phase at a time.
 ```
 core      ← imports nothing from the project
 platform  ← core
-fx        ← core
-game      ← core, platform, fx
-render    ← core, game, fx
+game      ← core
+render    ← core, game
 ui        ← core, game
-audio     ← core, game
 main      ← everything
+
+fx        ← core          (roadmap phase 8, not created yet)
+audio     ← core, game    (roadmap phase 11, not created yet)
 ```
+
+Note that `game` does not currently import `platform`: input arrives as a
+`core.Input` value, so gameplay needs nothing from the platform layer at all.
+Keep it that way if you can — it is what makes the simulation testable without
+a window.
 
 Odin forbids cyclic imports between packages, and one directory is exactly one package.
 The split is **by level of abstraction, not by game entity** — `player`, `obstacle`,
@@ -91,11 +122,17 @@ constantly, and splitting them would force premature interfaces.
 - **`render/` never mutates game state.** It takes state by value and produces pixels.
 - **`fx/` knows nothing about the game.** It is a parametric particle/post-processing
   module; gameplay may emit into it, but it never imports `game`.
-- **Input is passed in, never read inside gameplay.** Gameplay procedures take a
-  `platform.Input` struct. This keeps the game testable, makes replays possible, and is a
-  prerequisite for the server-side leaderboard validation described in the design doc.
+- **Input is passed in, never read inside gameplay.** Gameplay and UI procedures take a
+  `core.Input` value. Exactly one procedure in the project polls the keyboard
+  (`platform.read_input`) and exactly one reads the clock (`rl.GetFrameTime`, in the main
+  loop). Adding a second of either breaks replay.
 - **Randomness is seeded and threaded explicitly.** Never call the global `rand.*`
-  procedures; a run must be reproducible from its seed.
+  procedures; every draw goes through the run's own generator so the run is reproducible
+  from its seed.
+- **The simulation advances in fixed steps.** `core.FIXED_TIMESTEP`, never a raw frame
+  time. A frame may run zero, one, or several steps; input is latched until a step
+  consumes it. Anything that must not change a run's outcome — culling, rendering — has
+  to be provably neutral, not just probably neutral.
 - **No hardcoded colors outside `render/palette.odin`.** Every color is sampled from the
   three-world palette.
 - **No hardcoded pixel timings in patterns.** Patterns are time offsets; positions are
@@ -103,9 +140,8 @@ constantly, and splitting them would force premature interfaces.
 
 ### Save data and determinism
 
-- Save files live in the **OS user data directory**, never in the working directory:
-  `$XDG_DATA_HOME/wake-shift/` (Linux), `%APPDATA%\\wake-shift\\` (Windows),
-  `~/Library/Application Support/wake-shift/` (macOS).
+- Save files live in the **OS user data directory**, never in the working directory
+  (`platform/paths.odin` resolves it per platform via `os.user_data_dir`).
 - The payload is CBOR (`core:encoding/cbor`) sealed with ChaCha20-Poly1305
   (`core:crypto/chacha20poly1305`). A save that fails to authenticate is **rejected and
   reset to defaults**, never trusted and never allowed to crash the game.
@@ -117,7 +153,15 @@ constantly, and splitting them would force premature interfaces.
   A locally computed score is never evidence of anything.
 - Because of that, **determinism is a product feature, not tidiness**: seeded RNG, input
   as data, and a fixed timestep together buy leaderboard validation, replays, ghosts, and
-  reproducible balancing. Do not weaken any of the three for convenience.
+  reproducible balancing. All three are in place and verified. Do not weaken any of them
+  for convenience.
+- Changing `SaveData`'s shape means bumping `SAVE_FORMAT_VERSION`, which makes every
+  existing save unreadable — decoding deliberately refuses versions it does not know
+  rather than guessing. That is the right default, but it discards the player's data, so
+  say so before doing it.
+- `SaveData` returned by `load_save` owns heap allocations; free it with
+  `destroy_save_data`. A `SaveData` built in memory does not own them — its manifest
+  borrows the live recorder's tick log — so never destroy one of those.
 
 ---
 
@@ -201,7 +245,9 @@ Tracked here so they are not rediscovered. Each is scheduled in `ROADMAP.md`.
 - `PulsingShape` phase is driven by global elapsed time rather than the obstacle's own
   `arrival_time`, so identical patterns can present a 55px wall or an ignorable 8px stub.
   (T6.4)
-- Obstacles are never removed from the list once passed. (T2.9)
-- The DRAW switch in `main.odin` repeats the same gameplay draw calls three times. (T1.6)
 - The player silhouette inverts body and rim colors between worlds, contradicting the
   design doc's "same character, different lighting" rule. (T3.5)
+- The background is still `rl.ClearBackground(rl.BEIGE)` with hard black outlines: the
+  visual identity has not been started. (Phase 3)
+- Recorded run manifests are saved but never played back — there is no replay or ghost in
+  the game yet, only the data needed for one. (Phase 13 / post-MVP)
