@@ -11,8 +11,8 @@
 - [Come si legge questa roadmap](#come-si-legge-questa-roadmap)
 - [Stato attuale](#stato-attuale)
 - [Il sistema a tre mondi](#il-sistema-a-tre-mondi--riferimento-grafico-trasversale)
-- [Il salvataggio: analisi](#il-salvataggio-analisi-e-decisioni)
-- [Struttura del progetto](#struttura-del-progetto-da-qui-a-lì)
+- [Il salvataggio: cosa resta da sapere](#il-salvataggio-cosa-resta-da-sapere)
+- [Struttura del progetto](#struttura-del-progetto)
 - [Le fasi](#le-fasi)
 - [Riepilogo carico per modello](#riepilogo-carico-per-modello)
 - [Definition of Done — Alpha](#definition-of-done--alpha)
@@ -37,6 +37,12 @@ Ogni task porta il modello consigliato, per ottimizzare il piano Pro.
 Regola pratica: se il task si può descrivere completamente in tre righe senza lasciare scelte aperte, è **Sonnet**. Se richiede di decidere qualcosa mentre lo si costruisce, è **Opus**.
 
 `⚑` segnala i task che richiedono un tuo playtest prima di poter chiudere la fase.
+
+### Quando una fase si chiude
+
+**La sua sezione va compressa**, subito, prima di passare oltre: titolo con ✅, un paragrafo su cosa è stato fatto, e solo le decisioni che restano vincolanti per il lavoro futuro. La tabella dei task sparisce — serviva a eseguirli, non a ricordarli.
+
+Quello che si scopre strada facendo non si butta, si **sposta dove verrà riletto**: una trappola di una libreria va nel commento del file che la contiene, una regola di architettura in `CLAUDE.md`, un dettaglio di gameplay nel design doc. Qui resta il *perché* di una decisione, non il racconto di come ci si è arrivati. Se una nota non ha una casa altrove, la casa va creata prima di cancellarla da qui.
 
 ---
 
@@ -107,47 +113,15 @@ Con `world_t ≤ 0.5` si interpola Reale→Limine su `world_t * 2`; con `world_t
 
 ---
 
-## Il salvataggio: analisi e decisioni
+## Il salvataggio: cosa resta da sapere
 
-Hai chiesto di studiare il tema in ottica leaderboard online. Ecco cosa ho trovato e cosa propongo.
+Implementato nella Fase 2. L'analisi che ha portato alle decisioni non serve più; queste tre cose sì.
 
-### I tre problemi di oggi
+**Cifrare il salvataggio locale non rende sicura una leaderboard.** La chiave sta dentro il binario, e chiunque sia motivato la estrae. È un *deterrente* contro la modifica col blocco note, non una garanzia. Va detto così nel codice e a voce, mai spacciato per protezione.
 
-1. `highscore.txt` è **testo in chiaro**: si modifica col blocco note.
-2. Sta nella **cartella di lavoro**: cambia a seconda di dove lanci il gioco, si perde, si duplica.
-3. Era **versionato in git** (risolto: ora è in `.gitignore` e rimosso dall'indice).
+**La sicurezza vera è rivalidare lato server** (Design Doc sez. 10): il client manda seed + log degli input, il server rigioca la run e calcola il punteggio da sé. Il punteggio dichiarato dal client non viene mai creduto. Il `RunManifest` che ogni record salva è già quel pacchetto.
 
-### Cosa offre Odin
-
-La standard library è messa bene, ho verificato: `core:crypto` include `hmac`, `sha2`, `chacha20poly1305`, `ed25519`, `argon2id`; `core:encoding` include `cbor` per un formato binario compatto. Non serve nessuna dipendenza esterna.
-
-### La cosa importante da dire chiaramente
-
-**Cifrare il salvataggio locale non rende sicura una leaderboard.** La chiave deve stare dentro il binario, e chiunque sia motivato la estrae. È un *deterrente*, non una garanzia: ferma la modifica casuale, non un cheater vero. È giusto farlo — è sbagliato considerarlo protezione.
-
-La sicurezza vera è **rivalidare lato server**, ed è già descritta correttamente nel design doc (sez. 10): il client manda **seed + log degli input**, il server rigioca la run internamente e calcola il punteggio da sé. Il punteggio dichiarato dal client non viene mai creduto.
-
-Perché questo funzioni servono tre cose, tutte da mettere in piedi **prima** che il codice cresca:
-
-1. **RNG con seed esplicito** — mai `rand.*` globale
-2. **Input come dato** — la logica riceve uno stato di input, non interroga la tastiera al suo interno
-3. **Timestep fisso** — a passo variabile la stessa sequenza di input non produce la stessa run
-
-Un investimento, quattro ritorni: **validazione leaderboard, replay, ghost delle run migliori, bilanciamento riproducibile** (rigiochi la stessa run identica dopo aver cambiato un numero). Per questo la Fase 2 viene prima di tutto il lavoro grafico.
-
-### Decisioni proposte
-
-| Aspetto | Decisione | Perché |
-|---|---|---|
-| Posizione | Directory dati utente del SO: `$XDG_DATA_HOME/wake-shift/` (Linux), `%APPDATA%\wake-shift\` (Windows), `~/Library/Application Support/wake-shift/` (macOS) | Convenzione corretta; non dipende dalla cartella di lancio |
-| Formato | CBOR (`core:encoding/cbor`) | Compatto, versionabile, già nella stdlib |
-| Protezione | **ChaCha20-Poly1305** (`core:crypto`), chiave incorporata + nonce casuale per salvataggio | Cifratura *e* integrità in una primitiva sola. Soddisfa la richiesta di "criptato" e dà tamper-evidence nello stesso passo |
-| Salvataggio corrotto | Rifiutato → si riparte dai default, con avviso | Un file manomesso non deve mai far crashare il gioco |
-| Manifesto della run | Salvato per la run migliore: `seed`, `game_version`, `tick_rate`, log degli input, `claimed_depth` | È il pacchetto che un domani si manda al server. Gratis: ti dà anche i replay/ghost |
-
-**Alternativa considerata e scartata**: solo HMAC-SHA256 senza cifratura. Dà la stessa tamper-evidence e lascia il file leggibile per il debug — più semplice, tecnicamente sufficiente. L'ho scartata perché hai chiesto esplicitamente il file criptato, e AEAD costa lo stesso sforzo dandoti entrambe le cose. Se in fase di sviluppo il file opaco ti dà fastidio da ispezionare, si torna a HMAC in mezz'ora.
-
-### Modello di minaccia, onesto
+**Modello di minaccia, onesto**
 
 | Attacco | Difesa |
 |---|---|
@@ -158,200 +132,59 @@ Un investimento, quattro ritorni: **validazione leaderboard, replay, ghost delle
 
 ---
 
-## Struttura del progetto: da qui a lì
+## Struttura del progetto
 
-### Perché non seguiamo la struttura del design doc originale
+Fatta nella Fase 1; la tabella di migrazione ha esaurito il suo scopo. La struttura viva e le regole d'oro stanno in `CLAUDE.md`, che è il file che governa il codice — qui resta solo il perché.
 
-La v1.0 prevedeva `player/`, `obstacles/`, `patterns/`, `world/` come package separati. **In Odin non funziona**: import ciclici vietati, e una cartella è esattamente un package. Quelle entità si guardano continuamente (`score` legge `Player`, `lucidity` legge `Player` *e* `Obstacle`, `obstacle` legge `World`, le collisioni leggono tutto). Il taglio giusto è **per livello di astrazione, non per entità**. La correzione è già recepita nel design doc v1.1, sez. 14.
+**Perché non seguiamo la struttura del design doc originale.** La v1.0 prevedeva `player/`, `obstacles/`, `patterns/`, `world/` come package separati. In Odin non funziona: import ciclici vietati, e una cartella è esattamente un package. Quelle entità si guardano continuamente (`score` legge `Player`, `lucidity` legge `Player` *e* `Obstacle`, le collisioni leggono tutto). Il taglio giusto è **per livello di astrazione, non per entità**. Correzione già recepita nel design doc v1.1, sez. 14.
 
-### Struttura di destinazione
-
-```
-wake-shift/
-├── CLAUDE.md          ROADMAP.md          README.md          .gitignore
-├── docs/
-│   ├── design_doc.md              # v1.1
-│   └── archive/                   # roadmap superate
-├── assets/                        # (dalla Fase 11: audio)
-└── src/
-    ├── main.odin      # package main — finestra, loop, macchina a stati
-    ├── core/          # Lane, costanti schermo, easing, math, timer
-    ├── platform/      # canvas virtuale, fullscreen, input, persistenza
-    ├── fx/            # particelle, bloom — parametrico, ignora il gioco
-    ├── game/          # player, world, obstacle, pattern, difficulty,
-    │                  #   score, lucidity, collisioni — MAI un disegno
-    ├── render/        # palette, sfondo, terreno, player, ostacoli, parallax
-    ├── ui/            # menu, HUD, schermate
-    └── audio/         # musica con crossfade, SFX
-```
-
-### Grafo delle dipendenze — rigorosamente aciclico
-
-```
-core      ← non importa nulla del progetto
-platform  ← core
-fx        ← core
-game      ← core, platform, fx
-render    ← core, game, fx
-ui        ← core, game
-audio     ← core, game
-main      ← tutti
-```
-
-**Regole d'oro**: `game/` non disegna mai; `render/` non muta mai stato; `fx/` non sa niente del gioco.
-
-### Tabella di migrazione
-
-| Oggi | Domani | Package |
-|---|---|---|
-| `src/main.odin` | `src/main.odin` | `main` |
-| `src/core/core.odin` | `src/core/lane.odin`, `screen.odin`, `ease.odin` | `core` |
-| `src/display/display.odin` | `src/platform/display.odin` | `platform` |
-| `src/persistence.odin` | `src/platform/save.odin` | `platform` |
-| — nuovo — | `src/platform/input.odin`, `src/platform/paths.odin` | `platform` |
-| — nuovo — | `src/core/settings.odin` + `src/platform/window.odin` (Fase 2.5) | `core`, `platform` |
-| `src/world.odin` | `src/game/world.odin` | `game` |
-| `src/player.odin` | `src/game/player.odin` | `game` |
-| `src/obstacle.odin` | `src/game/obstacle.odin` | `game` |
-| `src/pattern.odin` | `src/game/pattern.odin` | `game` |
-| `src/difficulty.odin` | `src/game/difficulty.odin` | `game` |
-| `src/score.odin` | `src/game/score.odin` | `game` |
-| `src/lucidity.odin` | `src/game/lucidity.odin` | `game` |
-| `src/game.odin` | `src/game/collision.odin` + `src/game/run.odin` | `game` |
-| `src/player_render.odin` | `src/render/player.odin` | `render` |
-| `src/obstacle_render.odin` | `src/render/obstacle.odin` | `render` |
-| `src/terrain.odin` | `src/render/terrain.odin` | `render` |
-| — nuovo — | `src/render/palette.odin`, `src/render/background.odin` | `render` |
-| `src/menu.odin` | `src/ui/menu.odin` | `ui` |
-| `src/ui.odin` | `src/ui/screens.odin` | `ui` |
-| — nuovo — | `src/fx/particles.odin`, `src/fx/bloom.odin` | `fx` |
+**Ancora da creare**: `fx/` (Fase 9, particelle e bloom — parametrico, non sa niente del gioco) e `audio/` (Fase 12).
 
 ---
 
 ## Le fasi
 
-### ✅ Fase 0 — Sbloccare la build *(completata)*
+> Le fasi concluse sono compresse a un recap: cosa è stato fatto, e dove vive
+> adesso la conoscenza che serve a chi riprende. Le tabelle dei task chiusi non
+> restano — servivano a eseguirli, non a ricordarli.
 
-| Task | Descrizione | Modello |
-|---|---|---|
-| T0.1 | `world` riportato in `package main`, `odin check` verde, gioco avviabile | Opus ✅ |
-| T0.2 | `docs/`, `.gitignore`, `highscore.txt` rimosso dall'indice git | Sonnet ✅ |
-| T0.3 | Design doc aggiornato alla v1.1, `CLAUDE.md` e `ROADMAP.md` creati | Opus ✅ |
+### ✅ Fase 0 — Sbloccare la build
 
----
-
-### ✅ Fase 1 — Struttura del progetto *(completata)*
-
-**Obiettivo**: mettere la casa in ordine prima che ci si accumulino sopra shader, particelle e parallax. Più codice grafico si stratifica su una struttura piatta, più il refactor dopo costa.
-
-| Task | Descrizione | Modello |
-|---|---|---|
-| T1.1 | `core/` diviso in `lane.odin`, `screen.odin`, `ease.odin` | Sonnet ✅ |
-| T1.2 | `platform/`: sposta `display.odin` e `persistence.odin` | Sonnet ✅ |
-| T1.3 | **`game/`**: sposta world, player, obstacle, pattern, difficulty, score, lucidity; dividi `game.odin` in `collision.odin` + `run.odin` | **Opus** ✅ |
-| T1.4 | `render/`: sposta i tre file di disegno | Sonnet ✅ |
-| T1.5 | `ui/`: sposta menu e schermate | Sonnet ✅ |
-| T1.6 | `main.odin` ricablato sui nuovi package; `draw_gameplay` estratto (oggi il blocco DRAW ripete lo stesso disegno tre volte) | Sonnet ✅ |
-| T1.7 ⚑ | Verifica di non-regressione: il gioco gira **identico** a prima | Sonnet ✅ |
-
-**Perché T1.3 è Opus**: è il task con la più alta probabilità di rottura silenziosa. Nove file che oggi si vedono liberamente dentro `package main` diventano un package con confini veri; stato condiviso che smette di essere condiviso non dà errore di compilazione, dà un bug.
-
-**Test di verifica**: `odin check src` verde dopo *ogni* task, e il gioco percepibilmente identico a fine fase. Se noti una differenza, è un bug.
+Build ripristinata, `docs/` creata, `highscore.txt` tolto da git, design doc alla v1.1, `CLAUDE.md` e `ROADMAP.md` scritti.
 
 ---
 
-### Fase 2 — Salvataggio sicuro e determinismo *(T2.1-T2.9 completati)*
+### ✅ Fase 1 — Struttura del progetto
 
-**Obiettivo**: le fondamenta invisibili. Nessun cambiamento a schermo, ma senza queste la leaderboard di domani è impossibile e il bilanciamento di dopodomani è cieco.
-
-| Task | Descrizione | Modello |
-|---|---|---|
-| T2.1 | `platform/paths.odin`: directory dati utente per SO, con creazione della cartella | Sonnet ✅ |
-| T2.2 | `SaveData` + serializzazione CBOR, versionata | Sonnet ✅ |
-| T2.3 | Cifratura ChaCha20-Poly1305, nonce per salvataggio, gestione del file corrotto/manomesso senza crash | **Opus** ✅ |
-| T2.4 | Migrazione trasparente dal vecchio `highscore.txt`, poi rimozione | Sonnet ✅ |
-| T2.5 | **Input come struct** `core.Input` passato dall'esterno; via `rl.IsKeyPressed` da dentro la logica | **Opus** ✅ |
-| T2.6 | RNG con seed esplicito filtrato nel generatore di pattern | Sonnet ✅ |
-| T2.7 | **Timestep fisso** con accumulatore | **Opus** ✅ |
-| T2.8 | `RunManifest`: seed, versione, tick rate, log input, punteggio dichiarato — registrato durante la run e salvato per il record | **Opus** ✅ |
-| T2.9 | Rimozione degli ostacoli ormai passati dalla lista | Sonnet ✅ |
-| T2.10 ⚑ | Verifica finale a mano: giocare qualche run e confermare che nulla è regredito | Sonnet |
-
-**Perché T2.5 e T2.7 erano Opus**: toccano entrambi la macchina a stati del player, e T2.5 è il prerequisito diretto del gesto tap/hold della Fase 5. Il timestep fisso cambia sottilmente il *feel* — andava fatto con attenzione all'interpolazione del rendering.
-
-#### Cosa è emerso strada facendo
-
-Note utili da rileggere, non riassunti dei task:
-
-- **`Input` sta in `core`, non in `platform`** come diceva la tabella. Se stesse in `platform`, `ui` dovrebbe importarlo per il menu — un arco che il grafo delle dipendenze non prevede. È vocabolario condiviso, come `Lane`; a leggere la tastiera è `platform/input.odin`, unico punto del progetto.
-- **`make_directory_all` non è idempotente**: su ogni backend ritorna `.Exist` invece di `nil` quando la cartella c'è già. Scoperto solo testando due avvii di fila.
-- **Le funzioni AEAD di Odin usano `ensure()`** sulle dimensioni degli slice, che *aborta il processo*. Ogni controllo di lunghezza in `open_bytes` avviene prima di qualsiasi chiamata crittografica: un file troncato deve essere rifiutato, non far chiudere il gioco.
-- **Il timestep fisso porta con sé tre problemi, non uno**: l'input che si perde o si duplica (risolto con `pending_input` latched), la spirale della morte (risolta con `MAX_FRAME_TIME`), e il micro-stutter visivo (risolto disegnando da una copia del mondo spinta avanti del resto dell'accumulatore).
-- **`TICK_RATE` è la costante primaria, `FIXED_TIMESTEP` deriva da lei.** Il contrario faceva fallire il cast a intero per deriva float — e il manifesto ha bisogno di una frequenza esatta.
-- **Il culling degli ostacoli non può assumere l'ordinamento**: la larghezza delle voragini varia da 54 a 118 px, quindi un ostacolo più recente ma stretto può uscire dallo schermo prima di uno precedente ma largo. Compattazione completa, non rimozione del prefisso.
-
-#### Cosa questo sblocca
-
-Il determinismo è verificato, non solo progettato: stessa sequenza di step → stato bit-identico su profili di frame da 60 Hz, 240 Hz e irregolari; rigiocare un manifesto salvato riproduce il punteggio esatto; spostare un solo flip di un tick lo cambia. Da qui derivano, senza altro lavoro di fondo: validazione lato server della leaderboard, replay e ghost, e bilanciamento riproducibile (Fase 10).
+Codice riorganizzato nei package `core` / `platform` / `game` / `render` / `ui`, con grafo di dipendenze aciclico; `main.odin` ricablato e `draw_gameplay` estratto. Il gioco è rimasto identico a schermo, che era il test.
 
 ---
 
-### ✅ Fase 2.5 — Presentazione e finestra *(completata)*
+### ✅ Fase 2 — Salvataggio sicuro e determinismo
 
-**Obiettivo**: il gioco si comporta come un gioco vero — parte a schermo pieno alla risoluzione del monitor, ha una schermata opzioni, e ricorda come lo hai lasciato. Nessun cambiamento al gameplay.
+Salvataggio cifrato (CBOR + XChaCha20-Poly1305) nella directory dati utente, che rifiuta file corrotti o manomessi senza mai far crashare il gioco. Simulazione deterministica: seed esplicito, input come dato, timestep fisso a 60 Hz. Ogni record salva il `RunManifest` della run che l'ha ottenuto.
 
-**Perché "2.5" e non una rinumerazione**: ci sono 11 riferimenti a fasi e task dentro i commenti del codice (`roadmap T5.1`, `phase 3`, `T12.4`) e decine nei documenti. Rinumerare le fasi da 3 a 13 li renderebbe tutti falsi *in silenzio*, senza un solo errore di compilazione. Inserire mezza fase costa zero.
+**Perché conta**: il determinismo è verificato, non solo progettato — stessa sequenza di step, stato bit-identico su profili di frame a 60 Hz, 240 Hz e irregolari; rigiocare un manifesto salvato riproduce il punteggio esatto; spostare un flip di un solo tick lo cambia. Da qui derivano senza altro lavoro di fondo: validazione lato server della leaderboard, replay, ghost, e bilanciamento riproducibile (Fase 11).
 
-**Perché prima della Fase 3 e non alla 13, dove stava**
+**Una correzione alla pianificazione**: `Input` sta in `core`, non in `platform` come diceva la tabella di migrazione. Se stesse in `platform`, `ui` dovrebbe importarlo per il menu — un arco che il grafo non prevede. È vocabolario condiviso, come `Lane`. Stessa logica poi applicata a `Settings` nella Fase 2.5.
 
-1. **Le opzioni vanno salvate.** Toccare `SaveData` fa scattare il bump di `SAVE_FORMAT_VERSION`, e il decoder rifiuta di proposito le versioni che non conosce: **ogni salvataggio esistente diventa illeggibile**. Farlo adesso costa un highscore di prova. Farlo alla Fase 13 costa lo storico delle run.
-2. **È un prerequisito del bloom (Fase 4).** Lo shader di bright-pass e blur lavora sui texel del render target. Decidere la risoluzione del target *dopo* aver scritto lo shader significa rifare la matematica dei texel.
-3. **Dalla Fase 3 in poi ogni playtest è un giudizio visivo.** Palette, glow, parallax e particelle vanno giudicati a schermo pieno alla risoluzione vera, non in una finestra 1280×720.
+Le trappole trovate strada facendo (`make_directory_all` che ritorna `.Exist`, le funzioni AEAD che abortiscono il processo, i tre problemi del timestep fisso, `TICK_RATE` come costante primaria, il culling che non può assumere l'ordinamento) sono commentate nel codice che le riguarda e riassunte nel README.
 
-#### Le tre decisioni prese
+---
 
-**Fullscreen vero, ma sempre sul modo video già attivo.** ~~Fullscreen borderless, mai fullscreen esclusivo.~~ *Decisione rivista in corso d'opera, vedi sotto.* La motivazione originale — niente cambio del modo video del monitor, perché non si guadagna né campo visivo né performance e si paga in alt-tab lento, sfarfallio e desktop lasciato alla risoluzione sbagliata — **resta valida**, ma il borderless non è il modo di ottenerla.
+### ✅ Fase 2.5 — Presentazione e finestra
 
-Su KDE una finestra senza decorazioni grande quanto lo schermo resta una finestra *normale*: il compositor la massimizza dentro l'area di lavoro (monitor 2560×1440 → finestra 2560×1398) e continua a disegnarci sopra il pannello, anche con `_NET_WM_STATE_ABOVE` e `_STAYS_ON_TOP` impostati — cosa che raylib fa già. L'unico stato che mette una finestra sopra i pannelli è `_NET_WM_STATE_FULLSCREEN`.
+Il gioco parte a schermo pieno alla risoluzione del monitor senza lampeggiare, ha una schermata opzioni raggiungibile da menu e pausa (modalità, dimensione finestra, vsync, limite FPS), e ricorda come lo hai lasciato. Nessun cambiamento al gameplay.
 
-Quindi: fullscreen vero, chiedendo però **il modo video che il desktop sta già usando**. Nessun cambio di risoluzione avviene, e con esso nessuno dei costi che avevano fatto scartare l'esclusivo.
+**Le decisioni che restano vincolanti**
 
-**Il canvas passa alla risoluzione nativa.** Oggi il canvas 1280×720 è un upscale *raster*: su un 1080p viene ingrandito ×1.5, su un 4K ×3, e l'immagine è morbida — proprio dove silhouette e rim light dovrebbero essere taglienti. Ma Wake Shift disegna primitive vettoriali, non pixel art: il render target viene allocato alla risoluzione reale dell'output e alle coordinate si applica una scala, così **il codice di gioco continua a ragionare in 1280×720** e non cambia una riga, mentre i pixel sono nativi. Il letterbox resta, per i monitor non 16:9. Da qui esce anche, gratis, la leva per una voce "Qualità" quando arriva il bloom.
+- **Le coordinate di gioco restano 1280×720 per sempre.** Quello che è cambiato è dove atterrano: il render target è allocato alla risoluzione reale dell'output e uno zoom di `Camera2D` mappa una coordinata di gioco su un pixel nativo. Niente più upscale raster. Il target è grande quanto il canvas scalato, non quanto la finestra, così le bande nere restano fuori — il bright-pass del bloom (Fase 4) non deve vederle.
+- **Fullscreen vero, sempre sul modo video già attivo.** ~~Fullscreen borderless, mai esclusivo.~~ Decisione rivista dopo averla misurata: su KDE una finestra senza decorazioni grande quanto lo schermo resta una finestra *normale*, il compositor la massimizza nell'area di lavoro e ci disegna sopra il pannello. Solo `_NET_WM_STATE_FULLSCREEN` mette una finestra sopra i pannelli. La motivazione originale — non toccare la risoluzione del desktop — resta valida ed è rispettata: si chiede il modo che il desktop sta già usando.
+- **Un cambio di modalità è una trattativa, non una chiamata.** Il window manager risponde quando gli pare. `apply_display_mode` fa *un passo* ed è idempotente; `main` lo richiama per 30 frame dopo ogni cambio.
 
-**La risoluzione in opzioni è la dimensione della finestra**, non il modo video: si applica in windowed, filtrata su quelle che entrano nel monitor corrente. In fullscreen la voce è disattivata, perché lì la risoluzione è quella del desktop.
+I tre comportamenti di raylib che rendono tutto questo delicato — due dei quali cambiano in silenzio la risoluzione del desktop o fanno uscire la finestra dal fullscreen — stanno nell'intestazione di `platform/window.odin`, che è la prima cosa da leggere prima di toccare una chiamata di finestra.
 
-| Task | Descrizione | Modello |
-|---|---|---|
-| T2.5.1 | `platform/display.odin`: render target dimensionato sull'output reale, con le coordinate di gioco che restano 1280×720. Riallocazione al cambio di dimensione | **Opus** ✅ |
-| T2.5.2 | `DisplayMode` (Fullscreen / Windowed) e cambio a caldo che non perturba la simulazione — il frame lungo è già tagliato da `MAX_FRAME_TIME`, il render target no | **Opus** ✅ |
-| T2.5.3 | Query monitor: lista di risoluzioni finestra valide sul monitor corrente, più una voce "adatta al monitor"; gestione multi-monitor | Sonnet ✅ |
-| T2.5.4 | `Settings` (modalità, dimensione finestra, vsync) persistite dentro `SaveData` → `SAVE_FORMAT_VERSION` a 3 | Sonnet ✅ |
-| T2.5.5 | Avvio: impostazioni lette **prima** di `InitWindow` (non serve una finestra per leggerle), così la finestra nasce già giusta invece di lampeggiare; primo lancio = fullscreen sul monitor primario | Sonnet ✅ |
-| T2.5.6 | `ui/menu.odin` esteso: voce con valore che cicla con ←/→. Due campi nuovi in `core.Input` (`menu_left`, `menu_right`), **meta-input**: fuori dalla simulazione e fuori dal `RunManifest`, come `pause` e `toggle_fullscreen` | **Opus** ✅ |
-| T2.5.7 | `GameState.Options`, raggiungibile dal menu principale e dalla pausa, ESC per tornare indietro | Sonnet ✅ |
-| T2.5.8 | VSync on/off e limite FPS (60 / monitor / illimitato). La simulazione resta a 60 Hz fissi: cambia solo la frequenza di disegno, e `interpolated_world` in `main.odin` c'è già. Attenzione a non lasciare `SetTargetFPS` e vsync attivi insieme | Sonnet ✅ |
-| T2.5.9 ⚑ | Playtest: fullscreen, windowed, cambio a caldo durante una run, riavvio con le impostazioni ricordate | — ✅ |
-
-#### Cosa è emerso strada facendo
-
-- **`Settings` sta in `core`, non in `platform`**, esattamente per il motivo per cui ci sta `Input`: `ui` deve disegnarle e `platform` deve applicarle, e `ui` non ha il permesso di importare `platform`. Il livello che *applica* le impostazioni è `platform/window.odin`; il valore che le descrive è vocabolario condiviso.
-- **Il canvas non viene più letterboxato dentro il render target.** Il target è grande esattamente quanto il canvas scalato, e le bande nere sono la parte di finestra che il blit non copre. Costa zero adesso e serve alla Fase 4: il bright-pass del bloom lavorerebbe altrimenti anche sulle bande.
-- **CBOR non protegge dagli enum fuori range.** Un `DisplayMode(200)` viene serializzato e rideserializzato senza un solo errore (verificato). Le impostazioni sono l'unica parte del salvataggio che finisce dritta in chiamate di sistema, quindi `decode_save_data` le passa per `validate_settings` prima di restituirle.
-- **Il borderless è stato provato, misurato e scartato.** Su KWin 6 (Wayland, quindi XWayland) la finestra borderless esce 2560×1398 con `MAXIMIZED_VERT/HORZ` e senza `FULLSCREEN`, e il pannello resta sopra. È il bug che hai segnalato con lo screenshot. Sostituito da fullscreen vero: `FULLSCREEN` presente, 2560×1440, modo video del monitor intatto prima, durante e dopo.
-- **`ToggleFullscreen` di raylib passa a GLFW la dimensione *corrente della finestra* come modo video desiderato.** Chiamato su una finestra 1280×720 non ingrandisce la finestra al monitor: rimpicciolisce il monitor a 1280×720. Misurato — in un test la scrivania è finita a 1024×768. Per questo la finestra fullscreen nasce con `InitWindow(0, 0, ...)`, che raylib legge come "la dimensione del monitor" e applica *mentre* crea la finestra, e per questo il toggle a caldo è protetto da una guardia: si tocca solo quando la dimensione è già quella giusta, altrimenti si richiede il resize e si riprova al frame dopo.
-- **`SetWindowState` di raylib agisce su `FLAG_FULLSCREEN_MODE` ogni volta che l'insieme richiesto *differisce* da quello corrente**, a differenza di ogni altro flag che gestisce. Conseguenza: cambiare il vsync faceva uscire la finestra dal fullscreen come effetto collaterale. Si passa il bit della modalità corrente insieme alla richiesta, così il confronto resta pari.
-- **Uscire dal fullscreen non basta a riavere la finestra che si voleva.** raylib ripristina la geometria che la finestra aveva *entrando*, che è la dimensione del monitor; KDE massimizza una finestra di quella misura, e una finestra massimizzata ignora il ridimensionamento. Va prima de-massimizzata. Misurato senza: una richiesta di 1600×900 si assestava a 2560×1370 massimizzata.
-- **Un cambio di modalità non è una chiamata, è una trattativa.** Il window manager risponde al resize quando gli pare, un frame o due dopo. Per questo `apply_display_mode` fa *un passo* ed è idempotente, e `main` lo richiama per 30 frame dopo ogni cambio. Numero di tentativi limitato di proposito: a un WM che insiste va lasciato vincere.
-- **La finestra nasce nascosta.** `.WINDOW_HIDDEN` fra i config flag, modalità applicata, poi `ClearWindowState`: è così che il passaggio a fullscreen non si vede. Senza, il primo avvio mostra per un istante una finestra decorata.
-- **`FLAG_FULLSCREEN_MODE` nei config flag non serve e non funziona.** Provato: raylib riporta `IsWindowFullscreen() = true`, ma la finestra che arriva al compositor non porta `_NET_WM_STATE_FULLSCREEN` ed è massimizzata nell'area di lavoro, pannello ancora sopra. Il fullscreen si raggiunge con un toggle dopo la creazione.
-- **Il testo non guadagna nitidezza dal target nativo**, perché il font bitmap di default non ha risoluzione da dare. Le primitive vettoriali sì — ed è quello che serviva a silhouette e rim light. Un font vero arriva con l'identità visiva.
-- Il salvataggio esistente è stato invalidato dal bump a `SAVE_FORMAT_VERSION = 3`, come previsto: il decoder rifiuta di proposito le versioni che non conosce, quindi il record precedente è andato e si riparte dai default.
-
-**Test di verifica**: superato. Il gioco si apre a schermo pieno alla prima esecuzione senza lampeggiare, le impostazioni sopravvivono al riavvio, un cambio di modalità durante una run non fa saltare né la fisica né il punteggio, `odin check src` resta verde. Confermato dal tuo playtest il 2 settembre 2026.
-
-**Ricaduta sulla Fase 13**: la `T13.3` smette di essere "costruire la schermata opzioni" e diventa "ridisegnarla sulla palette definitiva". La `T13.4` resta, ma le si toglie la parte sulle opzioni: le rimane lo storico delle ultime run.
-
-**Deciso di non fare**: ricordare la dimensione di una finestra ridimensionata a mano trascinandone il bordo. La dimensione salvata è quella scelta nelle opzioni, e basta — leggerla dalla finestra viva ogni frame significa rischiare che un `SetWindowSize` appena richiesto venga sovrascritto dalla vecchia dimensione prima che il window manager l'abbia applicata.
+**Ricaduta sulle fasi successive**: la `T13.3` non è più "costruire la schermata opzioni" ma "ridisegnarla sulla palette definitiva"; alla `T13.4` resta solo lo storico delle ultime run.
 
 ---
 
@@ -524,11 +357,10 @@ Qui il determinismo della Fase 2 ripaga: si rigioca la stessa run identica dopo 
 
 ## Riepilogo carico per modello
 
-Fasi 0-2 completate. Il conteggio qui sotto è **quel che resta**.
+Fasi 0-2.5 completate. Il conteggio qui sotto è **quel che resta**.
 
 | Fase | Sonnet | Opus |
 |---|---|---|
-| 2.5 — Presentazione e finestra | 5 | 3 |
 | 3 — Palette, corpo, primo strato | 3 | 5 |
 | 4 — Bloom | 1 | 2 |
 | 5 — Il Limine | 2 | 4 |
@@ -540,9 +372,9 @@ Fasi 0-2 completate. Il conteggio qui sotto è **quel che resta**.
 | 11 — Game feel | 1 | 2 |
 | 12 — Audio | 2 | 3 |
 | 13 — UI e rifinitura | 3 | 2 |
-| **Totale rimanente** | **30** | **35** |
+| **Totale rimanente** | **25** | **32** |
 
-Il rapporto si è spostato verso Opus rispetto al piano iniziale, ed è corretto che sia così: le fasi che restano decidono *come si gioca* (il gesto del Limine, le regole di collisione, gli archetipi anticipatori, il bilanciamento) invece di spostare file. Le fasi economiche da mandare in Sonnet restano la **9** (preset di particelle, molto ripetitivi), la **13** (UI) e buona parte della **2.5**, dove l'unico lavoro davvero aperto è la pipeline del render target e il widget di menu con valore.
+Il rapporto si è spostato verso Opus rispetto al piano iniziale, ed è corretto che sia così: le fasi che restano decidono *come si gioca* (il gesto del Limine, le regole di collisione, gli archetipi anticipatori, il bilanciamento) invece di spostare file. Le fasi economiche da mandare in Sonnet restano la **9** (preset di particelle, molto ripetitivi) e la **13** (UI).
 
 Dove conviene spendere Opus, in ordine: la **5** (il gesto nuovo — se sbagliato lì, tutto il resto poggia male), la **6** (regole di collisione: un errore non dà errore di compilazione, dà un gioco che *sembra* ingiusto) e la **3** (la convergenza delle palette, che è insieme identità visiva e curva di difficoltà).
 

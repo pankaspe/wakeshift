@@ -101,6 +101,16 @@ This is a long project, developed one phase at a time.
 4. **Report honestly.** If a phase is partially done, say which part and why. If a test
    fails, show the output.
 5. Keep `odin check src` green at every intermediate step, especially during file moves.
+6. **Compress the phase in `ROADMAP.md` when it closes**, before moving on: a ✅ heading, a
+   paragraph on what was done, and only the decisions still binding on future work. The
+   task table goes — it existed to execute the phase, not to remember it. The file is read
+   at the start of every session, so a phase that stays at full length is a tax on every
+   session after it.
+
+   What was learned along the way is not discarded, it is **moved somewhere it will be
+   read again**: a library trap into the comment of the file that hits it, an architecture
+   rule into this file, a gameplay detail into the design doc. If a note has no home
+   elsewhere, give it one before deleting it from the roadmap.
 
 ---
 

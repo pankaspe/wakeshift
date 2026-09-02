@@ -146,10 +146,15 @@ is_obstacle_finished :: proc(obstacle: Obstacle, world: World) -> bool {
 // for the whole length of a run — without it a five-minute run leaves a
 // few hundred dead entries to be walked on every single step.
 //
-// Compacts in place and keeps the survivors in their original order.
-// Order is preserved deliberately: nothing downstream currently depends on
-// it, but obstacles are generated in ascending arrival_time and quietly
-// scrambling that would be an unpleasant surprise for anything that later
+// Compacts the whole list rather than dropping a finished prefix, because
+// finished obstacles do not arrive in order: chasm widths range from 54 to
+// 118 px, so a newer but narrow obstacle can leave the screen before an
+// older but wide one. A prefix scan would stop at the first survivor and
+// leak everything behind it.
+//
+// Survivors keep their original order. Nothing downstream depends on that
+// today, but obstacles are generated in ascending arrival_time and quietly
+// scrambling it would be an unpleasant surprise for anything that later
 // assumes it.
 remove_finished_obstacles :: proc(obstacles: ^[dynamic]Obstacle, world: World) {
 	kept := 0
