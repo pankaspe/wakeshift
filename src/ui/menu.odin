@@ -143,16 +143,21 @@ SETTING_COLUMN_GAP :: 30
 
 // Draws every row, marking the selected one — "> label <" for an action,
 // "< value >" for a setting.
-draw_menu :: proc(menu: Menu, start_y: i32, spacing: i32, font_size: i32) {
+//
+// The row you are on takes the accent color; the rows you could move to
+// take the world's light at a lower opacity; a disabled row takes less
+// still. Brightness carries the state rather than hue, so the rows stay
+// legible whatever world the palette is currently in.
+draw_menu :: proc(menu: Menu, start_y: i32, spacing: i32, font_size: i32, palettes: core.PaletteSet) {
 	for item, index in menu.items {
 		selected := index == menu.selected
 		y := start_y + i32(index) * spacing
 
-		color := rl.DARKGRAY
+		color := core.with_alpha(palettes.current.light, TEXT_SECONDARY)
 		if item.disabled {
-			color = rl.GRAY
+			color = core.with_alpha(palettes.current.light, TEXT_MUTED * 0.7)
 		} else if selected {
-			color = rl.BLACK
+			color = palettes.current.accent
 		}
 
 		if item.value_count == 0 {

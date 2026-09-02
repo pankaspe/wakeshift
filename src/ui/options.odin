@@ -210,8 +210,17 @@ update_options_screen :: proc(
 	return false, true
 }
 
-draw_options_screen :: proc(screen: OptionsScreen) {
-	draw_centered_text("OPTIONS", 180, 40, rl.BLACK)
-	draw_menu(screen.menu, 280, 46, 24)
-	draw_centered_text("LEFT / RIGHT to change  -  ESC to go back", 540, 18, rl.DARKGRAY)
+// Colors come from the palette like every other screen; the layout is
+// unchanged from when it was built in phase 2.5. Redesigning it against
+// the finished visual identity is roadmap T13.3.
+draw_options_screen :: proc(screen: OptionsScreen, palettes: core.PaletteSet) {
+	draw_overlay_scrim(palettes)
+	draw_centered_text("OPTIONS", 180, 40, palettes.current.accent)
+	draw_menu(screen.menu, 280, 46, 24, palettes)
+	draw_centered_text(
+		"LEFT / RIGHT to change  -  ESC to go back",
+		540,
+		18,
+		core.with_alpha(palettes.current.light, TEXT_MUTED),
+	)
 }

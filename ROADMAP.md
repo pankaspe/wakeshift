@@ -48,7 +48,7 @@ Quello che si scopre strada facendo non si butta, si **sposta dove verrà rilett
 
 ## Stato attuale
 
-Verificato sul codice, 2 settembre 2026 — aggiornato a chiusura Fase 2.5.
+Verificato sul codice, 2 settembre 2026 — aggiornato a chiusura Fase 3.
 
 **Funziona**
 - Loop one-button: corsa automatica, `SPACE` inverte la gravità, due corsie
@@ -62,17 +62,17 @@ Verificato sul codice, 2 settembre 2026 — aggiornato a chiusura Fase 2.5.
 - **[Fase 2]** Salvataggio cifrato (CBOR + XChaCha20-Poly1305) nella directory dati utente, che rifiuta file corrotti o manomessi senza mai far crashare il gioco
 - **[Fase 2]** Simulazione deterministica: seed esplicito, input come dato, timestep fisso a 60 Hz. Ogni record salva il `RunManifest` della run che l'ha ottenuto — seed più i tick di ogni flip
 - **[Fase 2.5]** Presentazione: parte a schermo pieno senza lampeggiare e senza toccare il modo video del monitor, render target alla risoluzione nativa del monitor (il codice di gioco continua a ragionare in 1280×720), schermata opzioni raggiungibile da menu e pausa, impostazioni salvate dentro il salvataggio cifrato
+- **[Fase 3]** Identità visiva avviata: nessun colore scritto a mano fuori da `core/palette.odin`, i due mondi disegnati insieme con l'orizzonte in mezzo, la convergenza che li avvicina col passare della run, il personaggio con un corpo che corre e frusta nel flip, glow additivo da primitive, HUD e menu ricolorati sulla palette
 
 **Non funziona / manca**
 - Ogni ostacolo pone la stessa domanda: l'unica leva di difficoltà è la velocità (270 → 330 → 400 px/s)
 - I 4 tipi di ostacolo sono **un tipo solo con 4 skin**: `Chasm` e `DreamHole` usano la stessa identica collisione di `Block`
 - Il "pieno vs vuoto" non esiste: la voragine è disegnata a `y = 720 - 54 = 666`, la linea del pavimento sta a ~690-706 → **sporge dal terreno di 25-40px, è un blocco in piedi, non un buco**
 - La Lucidity è un cricchetto: sale e non scende mai
-- La fascia centrale (40% dello schermo) è inutilizzata
-- Sfondo `rl.ClearBackground(rl.BEIGE)`, contorni neri da 1.8px
-- Nessuna particella, nessun bloom, nessun parallax, nessun audio
+- La fascia centrale (40% dello schermo) è inutilizzata *dal gameplay* — dalla Fase 3 è però già disegnata come fascia di orizzonte, quindi quando il Limine diventerà giocabile il giocatore starà nel punto dell'immagine che è sempre stato disegnato come soglia
+- Nessuna particella, nessun parallax, nessun audio. Il bloom non è vero bloom: è glow additivo impilato da primitive, non un bright-pass sul frame (Fase 4)
 - Nessun replay o ghost visibile in gioco: il `RunManifest` viene registrato e salvato, ma non ancora rigiocato dall'interfaccia
-- Menu e opzioni usano ancora il font bitmap di default di raylib e i colori di sistema: leggibili, ma non hanno identità visiva (Fase 3 / T13.3)
+- Menu e opzioni prendono ora i colori dalla palette, ma usano ancora il font bitmap di default di raylib: tutto quello che è disegnato da primitive è nitido alla risoluzione nativa, il testo no (T13.3)
 
 ---
 
@@ -188,23 +188,19 @@ I tre comportamenti di raylib che rendono tutto questo delicato — due dei qual
 
 ---
 
-### Fase 3 — Palette, corpo, e il primo strato
+### ✅ Fase 3 — Palette, corpo, e il primo strato
 
-**Obiettivo**: il salto visivo più grande della roadmap. Riferimento: [Il sistema a tre mondi](#il-sistema-a-tre-mondi--riferimento-grafico-trasversale) e Design Doc sez. 12.
+Il gioco ha smesso di essere disegnato su fondo beige. I due mondi sono ora sempre entrambi a schermo, con l'orizzonte in mezzo; quale dei due è vivo lo decide `world_t`, e quanto si somigliano lo decide `depth_t`. Il personaggio ha un corpo di primitive che corre, fluttua e frusta nel flip. Nessun colore è più scritto a mano fuori dalla palette.
 
-| Task | Descrizione | Modello |
-|---|---|---|
-| T3.1 | `render/palette.odin`: tre palette, `world_t`, interpolazione continua | **Opus** |
-| T3.2 | Interpolazione aggiuntiva per **profondità**: al crescere della profondità le palette dei due mondi virano verso quella del Limine (la convergenza, Design Doc sez. 12) | **Opus** |
-| T3.3 | `render/background.odin`: gradiente verticale Onirico→orizzonte→Reale guidato da `world_t` | **Opus** |
-| T3.4 | Terreno ricolorato su palette, rim light per mondo | Sonnet |
-| T3.5 | Ostacoli ricolorati su palette | Sonnet |
-| T3.6 | **Il personaggio prende un corpo**: testa, torso, arti da primitive; ciclo di corsa; la frustata del flip. Corregge anche l'inversione corpo/bordo attuale | **Opus** |
-| T3.7 | Glow additivo economico (`BLEND_ADDITIVE`, alpha decrescente) | **Opus** |
-| T3.8 | HUD e menu ricolorati, leggibilità su fondo scuro | Sonnet |
-| T3.9 ⚑ | Playtest visivo | — |
+**Le decisioni che restano vincolanti**
 
-**Test di verifica**: uno screenshot deve smettere di sembrare un prototipo. Il flip deve *sentirsi* come un attraversamento.
+- **La palette sta in `core/palette.odin`, non in `render/`.** Anche `ui` disegna con la palette, e `ui` non può importare `render`. È la terza volta che questa cosa succede — `Input` nella Fase 2, `Settings` nella Fase 2.5, la palette qui — ed è ormai una regola, scritta in `CLAUDE.md`: quello che è *vocabolario* va in `core`, il package che possiede il *comportamento* tiene la metà che ha bisogno dello stato di gioco. In `render/palette.odin` resta solo la derivazione di `world_t` e `depth_t` da `Player` e `World`.
+- **L'orizzonte cade esattamente sulla fascia del Limine** (216-504, la stessa suddivisione 30/40/30 del gameplay). Non è estetica: quando il Limine diventerà giocabile nella Fase 5, il giocatore starà nel punto dell'immagine che è sempre stato disegnato come soglia.
+- **Il ciclo di corsa è agganciato alla distanza percorsa, non al tempo.** Le gambe accelerano da sole a ogni cambio di tier, senza niente da tenere in sincrono.
+- **Un mezzo giro lascerebbe il personaggio a correre all'indietro**, quindi la posa specchia anche in orizzontale — e uno specchio non si interpola, cambia il verso del piano. Scatta a metà rotazione, dove la figura è di taglio: un fotogramma dentro 120 ms. Il perché e la via d'uscita (schiacciare la figura in quell'istante, non rallentare la rotazione) stanno nell'intestazione di `render/player.odin`.
+- **Il glow non è bloom.** Sono primitive additive impilate: costa poco, non tocca il frame intero, e resta utile anche dopo la Fase 4 per gli aloni locali.
+
+**Le tre manopole da girare se il playtest lo chiede**: `HORIZON_GLOW_*` in `background.odin` se il fondo ruba attenzione agli ostacoli (pilastro 2 batte l'atmosfera), `CONVERGENCE_MAX` (oggi 0.72) se a fondo run i due mondi diventano indistinguibili al punto da non capire dove sei, `PLAYER_STRIDE_LENGTH` se il passo non sembra appoggiato a terra.
 
 ---
 

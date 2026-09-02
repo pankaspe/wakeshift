@@ -56,14 +56,15 @@ order before touching anything:
 2. **`docs/design_doc.md`** — binding on *what* to build. v1.2 is current.
 3. The rest of this file — architecture rules and conventions.
 
-**Where the project stands:** phases 0-2.5 are complete (T2.5.9, the playtest, is the
-user's). The code is split into packages with an acyclic dependency graph, saves are
-encrypted in the OS user data directory, and the simulation is deterministic and verified
-(seeded generation, input as data, fixed timestep, run manifests recorded). The game opens
-in fullscreen at the monitor's own resolution, has an options screen reachable from the
-main menu and the pause menu, and remembers what was set there. Phase 3 — palette, the
-character's body, the first layer — is next and has not been started. The game still
-renders on `rl.ClearBackground(rl.BEIGE)`: the visual identity has not begun.
+**Where the project stands:** phases 0-3 are complete. The code is split into packages with an acyclic dependency
+graph, saves are encrypted in the OS user data directory, and the simulation is
+deterministic and verified (seeded generation, input as data, fixed timestep, run
+manifests recorded). The game opens in fullscreen at the monitor's own resolution, has an
+options screen reachable from the main menu and the pause menu, and remembers what was set
+there. The visual identity has begun: every color on screen is sampled from the three-world
+palette, the two worlds are drawn at once with a horizon between them, and the character
+has a body that runs and whips through the flip. What is still missing there is real bloom
+(phase 4), particles (phase 9) and parallax scenery (phase 10).
 
 **How verification works here:** `odin check src` after every edit, `odin build src` and a
 short launch before reporting a task done. For anything with real logic, write a throwaway
@@ -135,6 +136,14 @@ Note that `game` does not currently import `platform`: input arrives as a
 Keep it that way if you can — it is what makes the simulation testable without
 a window.
 
+Three things live in `core` that look like they belong elsewhere — `Input`, `Settings` and
+`Palette` — and all three for the same reason: two packages that may not import each other
+both need them. `ui` renders settings and `platform` applies them; `ui` draws menus out of
+the palette and `render` draws the world out of it. When something is *vocabulary* rather
+than *behavior*, `core` is where it goes; the package that owns the behavior keeps the half
+that needs game state (`render/palette.odin` derives `world_t` and `depth_t` from a Player
+and a World, and that is all it does).
+
 Odin forbids cyclic imports between packages, and one directory is exactly one package.
 The split is **by level of abstraction, not by game entity** — `player`, `obstacle`,
 `pattern` and `world` all live together inside `game/` because they reference each other
@@ -167,6 +176,10 @@ is only where those coordinates land.
 - `core.Settings` lives in `core` for the same reason `core.Input` does: `ui` renders it
   and `platform` applies it, and `ui` may not import `platform`. `platform/window.odin` is
   the only file that turns a Settings value into window calls.
+- Presentation may read a wall clock (`display_time` in `main`, accumulated from the same
+  single `rl.GetFrameTime()` call) for things that are drawn but not simulated — the menu's
+  drift between worlds, the horizon's breathing. It must never reach the simulation, which
+  advances only in whole `core.FIXED_TIMESTEP` steps out of the accumulator.
 - Drawing rate is a setting; the simulation rate is not. Whatever vsync and the frame
   limit are set to, the simulation advances at `core.TICK_RATE` in fixed steps.
 
@@ -187,8 +200,13 @@ is only where those coordinates land.
   time. A frame may run zero, one, or several steps; input is latched until a step
   consumes it. Anything that must not change a run's outcome — culling, rendering — has
   to be provably neutral, not just probably neutral.
-- **No hardcoded colors outside `render/palette.odin`.** Every color is sampled from the
-  three-world palette.
+- **No hardcoded colors outside `core/palette.odin`.** Every color is sampled from the
+  three-world palette, through `world_t` (where the player is) and `depth_t` (how deep the
+  run has gone). A color literal anywhere else is a bug, including in `ui/`.
+- **The body is dark in all three worlds; only the light changes.** Player, obstacles and
+  terrain all take `palette.silhouette`; what tells the worlds apart is the rim and the
+  glow (Design Doc, section 12). Inverting a silhouette between worlds reads as two
+  different characters, which is exactly what phase 3 fixed.
 - **No hardcoded pixel timings in patterns.** Patterns are time offsets; positions are
   derived at runtime from elapsed time and scroll speed.
 
@@ -299,14 +317,12 @@ Tracked here so they are not rediscovered. Each is scheduled in `ROADMAP.md`.
 - `PulsingShape` phase is driven by global elapsed time rather than the obstacle's own
   `arrival_time`, so identical patterns can present a 55px wall or an ignorable 8px stub.
   (T6.4)
-- The player silhouette inverts body and rim colors between worlds, contradicting the
-  design doc's "same character, different lighting" rule. Fixed as part of giving the
-  character a body. (T3.6)
-- The background is still `rl.ClearBackground(rl.BEIGE)` with hard black outlines: the
-  visual identity has not been started. (Phase 3)
-- Menus, HUD and the options screen use raylib's default bitmap font and system colors.
-  Now that the render target is native-resolution, everything drawn from primitives is
-  crisp and only the text is not — a real font is part of the visual identity work.
-  (Phase 3 / T13.3)
+- Menus, HUD and the options screen now take their colors from the palette, but still use
+  raylib's default bitmap font. Everything drawn from primitives is crisp at native
+  resolution and only the text is not — a real font is the remaining half of that job.
+  (T13.3)
+- The glow is drawn with stacked additive primitives, not a shader. It is deliberately
+  cheap and does not bloom the whole frame — a bright-pass and separable blur replace it
+  in phase 4, after which most of `render/glow.odin` stays useful only for local halos.
 - Recorded run manifests are saved but never played back — there is no replay or ghost in
   the game yet, only the data needed for one. (Phase 13 / post-MVP)

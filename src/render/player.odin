@@ -1,14 +1,33 @@
 /*
 * Player Render
-* Draws the player as a Hollow Knight-inspired silhouette. Real lane:
-* light body, dark rim, dark eyes. Dream lane: a negative of that — dark
-* body, light rim, light eyes — with eyes mirrored top-to-bottom to read
-* as "upside down", since the player hangs from the ceiling there
-* (Design Doc, section 12: Silhouette + Light).
+* The character: a dark silhouette with a head, a torso and four limbs,
+* built entirely from thick lines and circles (Design Doc, section 12 —
+* "a body, two poses"). No sprite, no texture; the sense of quality is
+* meant to come from the math of the movement, not from the detail of
+* the shapes.
 *
-* Also applies squash & stretch (traditional animation principle): a
-* gentle stretch while mid-flip, settling into a squash bounce on
-* landing that decays back to normal shape (section 15.2).
+* Three things are happening at once here, and they are deliberately
+* kept separate:
+*
+*   the skeleton  a fixed set of joints in a local unit box, authored
+*                 once below and never touched by animation
+*   the pose      how that box lands on screen: rotation, squash &
+*                 stretch, and the mirror that keeps the character facing
+*                 forward while upside down
+*   the animation the joint angles for this instant: the run cycle, and
+*                 the drift that replaces it as the Dream takes over
+*
+* The silhouette rule (Design Doc, section 12): the body is the same dark
+* shape in all three states, and only the *light* changes world. The old
+* code inverted body and rim between worlds — a light body in the Real
+* world, a dark one in the Dream — which read as two different
+* characters. That is fixed here.
+*
+* Accessibility (pillar 6): the two worlds are never told apart by color
+* alone. The character bounces on a hard, regular run cycle in the Real
+* world and drifts on a slow float in the Dream one, and the two blend
+* continuously through world_t, so the type of motion says which world is
+* live even with the color removed entirely.
 */
 package render
 
@@ -17,25 +36,87 @@ import "../game"
 import "core:math"
 import rl "vendor:raylib/v55"
 
-PLAYER_REAL_BODY_COLOR :: rl.Color{240, 240, 245, 255}
-PLAYER_REAL_RIM_COLOR :: rl.BLACK
-PLAYER_REAL_EYE_COLOR :: rl.BLACK
+// --- The skeleton, in fractions of the player's box ---
+//
+// Origin at the box center, +x forward (the direction of travel), +y
+// down. Everything is authored here once; a pose is only ever a
+// transform of these numbers, which is what keeps the run cycle and the
+// flip from having to know about each other.
 
-PLAYER_DREAM_BODY_COLOR :: rl.BLACK
-PLAYER_DREAM_RIM_COLOR :: rl.Color{240, 240, 245, 255}
-PLAYER_DREAM_EYE_COLOR :: rl.Color{210, 240, 255, 255}
+PLAYER_HEAD_CENTER :: rl.Vector2{0.09, -0.31}
+PLAYER_HEAD_RADIUS :: 0.150
+PLAYER_NECK :: rl.Vector2{0.06, -0.19}
+PLAYER_SHOULDER :: rl.Vector2{0.03, -0.13}
+PLAYER_HIP :: rl.Vector2{-0.02, 0.08}
 
-PLAYER_ROUNDNESS :: 0.5 // 0 = sharp rectangle, 1 = fully rounded (pill shape)
+PLAYER_THIGH_LENGTH :: 0.21
+PLAYER_SHIN_LENGTH :: 0.21
+PLAYER_UPPER_ARM_LENGTH :: 0.15
+PLAYER_FOREARM_LENGTH :: 0.15
 
-// How much the shape stretches vertically at the peak of a flip.
-STRETCH_AMOUNT :: 0.16
+PLAYER_TORSO_THICKNESS :: 0.20
+PLAYER_LIMB_THICKNESS :: 0.085
 
-// How long the post-landing squash bounce lasts, and how strong it starts.
-SETTLE_DURATION :: 0.22
+// --- The run cycle ---
+
+// Pixels of world scroll per full two-step stride. Tying the cycle to
+// distance rather than to time means the legs speed up with the world on
+// their own, through every tier change, with nothing to keep in sync.
+PLAYER_STRIDE_LENGTH :: 74
+
+PLAYER_LEG_SWING :: 0.62 // radians the thigh swings either side of vertical
+PLAYER_KNEE_BASE :: 0.18 // knees are never locked straight
+PLAYER_KNEE_SWING :: 0.95 // extra bend while the leg recovers
+PLAYER_ARM_SWING :: 0.42
+PLAYER_ELBOW_BEND :: 0.65
+PLAYER_LEAN :: 0.12 // radians of forward lean, a runner's posture
+PLAYER_BOUNCE :: 0.045 // vertical bob per step, in box fractions
+
+// --- The Dream drift, which replaces the run cycle as world_t rises ---
+
+PLAYER_FLOAT_PERIOD :: 2.6 // seconds per full rise and fall
+PLAYER_FLOAT_AMOUNT :: 0.055 // box fractions
+PLAYER_WOBBLE_PERIOD :: 1.7
+PLAYER_WOBBLE_AMOUNT :: 0.22 // radians added to the limbs, out of phase
+
+// --- Squash & stretch ---
+
+STRETCH_AMOUNT :: 0.16 // vertical stretch at the peak of a flip
+SETTLE_DURATION :: 0.22 // length of the post-landing squash bounce
 SETTLE_SQUASH_AMOUNT :: 0.28
 
-// Which lane the shape should currently be anchored to, for scaling purposes:
-// mid-flip we anchor to where we're headed, not where we came from.
+// --- Light ---
+
+PLAYER_RIM_THICKNESS :: 2.4 // how far the lit edge sticks out past the body
+PLAYER_GLOW_RADIUS :: 1.35 // multiples of the box size
+PLAYER_GLOW_STRENGTH :: 0.20
+PLAYER_FLIP_GLOW_BOOST :: 0.35 // extra glow at the peak of a flip
+PLAYER_EYE_RADIUS :: 0.035
+PLAYER_EYE_SPACING :: 0.085
+
+// How the figure's local box lands on screen.
+PlayerPose :: struct {
+	origin:   rl.Vector2, // where local (0,0) sits
+	rotation: f32, // radians, clockwise on screen
+	scale:    rl.Vector2, // squash & stretch; scale.x is negative when mirrored
+	unit:     f32, // pixels per local unit
+}
+
+// Every joint of the figure, in local coordinates, for this instant.
+PlayerFigure :: struct {
+	head:     rl.Vector2,
+	neck:     rl.Vector2,
+	shoulder: rl.Vector2,
+	hip:      rl.Vector2,
+	knees:    [2]rl.Vector2,
+	feet:     [2]rl.Vector2,
+	elbows:   [2]rl.Vector2,
+	hands:    [2]rl.Vector2,
+}
+
+// Which lane the shape should currently be anchored to, for scaling
+// purposes: mid-flip we anchor to where we're headed, not where we came
+// from.
 get_player_anchor_lane :: proc(player: game.Player) -> core.Lane {
 	if player.state == .Transitioning {
 		return player.target_lane
@@ -67,55 +148,223 @@ get_player_scale :: proc(player: game.Player) -> rl.Vector2 {
 	return rl.Vector2{1, 1}
 }
 
-draw_player :: proc(player: game.Player) {
-	scale := get_player_scale(player)
-	scaled_size := rl.Vector2{player.size.x * scale.x, player.size.y * scale.y}
-
-	// Keep the shape anchored to the surface it's touching (floor or
-	// ceiling) while it grows/shrinks, instead of scaling from the center —
-	// otherwise it would look like it's floating away from the ground.
-	anchor_lane := get_player_anchor_lane(player)
-	draw_x := player.position.x + (player.size.x - scaled_size.x) * 0.5
-	draw_y := player.position.y
-	if anchor_lane == .Real {
-		draw_y = player.position.y + player.size.y - scaled_size.y
+// The whip (Design Doc, section 12): half a turn, in the direction of
+// travel, over the ~7 frames the flip lasts, with a small overshoot so
+// it lands as an impulse rather than as a swing. Every flip turns the
+// same way, so repeated flips read as one continuous forward somersault.
+get_player_rotation :: proc(player: game.Player) -> f32 {
+	if player.state != .Transitioning {
+		return player.lane == .Dream ? math.PI : 0
 	}
 
-	body_rect := rl.Rectangle{draw_x, draw_y, scaled_size.x, scaled_size.y}
-	is_dream := player.lane == .Dream
-
-	body_color := is_dream ? PLAYER_DREAM_BODY_COLOR : PLAYER_REAL_BODY_COLOR
-	rim_color := is_dream ? PLAYER_DREAM_RIM_COLOR : PLAYER_REAL_RIM_COLOR
-	eye_color := is_dream ? PLAYER_DREAM_EYE_COLOR : PLAYER_REAL_EYE_COLOR
-
-	// Rim light: a slightly larger silhouette drawn first, behind the body,
-	// so only its edges peek out — a cheap but effective "outer glow"
-	// without needing a real lighting/shader pass.
-	rim_rect := rl.Rectangle {
-		body_rect.x - core.RIM_THICKNESS,
-		body_rect.y - core.RIM_THICKNESS,
-		body_rect.width + core.RIM_THICKNESS * 2,
-		body_rect.height + core.RIM_THICKNESS * 2,
-	}
-	rl.DrawRectangleRounded(rim_rect, PLAYER_ROUNDNESS, 12, rim_color)
-
-	// Main body, on top of the rim
-	rl.DrawRectangleRounded(body_rect, PLAYER_ROUNDNESS, 12, body_color)
-
-	draw_player_eyes(body_rect, eye_color, is_dream)
+	// The lane being left is whichever one we are not heading into.
+	from: f32 = player.target_lane == .Dream ? 0 : math.PI
+	t := clamp(player.transition_timer / game.TRANSITION_DURATION, 0, 1)
+	return from + math.PI * core.ease_out_back(t)
 }
 
-// Eyes shifted toward the front (direction of travel) horizontally always.
-// Vertically, mirrored between Real (near-top) and Dream (near-bottom) to
-// read as upside down when hanging from the ceiling.
-// Takes the already-scaled body_rect, so eyes move together with the squash/stretch.
-draw_player_eyes :: proc(body_rect: rl.Rectangle, eye_color: rl.Color, is_dream: bool) {
-	eye_radius := body_rect.width * 0.06
-	eye_y_factor: f32 = is_dream ? 0.55 : 0.45
-	eye_y := body_rect.y + body_rect.height * eye_y_factor
-	eye_spacing := body_rect.width * 0.16
-	front_center_x := body_rect.x + body_rect.width * 0.62
+// Half a turn leaves the character upside down *and* facing backwards,
+// so hanging from the ceiling also mirrors the figure horizontally: the
+// two together are exactly the vertical mirror the pose wants, with the
+// rotation carrying the motion.
+//
+// A mirror cannot be interpolated — it is a change of handedness — so it
+// snaps, and it snaps at the midpoint of the flip, where the figure is
+// side-on and turning at full speed. At 120 ms for the whole rotation
+// that is one frame around frame 4. If it ever reads as a pop on screen,
+// the fix is to squash the figure thin at the same instant, not to
+// slow the rotation down.
+get_player_mirror :: proc(player: game.Player) -> f32 {
+	facing_dream := player.lane == .Dream
 
-	rl.DrawCircleV(rl.Vector2{front_center_x - eye_spacing * 0.5, eye_y}, eye_radius, eye_color)
-	rl.DrawCircleV(rl.Vector2{front_center_x + eye_spacing * 0.5, eye_y}, eye_radius, eye_color)
+	if player.state == .Transitioning {
+		past_midpoint := player.transition_timer >= game.TRANSITION_DURATION * 0.5
+		facing_dream = past_midpoint ? player.target_lane == .Dream : player.target_lane == .Real
+	}
+
+	return facing_dream ? -1 : 1
+}
+
+new_player_pose :: proc(player: game.Player) -> PlayerPose {
+	scale := get_player_scale(player)
+
+	// Keep the figure planted on the surface it is touching while it
+	// squashes and stretches, instead of scaling about its center —
+	// otherwise a landing looks like it happens above the ground.
+	anchor_shift := (1 - scale.y) * player.size.y * 0.5
+	if get_player_anchor_lane(player) == .Dream {
+		anchor_shift = -anchor_shift
+	}
+
+	return PlayerPose {
+		origin = rl.Vector2 {
+			player.position.x + player.size.x * 0.5,
+			player.position.y + player.size.y * 0.5 + anchor_shift,
+		},
+		rotation = get_player_rotation(player),
+		scale = rl.Vector2{scale.x * get_player_mirror(player), scale.y},
+		unit = player.size.y,
+	}
+}
+
+// Local point -> screen point. Mirror and squash first, rotation second:
+// the figure is mirrored in its own frame, then the whole thing is
+// turned.
+pose_point :: proc(pose: PlayerPose, local: rl.Vector2) -> rl.Vector2 {
+	x := local.x * pose.scale.x * pose.unit
+	y := local.y * pose.scale.y * pose.unit
+
+	c := math.cos(pose.rotation)
+	s := math.sin(pose.rotation)
+	return rl.Vector2{pose.origin.x + x * c - y * s, pose.origin.y + x * s + y * c}
+}
+
+// A limb segment's far end, given an angle measured from straight down
+// and turning toward the front.
+@(private)
+limb_end :: proc(from: rl.Vector2, angle, length: f32) -> rl.Vector2 {
+	return rl.Vector2{from.x + math.sin(angle) * length, from.y + math.cos(angle) * length}
+}
+
+// Builds the figure for this instant.
+//
+// stride comes from distance travelled and drives the run; time drives
+// the Dream's drift. world_t crossfades between the two, so there is no
+// moment where the character switches animation — it stops running and
+// starts floating the same way the palette stops being blue and starts
+// being violet.
+new_player_figure :: proc(stride, time, world_t: f32) -> PlayerFigure {
+	dream := clamp(world_t, 0, 1)
+	grounded := 1 - dream
+
+	// The body rises twice per stride while running, and breathes slowly
+	// while floating.
+	bounce := -PLAYER_BOUNCE * abs(math.sin(stride)) * grounded
+	float := PLAYER_FLOAT_AMOUNT * math.sin(time / PLAYER_FLOAT_PERIOD * 2 * math.PI) * dream
+	body_offset := rl.Vector2{0, bounce + float}
+
+	figure := PlayerFigure {
+		head     = PLAYER_HEAD_CENTER + body_offset,
+		neck     = PLAYER_NECK + body_offset,
+		shoulder = PLAYER_SHOULDER + body_offset,
+		hip      = PLAYER_HIP + body_offset,
+	}
+
+	for side in 0 ..< 2 {
+		// The two legs are half a cycle apart; the arms counter the leg
+		// on their own side, which is what makes a run read as a run.
+		phase := stride + math.PI * f32(side)
+		wobble :=
+			PLAYER_WOBBLE_AMOUNT *
+			math.sin(time / PLAYER_WOBBLE_PERIOD * 2 * math.PI + math.PI * f32(side)) *
+			dream
+
+		// Legs. The knee flexes hardest while the leg is behind and being
+		// pulled through, which is the single detail that separates a run
+		// from two sticks swinging.
+		thigh := PLAYER_LEG_SWING * math.sin(phase) * grounded + wobble
+		recovery := max(-math.sin(phase - 0.6), 0)
+		knee_bend := (PLAYER_KNEE_BASE + PLAYER_KNEE_SWING * recovery) * grounded
+		knee_bend += PLAYER_KNEE_BASE * dream
+
+		figure.knees[side] = limb_end(figure.hip, thigh, PLAYER_THIGH_LENGTH)
+		figure.feet[side] = limb_end(figure.knees[side], thigh - knee_bend, PLAYER_SHIN_LENGTH)
+
+		// Arms, opposite the leg on the same side, elbow bent forward.
+		arm := -PLAYER_ARM_SWING * math.sin(phase) * grounded - wobble
+		figure.elbows[side] = limb_end(figure.shoulder, arm, PLAYER_UPPER_ARM_LENGTH)
+		figure.hands[side] = limb_end(
+			figure.elbows[side],
+			arm + PLAYER_ELBOW_BEND * grounded,
+			PLAYER_FOREARM_LENGTH,
+		)
+	}
+
+	return figure
+}
+
+// Draws every bone as a thick line with rounded ends, at the given
+// thickness in local units. Called twice: once fat in the world's light
+// to make the rim, once at true weight in the silhouette color on top.
+@(private)
+draw_player_bones :: proc(
+	pose: PlayerPose,
+	figure: PlayerFigure,
+	extra_thickness: f32,
+	color: rl.Color,
+) {
+	limb := PLAYER_LIMB_THICKNESS * pose.unit + extra_thickness
+	torso := PLAYER_TORSO_THICKNESS * pose.unit + extra_thickness
+	head_radius := PLAYER_HEAD_RADIUS * pose.unit + extra_thickness * 0.5
+
+	bone :: proc(pose: PlayerPose, a, b: rl.Vector2, thickness: f32, color: rl.Color) {
+		start := pose_point(pose, a)
+		end := pose_point(pose, b)
+		rl.DrawLineEx(start, end, thickness, color)
+		// Round the joints: a capsule instead of a bare rectangle, so
+		// limbs bend without opening a notch at the elbow or knee.
+		rl.DrawCircleV(start, thickness * 0.5, color)
+		rl.DrawCircleV(end, thickness * 0.5, color)
+	}
+
+	for side in 0 ..< 2 {
+		bone(pose, figure.hip, figure.knees[side], limb, color)
+		bone(pose, figure.knees[side], figure.feet[side], limb, color)
+		bone(pose, figure.shoulder, figure.elbows[side], limb, color)
+		bone(pose, figure.elbows[side], figure.hands[side], limb, color)
+	}
+
+	bone(pose, figure.shoulder, figure.hip, torso, color)
+	bone(pose, figure.neck, figure.shoulder, limb, color)
+	rl.DrawCircleV(pose_point(pose, figure.head), head_radius, color)
+}
+
+draw_player :: proc(player: game.Player, world: game.World, palettes: core.PaletteSet) {
+	pose := new_player_pose(player)
+
+	// A forward lean on top of the flip's rotation: posture, not motion.
+	// Mirrored with the figure, so it leans into the run in both worlds.
+	pose.rotation += PLAYER_LEAN * get_player_mirror(player)
+
+	stride := world.scroll_offset / PLAYER_STRIDE_LENGTH * 2 * math.PI
+	figure := new_player_figure(stride, world.elapsed_time, palettes.world_t)
+
+	// The aura: the world's light gathered around the body, brightest at
+	// the peak of a flip. The body itself never takes a world's color —
+	// only what is around it does (Design Doc, section 12).
+	glow_strength: f32 = PLAYER_GLOW_STRENGTH
+	if player.state == .Transitioning {
+		t := player.transition_timer / game.TRANSITION_DURATION
+		glow_strength += PLAYER_FLIP_GLOW_BOOST * math.sin(clamp(t, 0, 1) * math.PI)
+	}
+	draw_glow_circle(
+		pose_point(pose, figure.hip),
+		player.size.y * PLAYER_GLOW_RADIUS,
+		palettes.current.light,
+		glow_strength,
+	)
+
+	// Rim first, body over it: only the edges of the fatter silhouette
+	// survive, which is a lit outline for the price of drawing the figure
+	// twice.
+	draw_player_bones(pose, figure, PLAYER_RIM_THICKNESS * 2, palettes.current.light)
+	draw_player_bones(pose, figure, 0, palettes.current.silhouette)
+
+	draw_player_eyes(pose, figure, palettes.current.accent)
+}
+
+// Two points of light on the head, set toward the front. They are the
+// only part of the character allowed a bright color, and they carry the
+// facing: authored in local space, they follow the mirror and the
+// rotation without a special case.
+@(private)
+draw_player_eyes :: proc(pose: PlayerPose, figure: PlayerFigure, color: rl.Color) {
+	radius := PLAYER_EYE_RADIUS * pose.unit
+	front := rl.Vector2{figure.head.x + PLAYER_HEAD_RADIUS * 0.45, figure.head.y - 0.02}
+
+	for side in 0 ..< 2 {
+		offset := PLAYER_EYE_SPACING * (f32(side) - 0.5)
+		center := pose_point(pose, rl.Vector2{front.x - offset * 0.35, front.y + offset})
+		rl.DrawCircleV(center, radius, color)
+	}
 }

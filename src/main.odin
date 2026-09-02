@@ -30,16 +30,22 @@ import "core:math/rand"
 import rl "vendor:raylib/v55"
 
 // Draws terrain, every obstacle, then the player on top — the gameplay
-// scene itself, with no HUD or overlay. Playing draws this live; Paused
+// scene itself, on top of a background already drawn, with no HUD or
+// overlay. Playing draws this live; Paused
 // and GameOver draw the same frozen scene underneath their own overlay,
 // so without this helper the three calls would repeat identically in
 // every case of the DRAW switch below.
-draw_gameplay :: proc(world: game.World, obstacles: []game.Obstacle, player: game.Player) {
-	render.draw_terrain(world)
+draw_gameplay :: proc(
+	world: game.World,
+	obstacles: []game.Obstacle,
+	player: game.Player,
+	palettes: core.PaletteSet,
+) {
+	render.draw_terrain(world, palettes)
 	for obstacle in obstacles {
-		render.draw_obstacle(obstacle, world)
+		render.draw_obstacle(obstacle, world, palettes)
 	}
-	render.draw_player(player)
+	render.draw_player(player, world, palettes)
 }
 
 // Returns a copy of the world advanced by the leftover fraction of a
@@ -174,6 +180,11 @@ main :: proc() {
 	// step by the end of a frame.
 	accumulator: f32 = 0
 
+	// Wall time since launch. Drives presentation that has no run behind
+	// it and must never be confused with world.elapsed_time, which is the
+	// simulation's own clock and advances in fixed steps.
+	display_time: f32 = 0
+
 	// Simulation input waiting for a step to consume it. Needed because a
 	// frame and a step are no longer the same thing: a frame that runs no
 	// step would otherwise drop the press, and one that runs two would
@@ -201,6 +212,18 @@ main :: proc() {
 		// last frame — a drag, a monitor change, or the fullscreen switch
 		// below (platform/display.odin).
 		platform.update_display(&disp)
+
+		// The one clock read in the whole project, and the one keyboard
+		// poll, both here (core/input.odin). Clamped once, at the source:
+		// everything downstream is measuring the same frame.
+		frame_time := min(rl.GetFrameTime(), core.MAX_FRAME_TIME)
+
+		// Wall time since launch, for things that are drawn but not
+		// simulated: the menu's slow drift between the two worlds, the
+		// horizon's breathing on a screen with no run behind it. Never
+		// reaches the simulation — that advances only in whole steps of
+		// core.FIXED_TIMESTEP, out of the accumulator below.
+		display_time += frame_time
 
 		// Sample the keyboard exactly once per frame, here. Nothing
 		// downstream polls raylib for itself — see core/input.odin.
@@ -254,7 +277,7 @@ main :: proc() {
 			// Hold this frame's flip until a step takes it (see pending_input).
 			pending_input.flip = pending_input.flip || input.flip
 
-			accumulator += min(rl.GetFrameTime(), core.MAX_FRAME_TIME)
+			accumulator += frame_time
 
 			// Run as many whole simulation steps as the elapsed real time
 			// has earned — usually one, occasionally none or two.
@@ -413,11 +436,29 @@ main :: proc() {
 		// Add new visual elements inside the relevant case(s) below.
 		// ============================================================
 		platform.begin_game_canvas(disp)
-		rl.ClearBackground(rl.BEIGE)
+
+		// The palette of this frame (core/palette.odin). With a run on
+		// screen it is read off the player's height and the run's depth;
+		// with only a menu on screen there is no player to read, so it
+		// drifts slowly between the two worlds instead — the first thing
+		// anyone sees already states the premise.
+		showing_run :=
+			game_state == .Playing ||
+			game_state == .Paused ||
+			game_state == .GameOver ||
+			(game_state == .Options && options_return == .Paused)
+
+		palettes :=
+			showing_run \
+			? render.new_scene_palette(player, world) \
+			: render.new_menu_palette(display_time)
+
+		rl.ClearBackground(palettes.limen.deep)
+		render.draw_background(palettes, showing_run ? world.elapsed_time : display_time)
 
 		switch game_state {
 		case .MainMenu:
-			ui.draw_main_menu(main_menu, high_score)
+			ui.draw_main_menu(main_menu, high_score, palettes)
 
 		case .Playing:
 			// The simulation moves in whole steps; the display refreshes
@@ -430,27 +471,37 @@ main :: proc() {
 			// guess. It does mean the picture leads the collision state by
 			// up to one step (~17ms) — the forgiving direction: something
 			// can look like it grazed you a frame before the game agrees.
-			draw_gameplay(interpolated_world(world, accumulator), obstacles[:], player)
-			ui.draw_hud(score, lucidity, game.tiers[game.get_current_tier_index(world.elapsed_time)].name)
+			draw_gameplay(interpolated_world(world, accumulator), obstacles[:], player, palettes)
+			ui.draw_hud(
+				score,
+				lucidity,
+				game.tiers[game.get_current_tier_index(world.elapsed_time)].name,
+				palettes,
+			)
 
 		case .Paused:
 			// draw the frozen gameplay frame underneath, then the overlay on top
-			draw_gameplay(world, obstacles[:], player)
-			ui.draw_hud(score, lucidity, game.tiers[game.get_current_tier_index(world.elapsed_time)].name)
-			ui.draw_pause_overlay(pause_menu)
+			draw_gameplay(world, obstacles[:], player, palettes)
+			ui.draw_hud(
+				score,
+				lucidity,
+				game.tiers[game.get_current_tier_index(world.elapsed_time)].name,
+				palettes,
+			)
+			ui.draw_pause_overlay(pause_menu, palettes)
 
 		case .GameOver:
-			draw_gameplay(world, obstacles[:], player)
-			ui.draw_game_over(score, high_score)
+			draw_gameplay(world, obstacles[:], player, palettes)
+			ui.draw_game_over(score, high_score, palettes)
 
 		case .Options:
 			// Opened from the pause menu, the frozen run stays visible behind
 			// it — the same overlay relationship the pause screen has, so
 			// changing a setting mid-run does not look like leaving it.
 			if options_return == .Paused {
-				draw_gameplay(world, obstacles[:], player)
+				draw_gameplay(world, obstacles[:], player, palettes)
 			}
-			ui.draw_options_screen(options_screen)
+			ui.draw_options_screen(options_screen, palettes)
 		}
 
 		platform.end_game_canvas()

@@ -25,9 +25,3 @@ REAL_LANE_RATIO :: 0.30
 // with the player because obstacle position math depends on it too, and
 // obstacle code has no reason to know about the player just for this.
 PLAYER_X :: 200
-
-// Shared border weight for every silhouette in the game (player, obstacles,
-// terrain) — one "line weight" for the whole project, not a player detail.
-// Likely to move to render/palette.odin once the visual identity lands in
-// roadmap phase 3.
-RIM_THICKNESS :: 1.8
