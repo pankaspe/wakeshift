@@ -3,7 +3,7 @@
 * holds global world state, like scroll speed, and drives everything
 * that moves automatically with it (floor, ceiling, obstacles)
 */
-package main
+package game
 
 // Initial scroll speed, in pixels per second (Design Doc, section 6: ~260-280 px/s)
 INITIAL_SCROLL_SPEED :: 270

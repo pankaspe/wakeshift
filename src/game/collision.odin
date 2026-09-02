@@ -1,20 +1,13 @@
 /*
-* This is Game file, game.odin
-* holds game-level state (playing / game over) and collision checks
+* Collision
+* Answers the one question that ends a run: are the player and an obstacle
+* overlapping right now? Obstacle geometry is derived from world time
+* (see obstacle.odin), so this always tests where an obstacle actually is
+* on this frame, never where it was authored.
 */
-package main
+package game
 
 import rl "vendor:raylib/v55"
-
-// Application-level screen state — separate from the player's own state
-// machine (Section 3). This one governs which screen is shown and which
-// input is being listened for (Design Doc, section 9).
-GameState :: enum {
-	MainMenu,
-	Playing,
-	Paused,
-	GameOver,
-}
 
 // Converts a position/size pair into a raylib Rectangle, for collision checks.
 to_rect :: proc(position, size: rl.Vector2) -> rl.Rectangle {
@@ -38,22 +31,4 @@ check_player_obstacle_collision :: proc(player: Player, obstacle: Obstacle, worl
 	obstacle_rect := to_rect(obstacle_position, obstacle_size)
 
 	return rl.CheckCollisionRecs(player_rect, obstacle_rect)
-}
-
-reset_run :: proc(
-	player: ^Player,
-	world: ^World,
-	score: ^Score,
-	obstacles: ^[dynamic]Obstacle,
-	generator: ^PatternGenerator,
-	lucidity: ^Lucidity,
-) {
-	player^ = new_player()
-	world^ = new_world()
-	score^ = new_score()
-	lucidity^ = new_lucidity()
-
-	delete(obstacles^)
-	obstacles^ = nil
-	generator^ = new_pattern_generator(all_patterns, 2.0, .Dream)
 }

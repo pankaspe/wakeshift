@@ -8,8 +8,9 @@
 * the game go fullscreen cleanly, on any monitor, without any gameplay
 * or asset code needing to know about real screen dimensions at all.
 */
-package main
+package platform
 
+import "../core"
 import rl "vendor:raylib/v55"
 
 Display :: struct {
@@ -17,7 +18,7 @@ Display :: struct {
 }
 
 new_display :: proc() -> Display {
-	return Display{render_target = rl.LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT)}
+	return Display{render_target = rl.LoadRenderTexture(core.SCREEN_WIDTH, core.SCREEN_HEIGHT)}
 }
 
 destroy_display :: proc(display: Display) {
@@ -45,10 +46,10 @@ present_display :: proc(display: Display) {
 
 	screen_width := f32(rl.GetScreenWidth())
 	screen_height := f32(rl.GetScreenHeight())
-	scale := min(screen_width / SCREEN_WIDTH, screen_height / SCREEN_HEIGHT)
+	scale := min(screen_width / core.SCREEN_WIDTH, screen_height / core.SCREEN_HEIGHT)
 
-	dest_width := SCREEN_WIDTH * scale
-	dest_height := SCREEN_HEIGHT * scale
+	dest_width := core.SCREEN_WIDTH * scale
+	dest_height := core.SCREEN_HEIGHT * scale
 	dest_x := (screen_width - dest_width) * 0.5
 	dest_y := (screen_height - dest_height) * 0.5
 

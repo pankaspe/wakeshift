@@ -3,8 +3,9 @@
 * Draws each application screen (Design Doc, section 9): main menu,
 * in-game HUD, pause overlay, game over screen.
 */
-package main
+package ui
 
+import "../game"
 import "core:fmt"
 import rl "vendor:raylib/v55"
 
@@ -20,7 +21,7 @@ draw_main_menu :: proc(menu: Menu, high_score: f32) {
 // streak when it's active. Real HUD polish (Design Doc section 9 styling)
 // comes later; for now this replaces the plain text that used to live
 // directly in main.odin.
-draw_hud :: proc(score: Score, lucidity: Lucidity, tier_name: string) {
+draw_hud :: proc(score: game.Score, lucidity: game.Lucidity, tier_name: string) {
 	score_text := fmt.ctprintf("Depth: %.0f", score.value)
 	rl.DrawText(score_text, 20, 20, 24, rl.BLACK)
 
@@ -28,7 +29,7 @@ draw_hud :: proc(score: Score, lucidity: Lucidity, tier_name: string) {
 	rl.DrawText(tier_text, 20, 50, 18, rl.DARKGRAY)
 
 	if lucidity.streak > 0 {
-		multiplier := get_score_multiplier(lucidity)
+		multiplier := game.get_score_multiplier(lucidity)
 		streak_text := fmt.ctprintf(
 			"Lucidity x%d  (+%.0f%%)",
 			lucidity.streak,
@@ -47,7 +48,7 @@ draw_pause_overlay :: proc(menu: Menu) {
 // Drawn on top of the frozen gameplay frame on game over — a small
 // Dream Report (Design Doc, section 8-9): final depth, and whether it's
 // a new personal best.
-draw_game_over :: proc(score: Score, high_score: f32) {
+draw_game_over :: proc(score: game.Score, high_score: f32) {
 	draw_centered_text("AWAKENED", 260, 40, rl.RED)
 
 	final_score_text := fmt.ctprintf("Depth reached: %.0f", score.value)

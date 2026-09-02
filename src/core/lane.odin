@@ -1,15 +1,13 @@
 /*
-* This is Lane file, lane.odin
-* shared concepts for the two-lane world: the lane enum, screen reference
-* size, and lane-to-position math. Used by both player and obstacles.
+* Lane
+* The lanes anything in the game can occupy, and where each one sits
+* vertically (Design Doc, sections 5-6). Kept free of behavior on purpose:
+* this is the shared vocabulary every other package speaks, so it must not
+* depend on any of them.
 */
-package main
+package core
 
 import rl "vendor:raylib/v55"
-
-// Screen reference resolution (Design Doc, section 6)
-SCREEN_WIDTH :: 1280
-SCREEN_HEIGHT :: 720
 
 // The two lanes anything in the game can occupy (Design Doc, section 5-6)
 Lane :: enum {

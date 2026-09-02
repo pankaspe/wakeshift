@@ -1,23 +1,16 @@
 /*
-* This is Player file, player.odin
-* holds the player character state and draws it
+* Player
+* Holds the player character state and drives the flip state machine
+* (Design Doc, section 4). Drawing lives separately in the render package:
+* nothing under game/ ever draws.
 */
-package main
+package game
 
+import "../core"
 import rl "vendor:raylib/v55"
-
-// Vertical split of the play area (Design Doc, section 6):
-// Dream lane 30% / transition zone 40% / Real lane 30%
-DREAM_LANE_RATIO :: 0.30
-TRANSITION_ZONE_RATIO :: 0.40
-REAL_LANE_RATIO :: 0.30
 
 // Player reference size in pixels (Design Doc, section 6: ~40-50px)
 PLAYER_SIZE :: 45
-
-// Fixed horizontal position of the player on screen.
-// The player stays put; the world will scroll past it (Section 5).
-PLAYER_X :: 200
 
 // Player state machine (Design Doc, section 4).
 // Transitioning is a short in-between state while flipping lanes.
@@ -38,9 +31,9 @@ INVULNERABILITY_DURATION :: 0.15
 Player :: struct {
 	position:              rl.Vector2,
 	size:                  rl.Vector2,
-	lane:                  Lane, // current lane (used once not transitioning)
+	lane:                  core.Lane, // current lane (used once not transitioning)
 	state:                 PlayerState,
-	target_lane:           Lane, // lane we're flipping into, while transitioning
+	target_lane:           core.Lane, // lane we're flipping into, while transitioning
 	transition_timer:      f32, // seconds elapsed since transition started
 	transition_start_y:    f32, // y position when the transition began
 	is_invulnerable:       bool,
@@ -55,20 +48,14 @@ new_player :: proc() -> Player {
 
 	return Player {
 		position   = rl.Vector2 {
-			PLAYER_X,
-			SCREEN_HEIGHT - player_size.y, // bottom edge touches the floor
+			core.PLAYER_X,
+			core.SCREEN_HEIGHT - player_size.y, // bottom edge touches the floor
 		},
 		size       = player_size,
 		lane       = .Real,
 		state      = .Real,
 		lane_since = 0,
 	}
-}
-
-// Ease-out quadratic: starts fast, slows down towards the end.
-// t goes from 0 (start) to 1 (end) and so does the returned value.
-ease_out_quad :: proc(t: f32) -> f32 {
-	return 1 - (1 - t) * (1 - t)
 }
 
 // Reads input and updates the player state machine.
@@ -92,9 +79,9 @@ update_player :: proc(player: ^Player, world: World) {
 		if t > 1 {
 			t = 1
 		}
-		eased_t := ease_out_quad(t)
+		eased_t := core.ease_out_quad(t)
 
-		target_y := get_lane_y(player.target_lane, player.size)
+		target_y := core.get_lane_y(player.target_lane, player.size)
 		player.position.y =
 			player.transition_start_y + (target_y - player.transition_start_y) * eased_t
 

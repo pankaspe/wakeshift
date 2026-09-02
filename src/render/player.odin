@@ -10,8 +10,10 @@
 * gentle stretch while mid-flip, settling into a squash bounce on
 * landing that decays back to normal shape (section 15.2).
 */
-package main
+package render
 
+import "../core"
+import "../game"
 import "core:math"
 import rl "vendor:raylib/v55"
 
@@ -24,7 +26,6 @@ PLAYER_DREAM_RIM_COLOR :: rl.Color{240, 240, 245, 255}
 PLAYER_DREAM_EYE_COLOR :: rl.Color{210, 240, 255, 255}
 
 PLAYER_ROUNDNESS :: 0.5 // 0 = sharp rectangle, 1 = fully rounded (pill shape)
-PLAYER_RIM_THICKNESS :: 1.8
 
 // How much the shape stretches vertically at the peak of a flip.
 STRETCH_AMOUNT :: 0.16
@@ -35,7 +36,7 @@ SETTLE_SQUASH_AMOUNT :: 0.28
 
 // Which lane the shape should currently be anchored to, for scaling purposes:
 // mid-flip we anchor to where we're headed, not where we came from.
-get_player_anchor_lane :: proc(player: Player) -> Lane {
+get_player_anchor_lane :: proc(player: game.Player) -> core.Lane {
 	if player.state == .Transitioning {
 		return player.target_lane
 	}
@@ -46,10 +47,10 @@ get_player_anchor_lane :: proc(player: Player) -> Lane {
 // Values > 1 on Y stretch tall/thin; values < 1 on Y squash short/wide.
 // X is always adjusted opposite to Y, for a (rough) sense of volume
 // preservation — a classic animation trick, not physically exact.
-get_player_scale :: proc(player: Player) -> rl.Vector2 {
+get_player_scale :: proc(player: game.Player) -> rl.Vector2 {
 	if player.state == .Transitioning {
 		// Bell curve peaking mid-flip, back to 1 at both ends.
-		t := player.transition_timer / TRANSITION_DURATION
+		t := player.transition_timer / game.TRANSITION_DURATION
 		stretch := STRETCH_AMOUNT * math.sin(t * math.PI)
 		return rl.Vector2{1 - stretch * 0.6, 1 + stretch}
 	}
@@ -66,7 +67,7 @@ get_player_scale :: proc(player: Player) -> rl.Vector2 {
 	return rl.Vector2{1, 1}
 }
 
-draw_player :: proc(player: Player) {
+draw_player :: proc(player: game.Player) {
 	scale := get_player_scale(player)
 	scaled_size := rl.Vector2{player.size.x * scale.x, player.size.y * scale.y}
 
@@ -91,10 +92,10 @@ draw_player :: proc(player: Player) {
 	// so only its edges peek out — a cheap but effective "outer glow"
 	// without needing a real lighting/shader pass.
 	rim_rect := rl.Rectangle {
-		body_rect.x - PLAYER_RIM_THICKNESS,
-		body_rect.y - PLAYER_RIM_THICKNESS,
-		body_rect.width + PLAYER_RIM_THICKNESS * 2,
-		body_rect.height + PLAYER_RIM_THICKNESS * 2,
+		body_rect.x - core.RIM_THICKNESS,
+		body_rect.y - core.RIM_THICKNESS,
+		body_rect.width + core.RIM_THICKNESS * 2,
+		body_rect.height + core.RIM_THICKNESS * 2,
 	}
 	rl.DrawRectangleRounded(rim_rect, PLAYER_ROUNDNESS, 12, rim_color)
 

@@ -5,7 +5,7 @@
 * patterns unlocked from that point on. Future bonuses/maluses per tier
 * can hang off this same struct without restructuring anything.
 */
-package main
+package game
 
 Tier :: struct {
 	name:           string,

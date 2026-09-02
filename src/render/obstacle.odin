@@ -6,13 +6,15 @@
 * are natural/solid (stone, cracked earth); Dream lane obstacles are
 * organic/unnatural (pulsing membrane, torn rift) — section 15.3.
 */
-package main
+package render
 
+import "../core"
+import "../game"
 import rl "vendor:raylib/v55"
 
-draw_obstacle :: proc(obstacle: Obstacle, world: World) {
-	position := get_obstacle_position(obstacle, world)
-	size := get_obstacle_size(obstacle, world)
+draw_obstacle :: proc(obstacle: game.Obstacle, world: game.World) {
+	position := game.get_obstacle_position(obstacle, world)
+	size := game.get_obstacle_size(obstacle, world)
 
 	switch obstacle.obstacle_type {
 	case .Block:
@@ -30,7 +32,7 @@ draw_obstacle :: proc(obstacle: Obstacle, world: World) {
 
 OBSTACLE_STONE_COLOR :: rl.Color{60, 58, 62, 255}
 OBSTACLE_RIM_COLOR :: rl.BLACK
-OBSTACLE_RIM_THICKNESS :: PLAYER_RIM_THICKNESS // shared border weight across every element
+OBSTACLE_RIM_THICKNESS :: core.RIM_THICKNESS // shared border weight across every element
 
 // Normalized (0..1) outline of an irregular rock, hand-authored once.
 // Scaled and positioned to each obstacle's actual size/position at draw time.

@@ -4,8 +4,9 @@
 * navigated with UP/DOWN, confirmed with ENTER. Used for both the main
 * menu and the pause overlay (Design Doc, section 9).
 */
-package main
+package ui
 
+import "../core"
 import "core:fmt"
 import rl "vendor:raylib/v55"
 
@@ -33,7 +34,7 @@ update_menu :: proc(menu: ^Menu) -> bool {
 // Draws text horizontally centered on screen at the given y.
 draw_centered_text :: proc(text: cstring, y: i32, font_size: i32, color: rl.Color) {
 	width := rl.MeasureText(text, font_size)
-	x := (SCREEN_WIDTH - width) / 2
+	x := (core.SCREEN_WIDTH - width) / 2
 	rl.DrawText(text, x, y, font_size, color)
 }
 

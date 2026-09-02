@@ -1,10 +1,14 @@
 /*
-* Persistence
-* Saves and loads the player's personal best "Dream Depth" to a local
-* file, so it survives closing and reopening the game (Design Doc,
-* section 10).
+* Save
+* Saves and loads the player's personal best "Dream Depth" so it survives
+* closing and reopening the game (Design Doc, section 10).
+*
+* Deliberately still the original plain-text, working-directory-relative
+* implementation: roadmap phase 2 replaces it wholesale with a CBOR payload
+* sealed with ChaCha20-Poly1305, living in the OS user data directory.
+* Moving it here first keeps that replacement a single-package change.
 */
-package main
+package platform
 
 import "core:fmt"
 import "core:os"

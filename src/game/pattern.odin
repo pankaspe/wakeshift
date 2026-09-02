@@ -6,23 +6,24 @@
 * safely be in at the start and end of the pattern, so patterns can be
 * chained without an unfair forced flip at the boundary.
 */
-package main
+package game
 
+import "../core"
 import "core:fmt"
 import "core:math/rand"
 
 // A single obstacle event within a pattern, in time relative to pattern start.
 PatternEvent :: struct {
 	time_offset:   f32, // seconds since the pattern started
-	lane:          Lane, // lane the obstacle occupies (player must be in the OTHER lane to survive)
+	lane:          core.Lane, // lane the obstacle occupies (player must be in the OTHER lane to survive)
 	obstacle_type: ObstacleType,
 }
 
 Pattern :: struct {
 	events:     []PatternEvent,
 	duration:   f32, // total length of the pattern, in seconds
-	entry_lane: Lane, // lane the player must be in when the pattern starts
-	exit_lane:  Lane, // lane the player will be in when the pattern ends
+	entry_lane: core.Lane, // lane the player must be in when the pattern starts
+	exit_lane:  core.Lane, // lane the player will be in when the pattern ends
 }
 
 // A single Block in the Real lane: player must be in Dream to survive.
@@ -142,7 +143,7 @@ build_obstacles_from_patterns :: proc(patterns: []Pattern, start_time: f32) -> [
 // Picks a random pattern from the pool whose entry_lane matches the lane
 // the player is currently required to be safe in — this is what guarantees
 // two chained patterns never force an unfair flip at their boundary.
-pick_next_pattern :: proc(pool: []Pattern, required_entry_lane: Lane) -> Pattern {
+pick_next_pattern :: proc(pool: []Pattern, required_entry_lane: core.Lane) -> Pattern {
 	candidates: [dynamic]Pattern
 	defer delete(candidates)
 
@@ -173,13 +174,13 @@ GENERATION_LOOKAHEAD :: 6.0
 PatternGenerator :: struct {
 	pool:            []Pattern,
 	generated_until: f32, // world time up to which obstacles already exist
-	next_entry_lane: Lane, // lane required for the next pattern, for chain continuity
+	next_entry_lane: core.Lane, // lane required for the next pattern, for chain continuity
 }
 
 new_pattern_generator :: proc(
 	pool: []Pattern,
 	start_time: f32,
-	start_lane: Lane,
+	start_lane: core.Lane,
 ) -> PatternGenerator {
 	return PatternGenerator {
 		pool = pool,

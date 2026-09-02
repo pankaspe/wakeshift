@@ -5,7 +5,7 @@
 * Distinct from Score (Section 12), which only measures survival time:
 * Lucidity measures deliberate risk-taking (Design Doc, section 8).
 */
-package main
+package game
 
 Lucidity :: struct {
 	streak: int,

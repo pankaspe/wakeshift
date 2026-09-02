@@ -1,0 +1,16 @@
+# Build output
+build/
+*.bin
+wakeshift
+wakeshift.exe
+
+# Local player data (save files live in the OS user data directory,
+# but keep the legacy path ignored so old checkouts stay clean)
+highscore.txt
+*.dat
+
+# Editor / OS noise
+.DS_Store
+*.swp
+.vscode/
+.idea/

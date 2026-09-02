@@ -4,7 +4,7 @@
 * time, faster while the player is in the Dream lane than in the Real lane
 * (Design Doc, section 8).
 */
-package main
+package game
 
 // Points per second, depending on which lane the player currently occupies.
 SCORE_RATE_REAL :: 10

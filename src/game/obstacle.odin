@@ -6,8 +6,9 @@
 * This means changing scroll_speed later never breaks perceived timing
 * (Design Doc, section 6-7).
 */
-package main
+package game
 
+import "../core"
 import "core:math"
 import "core:math/rand"
 import rl "vendor:raylib/v55"
@@ -28,7 +29,7 @@ ObstacleType :: enum {
 // Declares which lane each obstacle type belongs to, per the thematic
 // pairing in Design Doc section 5 (Real = full/static, Dream = void/dynamic).
 // Used to catch pattern-authoring mistakes early (see validate_pattern_pool).
-expected_lane_for_type :: proc(obstacle_type: ObstacleType) -> Lane {
+expected_lane_for_type :: proc(obstacle_type: ObstacleType) -> core.Lane {
 	switch obstacle_type {
 	case .Block, .Chasm:
 		return .Real
@@ -40,7 +41,7 @@ expected_lane_for_type :: proc(obstacle_type: ObstacleType) -> Lane {
 
 Obstacle :: struct {
 	arrival_time:      f32, // world.elapsed_time value at which this obstacle reaches PLAYER_X
-	lane:              Lane,
+	lane:              core.Lane,
 	size:              rl.Vector2,
 	obstacle_type:     ObstacleType,
 	lucidity_resolved: bool, // true once this obstacle has been checked for a near-miss (section 17)
@@ -55,7 +56,7 @@ CHASM_WIDTH_MEDIUM :: OBSTACLE_SIZE * 1.6
 CHASM_WIDTH_LONG :: OBSTACLE_SIZE * 2.2
 
 // Creates an obstacle that will arrive at the player's x position at the given time.
-new_obstacle :: proc(arrival_time: f32, lane: Lane, obstacle_type: ObstacleType) -> Obstacle {
+new_obstacle :: proc(arrival_time: f32, lane: core.Lane, obstacle_type: ObstacleType) -> Obstacle {
 	width: f32 = OBSTACLE_SIZE
 	if obstacle_type == .Chasm {
 		roll := rand.float32()
@@ -103,8 +104,8 @@ get_obstacle_size :: proc(obstacle: Obstacle, world: World) -> rl.Vector2 {
 // how much time remains until (or has passed since) its arrival_time.
 get_obstacle_position :: proc(obstacle: Obstacle, world: World) -> rl.Vector2 {
 	time_until_arrival := obstacle.arrival_time - world.elapsed_time
-	x := PLAYER_X + time_until_arrival * world.scroll_speed
+	x := core.PLAYER_X + time_until_arrival * world.scroll_speed
 	size := get_obstacle_size(obstacle, world)
-	y := get_lane_y(obstacle.lane, size)
+	y := core.get_lane_y(obstacle.lane, size)
 	return rl.Vector2{x, y}
 }

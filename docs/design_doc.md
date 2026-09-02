@@ -1,7 +1,21 @@
 # WAKE SHIFT
-### Game Design Document — v1.0
+### Game Design Document — v1.1
 
 *(già "Hypnagogia" nelle versioni precedenti — rinominato per evitare sovrapposizioni con titoli già pubblicati, vedi sezione 11)*
+
+> ### Revisione v1.1 — 2 settembre 2026
+>
+> Aggiornamento dopo la chiusura dell'Alpha e la revisione del design. Le modifiche sostanziali rispetto alla v1.0 sono segnate nel testo con **[v1.1]**:
+>
+> - **Stack corretto**: non più Haxe + HaxeFlixel ma **Odin + raylib**. La v1.0 era stata scritta prima della scelta definitiva e ne portava ancora i riferimenti in tre punti.
+> - **Da due stati a tre**: la fascia centrale smette di essere spazio vuoto e diventa il **Limine**, terzo stato giocabile.
+> - **Da un gesto a due**: tap e hold sulla stessa barra spaziatrice.
+> - **La Lucidità** da contatore passivo a **carburante spendibile**.
+> - **Identità visiva** riscritta attorno a un sistema a **tre palette con blending continuo**.
+> - **Struttura del codice** corretta per i vincoli reali di Odin (niente import ciclici tra package).
+> - **Persistenza**: formato binario firmato, e il determinismo della simulazione come vera base dell'anti-cheat.
+>
+> Questo documento dice *cosa* e *perché*. Il *come e in che ordine* sta in `ROADMAP.md`; le regole operative di sviluppo in `CLAUDE.md`.
 
 ---
 
@@ -9,7 +23,7 @@
 
 1. Concept
 2. Il Loop di Gioco
-3. I Due Mondi
+3. I Tre Stati **[v1.1]**
 4. Il Flip: dettagli di design
 5. Anatomia degli Ostacoli
 6. Spazio di Gioco & Timing
@@ -31,20 +45,22 @@
 ## 1. Concept
 
 **Genere**: Endless runner / reflex arcade
-**Piattaforma target**: Desktop (Windows/Linux/Mac), con possibilità futura di build web (HTML5) grazie alla natura multi-target di Haxe — non sfruttata nell'MVP ma disponibile senza riscrivere il codice
-**Engine**: Haxe + HaxeFlixel
-**Input**: Un solo tasto — **barra spaziatrice** — per il flip gravità (nessun altro comando)
+**Piattaforma target**: Desktop (Windows/Linux/Mac)
+**Stack** **[v1.1]**: Odin + raylib (`vendor:raylib/v55`)
+**Input** **[v1.1]**: Un solo tasto — **barra spaziatrice** — con due gesti: *tap* per il flip completo, *hold* per sospendersi nel Limine (vedi sezione 4)
 
-**Elevator pitch**: Sei sospeso tra il Mondo Reale e il Mondo Onirico. Con un tasto capovolgi la gravità e passi dall'uno all'altro, ognuno con le proprie regole, il proprio ritmo, i propri pericoli. Quanto in profondità riesci a scendere nel sogno prima del Risveglio?
+**Elevator pitch** **[v1.1]**: Sei sospeso tra il Mondo Reale e il Mondo Onirico. Con un tasto capovolgi la gravità e passi dall'uno all'altro, ognuno con le proprie regole e i propri pericoli — e se tieni premuto ti fermi a metà strada, nel Limine, dove il punteggio corre più veloce ma non puoi restare a lungo. Quanto in profondità riesci a scendere nel sogno prima del Risveglio?
 
 **Canali di distribuzione target**: itch.io / Steam (community indie affine a questo genere), streaming/Twitch (alta skill expression = ottimo da guardare in diretta), clip di "raffiche" di switch perfetti condivisibili come contenuto breve.
 
 **Pilastri di design** (da rispettare in ogni decisione futura, anche in fase di sviluppo assistito da AI):
-1. **Un tasto, una regola** — l'intero gioco si controlla con un solo input (barra spaziatrice = flip). Nessuna eccezione, nessun verbo aggiuntivo (niente salto, niente abbassamento separato).
+1. **Un tasto, due gesti** **[v1.1]** — l'intero gioco si controlla con la sola barra spaziatrice: tap = flip completo, hold = sospensione nel Limine, rilascio = completamento del viaggio. Nessun secondo tasto di gioco, mai; nessun verbo aggiuntivo (niente salto, niente abbassamento separato). I menu possono usare frecce/invio/ESC: il pilastro copre il gameplay, non la UI.
 2. **Leggibile in 2 secondi** — chi guarda un video del gioco deve capire l'obiettivo senza spiegazioni.
 3. **Ogni run è diversa, ogni run è giusta** — procedurale ma mai ingiusto o irrisolvibile.
 4. **Il tema non è decorazione** — reale/onirico deve influenzare meccanica, grafica e feedback, non solo estetica superficiale.
-5. **Una sola domanda in ogni istante** — il giocatore si chiede solo "sono nel mondo giusto?". Ogni ostacolo vive in una sola corsia (alta o bassa), mai in entrambe contemporaneamente: lo switch mondi è l'unica risposta possibile a qualsiasi minaccia.
+5. **Una sola domanda in ogni istante** **[v1.1]** — il giocatore si chiede solo "dove devo essere?", con **tre** risposte possibili invece di due: pavimento, Limine, soffitto. Nessun ostacolo minaccia tutte e tre le fasce insieme: il movimento verticale resta l'unica risposta possibile a qualsiasi minaccia.
+
+6. **Mai il colore da solo** **[v1.1]** — i tre stati devono essere sempre distinguibili anche da posizione e tipo di movimento, non solo dalla palette. È un vincolo di accessibilità, non una preferenza estetica (vedi sezione 12).
 
 > **Nota per lo sviluppo assistito da AI**: qualsiasi nuova feature proposta in fase di implementazione va prima verificata contro questi 5 pilastri. Se una feature richiede un secondo input o rompe la leggibilità istantanea, va scartata o ridiscussa qui nel doc prima di essere implementata.
 
@@ -53,16 +69,17 @@
 ## 2. Il Loop di Gioco
 
 1. Il personaggio corre automaticamente in orizzontale a velocità crescente.
-2. Il giocatore preme la barra spaziatrice per invertire la gravità → il personaggio passa dal pavimento (Mondo Reale) al soffitto (Mondo Onirico), o viceversa.
-3. Deve trovarsi nella corsia giusta al momento giusto: ogni ostacolo esiste in una sola corsia (mai in entrambe), quindi lo switch è l'unica azione necessaria per evitarlo (vedi sezione 5, Anatomia degli Ostacoli).
-4. La collisione = fine corsa ("Risveglio").
-5. Fine partita: riepilogo statistiche ("Referto Onirico") + invito a ritentare immediato.
+2. Il giocatore **tappa** la barra spaziatrice per invertire la gravità → il personaggio compie un viaggio completo dal pavimento (Mondo Reale) al soffitto (Mondo Onirico), o viceversa.
+3. **[v1.1]** In alternativa **tiene premuto**: il viaggio si ferma a metà e il personaggio resta sospeso nel **Limine**, la fascia centrale. Al rilascio, il viaggio si completa nella direzione in cui stava andando.
+4. Deve trovarsi nella fascia giusta al momento giusto: nessun ostacolo minaccia tutte e tre le fasce insieme, quindi il movimento verticale è l'unica azione necessaria per evitarlo (vedi sezione 5).
+5. La collisione = fine corsa ("Risveglio").
+6. Fine partita: riepilogo statistiche ("Referto Onirico") + invito a ritentare immediato.
 
 Durata media di una run: **15–45 secondi** nelle fasi iniziali di gioco, fino a diversi minuti per giocatori esperti.
 
 ---
 
-## 3. I Due Mondi
+## 3. I Tre Stati **[v1.1]**
 
 ### Mondo Reale (basso / pavimento)
 - **Palette**: desaturata, toni freddi (grigi, blu spenti)
@@ -76,16 +93,41 @@ Durata media di una run: **15–45 secondi** nelle fasi iniziali di gioco, fino 
 - **Lettura richiesta al giocatore**: ritmo e tempismo (skill "temporale")
 - **Audio**: suoni filtrati, eterei, con leggero riverbero
 
-### Perché la dualità funziona
-Il giocatore non impara "una skill", ne impara due in parallelo. Il livello di padronanza percepito cresce più velocemente rispetto a un runner classico, senza aggiungere bottoni.
+### Il Limine (centro) **[v1.1]**
+- **Palette**: slavata, sovraesposta, bassissimo contrasto — entrambi i mondi presenti a metà intensità
+- **Cosa è**: la soglia tra veglia e sonno. È letteralmente la *hypnagogia* che dava il nome originale al progetto, recuperata come luogo giocabile invece che come semplice titolo scartato
+- **Come ci si arriva**: tenendo premuta la barra spaziatrice a metà di un flip
+- **Costo**: consuma Lucidità (sezione 8). Non è un rifugio, è una scommessa a tempo
+- **Ricompensa**: il ritmo di punteggio più alto dei tre
+- **Audio**: come sentire i due mondi da sott'acqua — filtro passa-basso e riverbero che salgono con la permanenza
+
+### Perché la tripartizione funziona **[v1.1]**
+Con due stati il giocatore impara due skill in parallelo (spaziale e temporale) senza aggiungere bottoni — già più di un runner classico. Il terzo stato aggiunge la dimensione che mancava: **una decisione economica**. Non più solo "dove devo essere per sopravvivere", ma "quanto rischio per quanto rendimento". È ciò che impedisce alla difficoltà di crescere solo aumentando la velocità.
 
 ---
 
 ## 4. Il Flip: dettagli di design
 
+### Il modello mentale **[v1.1]**
+
+> *Un flip è un viaggio da parete a parete, e tenendo premuto puoi fermarti a metà.*
+
+Questa singola frase deve bastare a spiegare l'intero sistema di controllo. Se serve una seconda frase, il gesto è progettato male.
+
+| Gesto | Effetto |
+|---|---|
+| **Tap** (< ~0.15s) | Viaggio completo fino alla parete opposta |
+| **Hold** | Il viaggio si ferma a metà: sospensione nel Limine, finché tieni premuto e hai Lucidità |
+| **Rilascio** | Il viaggio si completa **nella direzione in cui stavi andando** |
+
+La scelta di far *proseguire* il viaggio al rilascio (invece di riportare indietro) è deliberata: è l'unica versione che si spiega senza dover ricordare da dove si veniva, e mantiene il Limine un luogo di transito invece che un rifugio difensivo.
+
+### Dettagli
+
 - Il flip **non è istantaneo**: una micro-transizione di ~0.1–0.15s con distorsione visiva (blur/dissolve) e un suono che cambia pitch (sale passando al sogno, scende tornando al reale)
 - Durante la transizione il personaggio è **momentaneamente invulnerabile** (frame di grazia) per evitare la frustrazione da "collisione ingiusta" nel momento del cambio
 - Nessun cooldown sul flip: il ritmo lo detta il livello, non un vincolo artificiale
+- **[v1.1]** Nessuna invulnerabilità nel Limine: la sospensione è uno stato, non un frame di grazia prolungato. Deve esistere almeno un tipo di ostacolo che minaccia il centro, altrimenti tenere premuto diventa la strategia dominante
 - Vedi sezione 12 per il dettaglio dell'effetto particellare associato al flip
 
 *(Nota: i parametri esatti — durata frame di grazia, curva di easing — andranno definiti e testati in fase di prototipo, non in questo documento. Valori di partenza suggeriti in sezione 6.)*
@@ -166,13 +208,15 @@ Range in linea con lo standard del genere reflex-arcade: abbastanza stretto da g
 
 ### Suddivisione verticale dello schermo
 
+**[v1.1]** — la fascia centrale non è più spazio vuoto:
+
 | Fascia | % altezza schermo | Funzione |
 |---|---|---|
 | Corsia Onirico (alto) | ~30% | Zona ostacoli Mondo Onirico |
-| Zona di transizione centrale | ~40% | Spazio "vuoto" per respiro visivo + attraversamento animato del flip |
+| **Limine (centro)** | ~40% | **Terzo stato giocabile**: attraversamento del flip *e* zona di sospensione |
 | Corsia Reale (basso) | ~30% | Zona ostacoli Mondo Reale |
 
-La zona centrale ampia serve a due scopi: evitare una sensazione claustrofobica e dare margine fisico all'animazione di attraversamento del personaggio durante il flip (il personaggio si sposta fisicamente, non si teletrasporta).
+La fascia centrale ampia serve ora a tre scopi: evitare una sensazione claustrofobica, dare margine fisico all'animazione di attraversamento (il personaggio si sposta, non si teletrasporta), e ospitare lo stato sospeso con abbastanza spazio perché sia leggibile a colpo d'occhio dove si trova il giocatore.
 
 ### Velocità di scorrimento
 
@@ -185,7 +229,7 @@ La zona centrale ampia serve a due scopi: evitare una sensazione claustrofobica 
 
 Per un arcade a riflessi il frame rate è parte integrante dell'esperienza, non un dettaglio tecnico secondario. **Requisito esplicito**: 60 FPS stabili, da trattare come vincolo di design fin dal prototipo, non come semplice auspicio da verificare a posteriori.
 
-### Nota tecnica per l'implementazione (Haxe/HaxeFlixel)
+### Nota tecnica per l'implementazione **[v1.1]**
 
 **Non hardcodare i pixel nei pattern.** I pattern vanno descritti come sequenze di eventi nel tempo (es. *"a 1.5s dall'inizio del pattern → ostacolo in corsia bassa"*), convertiti in posizione X a runtime moltiplicando per la velocità di scroll corrente. Questo rende i pattern indipendenti dal bilanciamento della velocità: se in futuro si cambia la curva di difficoltà, i pattern restano validi senza bisogno di essere ridisegnati.
 
@@ -227,7 +271,17 @@ Tolto il salto, tutta la varietà ritmica del gioco nasce da **quanto in anticip
 Invece di un punteggio anonimo, il tema dà forma alle statistiche mostrate a fine partita:
 
 - **Profondità Onirica** (punteggio principale): cresce nel tempo, più velocemente mentre si è nel Mondo Onirico rispetto al Reale → incentiva il rischio nella zona meccanicamente più instabile
-- **Lucidità**: streak di flip consecutivi senza errori → oltre certe soglie, sblocca effetti visivi progressivi, in particolare a livello di sistema particellare (vedi sezione 12)
+- **Lucidità** **[v1.1]**: non più un semplice contatore, ma una **risorsa a due facce**. Si accumula con i near-miss (evitare un ostacolo sistemandosi nella fascia giusta *tardi*, non in anticipo comodo) e si **consuma** restando sospesi nel Limine. Alimenta il moltiplicatore di punteggio *e* il carburante della sospensione: da qui nasce la tensione centrale del gioco — *banco il moltiplicatore o lo brucio per stare dove rende di più?* Oltre certe soglie sblocca anche effetti visivi progressivi, in particolare a livello di sistema particellare (vedi sezione 12)
+
+### Ritmi di punteggio **[v1.1]**
+
+| Stato | Punti/s | Rischio |
+|---|---|---|
+| Reale (pavimento) | 10 | Basso |
+| Onirico (soffitto) | 25 | Medio |
+| Limine (centro) | 40 | Alto — consuma Lucidità, e il centro deve avere le sue minacce |
+
+I valori esatti sono di partenza, da tarare a playtest. Il vincolo di design è che **nessuno dei tre stati deve essere la scelta ovvia sempre**: se esiste una fascia in cui conviene stare in ogni situazione, il sistema ha fallito.
 - **Risveglio**: il game over, narrativamente motivato (non "Game Over" ma "Ti sei svegliato")
 
 A fine run: un piccolo **"Referto Onirico"** riassuntivo (Profondità raggiunta, Lucidità massima, eventuale record personale) — pensato per essere facilmente condivisibile/screenshottabile.
@@ -266,14 +320,22 @@ Overlay che ferma il gioco (sfondo di gameplay visibile ma sfumato/blur dietro i
 
 ## 10. Persistenza Dati
 
-### Salvataggio locale (offline)
+### Salvataggio locale (offline) **[v1.1]**
 
-Dati da salvare in locale (formato leggero, es. JSON — nessun database necessario per questo scope):
+Dati da salvare in locale:
 - Record personale (Profondità massima, Lucidità massima)
 - Storico delle run recenti
 - Opzioni scelte (lingua, volumi)
+- **Manifesto della run migliore**: seed, versione del gioco, log degli input
 
-**Nota sulla sicurezza**: per il salvataggio puramente locale non è necessaria alcuna protezione anti-manomissione. Modificare manualmente il proprio file di salvataggio non danneggia altri giocatori — è un problema che non esiste in questo contesto, e proteggerlo sarebbe uno sforzo sprecato.
+**Posizione**: nella directory dati utente del sistema operativo, non nella cartella di lavoro — `$XDG_DATA_HOME/wake-shift/` (Linux), `%APPDATA%\\wake-shift\\` (Windows), `~/Library/Application Support/wake-shift/` (macOS). La v1.0 non lo specificava e l'Alpha scriveva un `highscore.txt` relativo alla cartella corrente, che si perdeva o si duplicava a seconda di dove veniva lanciato il gioco.
+
+**Formato**: binario compatto (CBOR) con un **tag di integrità HMAC-SHA256** in coda. Al caricamento il tag viene ricalcolato: se non coincide, il salvataggio è considerato corrotto o manomesso.
+
+**Nota onesta sulla sicurezza — correzione rispetto alla v1.0**: la v1.0 sosteneva che proteggere il salvataggio locale fosse sforzo sprecato. Nell'ottica di una leaderboard online quel ragionamento va corretto, ma solo a metà:
+
+- **La firma locale non è sicurezza, è un deterrente.** La chiave è dentro il binario, e chiunque sia motivato può estrarla. Serve a fermare la modifica casuale col blocco note, niente di più. È giusto farla, è sbagliato considerarla una garanzia.
+- **La vera sicurezza è la rivalidazione lato server**, descritta qui sotto. Un punteggio locale firmato non deve mai essere accettato da un server come prova di nulla.
 
 ### Leaderboard online (roadmap post-MVP, fuori scope MVP)
 
@@ -283,7 +345,13 @@ A differenza del salvataggio locale, una leaderboard condivisa richiede protezio
 - **Livello robusto (standard per gli arcade)**: il client invia **seed della run + log degli input** (ogni pressione della barra spaziatrice con relativo timestamp) invece del punteggio finale. Il server, conoscendo la logica deterministica del gioco (pattern generati da seed, fisica prevedibile — già previsti dall'architettura in sezione 7), **rigioca la run internamente** e calcola autonomamente il punteggio. Se il valore dichiarato dal client non coincide, il punteggio viene scartato
 - **Livello aggiuntivo**: rate limiting sulle submission e flag automatici su punteggi statisticamente anomali per revisione manuale, invece di un sistema anti-cheat complesso sproporzionato per un progetto indie/solista
 
-**Nota architetturale importante**: il generatore procedurale deterministico da seed (sezione 7) non serve solo al level design — è anche la base tecnica che renderà possibile, in futuro, la validazione lato server della leaderboard senza dover riprogettare il sistema di generazione.
+**Nota architetturale importante** **[v1.1]**: il determinismo non serve solo al level design ed è la vera base dell'anti-cheat. Richiede tre cose insieme, tutte da mettere in piedi *prima* che il codice cresca:
+
+1. **Generazione procedurale da seed esplicito** — mai chiamate a un RNG globale
+2. **Input come dato, non come lettura diretta della tastiera** — la logica di gioco riceve uno stato di input, non interroga `IsKeyPressed` al suo interno
+3. **Timestep fisso** — a passo variabile la stessa sequenza di input non produce la stessa run
+
+Un solo investimento con quattro ritorni: validazione della leaderboard, replay, ghost delle run migliori, e bilanciamento riproducibile (stessa run rigiocabile identica dopo una modifica ai numeri).
 
 ---
 
@@ -348,12 +416,35 @@ Le particelle sono l'elemento chiave per dare un "tocco di cura" a uno stile vis
 
 ### Palette di riferimento (indicativa, da affinare in fase di prototipo)
 
-| Mondo | Sfondo | Silhouette | Luce/Accento |
-|---|---|---|---|
-| Reale | Grigio-blu scuro desaturato | Nero/antracite | Bianco freddo / azzurro spento |
-| Onirico | Viola-magenta profondo | Nero/antracite (stesso personaggio) | Arancio-oro caldo / rosa acceso |
+**[v1.1]** — tre palette invece di due, con valori di partenza concreti da affinare a schermo:
 
-Mantenere lo **stesso personaggio** (stessa silhouette) in entrambi i mondi è importante: a cambiare deve essere solo l'illuminazione e il contesto, mai l'identità del personaggio — rinforza l'idea che è la stessa persona sospesa tra due stati, non due personaggi diversi.
+| Ruolo | **Reale** (freddo, duro) | **Limine** (slavato, sovraesposto) | **Onirico** (caldo, diffuso) |
+|---|---|---|---|
+| Fondo profondo | `#0B0F17` | `#1A1B26` | `#2A0D33` |
+| Fondo vicino | `#182231` | `#3A3550` | `#4E1B5C` |
+| Silhouette | `#05070B` | `#0A0910` | `#0B0410` |
+| Luce / rim | `#8FB8E8` azzurro freddo | `#F0E6D2` bianco caldo pallido | `#FFAE5C` oro caldo |
+| Accento | `#D8E8FF` | `#FFF6E0` | `#FF6FBE` rosa acceso |
+
+### Il blending continuo **[v1.1]**
+
+I due mondi sono **sempre entrambi visibili** — Onirico in alto, Reale in basso, che si incontrano in una fascia di orizzonte al centro. Quello che cambia con la posizione del giocatore non è *quale* mondo si vede, ma **quale dei due è vivo e quale sta sbiadendo**. Salendo, l'onirico fiorisce (satura, si illumina, respira) mentre il reale si spegne; scendendo, l'opposto.
+
+La variabile che guida tutto:
+
+```
+world_t = 1 - (player_center_y / SCREEN_HEIGHT)
+```
+
+`0.0` = pavimento (Reale puro) · `0.5` = centro (Limine puro) · `1.0` = soffitto (Onirico puro)
+
+È **continua, non a scatti**: non appena il giocatore inizia a muoversi, l'intera immagine comincia a cambiare, e non esiste nessun momento di "switch" della palette. È questo che rende il flip un'esperienza visiva invece che un cambio di stato — ed è la ragione per cui il Limine ha bisogno di una palette propria e non di una semplice media delle altre due.
+
+Con `world_t ≤ 0.5` si interpola Reale→Limine su `world_t * 2`; con `world_t > 0.5` si interpola Limine→Onirico su `(world_t - 0.5) * 2`. Ogni elemento a schermo campiona da qui: non esistono colori scritti a mano fuori dalla definizione delle palette.
+
+### La regola della silhouette unica
+
+Mantenere lo **stesso personaggio** (stessa silhouette, corpo sempre scuro) in tutti e tre gli stati è importante: a cambiare deve essere solo l'illuminazione — rim light e glow prendono il colore del mondo corrente. Rinforza l'idea che è la stessa persona sospesa tra stati diversi, non tre personaggi diversi.
 
 ### Accessibilità cromatica (principio vincolante)
 
@@ -414,8 +505,8 @@ Un cambio musicale netto ad ogni flip rischierebbe di risultare fastidioso, spec
 
 ## 14. Stack Tecnico & Note di Architettura
 
-**Linguaggio**: Odin
-**Libreria grafica/input/audio**: raylib
+**Linguaggio**: Odin (`dev-2026-07`)
+**Libreria grafica/input/audio**: raylib, bindings `vendor:raylib/v55`
 **Piattaforma di build**: Desktop nativo (Windows/Linux/Mac)
 
 Note architetturali di massima da tenere presenti nello sviluppo (da affinare a inizio prototipo):
@@ -426,7 +517,7 @@ Note architetturali di massima da tenere presenti nello sviluppo (da affinare a 
 - **Sistema particellare**: da progettare come modulo riutilizzabile parametrizzato (colore, direzione, dissolvenza, densità) così da poter servire sia per Reale che Onirico che per il momento del flip, cambiando solo i parametri (vedi sezione 12)
 - **Separazione dati/codice**: i pattern (specialmente una volta superato l'MVP) dovrebbero poter essere definiti come dati esterni (es. file di configurazione) piuttosto che hardcoded, per velocizzare l'iterazione di level design
 
-### Struttura del progetto a cartelle
+### Struttura del progetto a cartelle *(vedi la correzione [v1.1] in fondo alla sezione)*
 
 Per garantire che il progetto resti scalabile man mano che cresce (nuovi tier, nuovi ostacoli, più asset audio/particellari), il codice sorgente va organizzato in cartelle per responsabilità fin dall'inizio, invece di partire con tutto in un unico file. Struttura indicativa di riferimento (da adattare in fase di setup pratico del progetto):
 
@@ -451,9 +542,34 @@ wake-shift/
     └── patterns/                 # definizioni pattern esterne (sezione 7)
 ```
 
-Questa separazione rispecchia direttamente le sezioni di questo documento (world/obstacles/patterns → sezioni 5-7, particles → sezione 12, audio → sezione 13), così da mantenere corrispondenza diretta tra design doc e codice, utile anche per orientare lo sviluppo assistito da AI in fase di implementazione.
+### Correzione **[v1.1]**: perché quella struttura non funziona in Odin
 
-*(Questa sezione verrà espansa e resa più precisa a inizio sviluppo pratico, nell'altra chat dedicata all'implementazione)*
+La struttura qui sopra (un package per entità di gioco) è stata scritta prima di conoscere i vincoli reali del linguaggio e **va scartata**. In Odin non sono ammessi import ciclici tra package, e una cartella è esattamente un package. Le entità di gioco si guardano continuamente tra loro: `score` legge `Player`, `lucidity` legge `Player` *e* `Obstacle`, `obstacle` legge `World`, le collisioni leggono tutto. Separarle in package obbligherebbe a inventare interfacce che non servono, su un progetto di poche migliaia di righe scritto da una persona sola.
+
+Il taglio che regge è **per livello di astrazione, non per entità**:
+
+```
+src/
+├── main.odin      # package main — finestra, loop, macchina a stati
+├── core/          # Lane, costanti schermo, easing, math, timer
+├── platform/      # canvas virtuale, fullscreen, input, persistenza
+├── fx/            # sistema particellare, bloom — parametrico, ignora il gioco
+├── game/          # player, world, obstacle, pattern, difficulty, score,
+│                  #   lucidity, collisioni — MAI una chiamata di disegno
+├── render/        # palette, sfondo, terreno, player, ostacoli, parallax
+├── ui/            # menu, HUD, schermate
+└── audio/         # musica con crossfade, SFX
+```
+
+Grafo delle dipendenze, rigorosamente aciclico:
+
+```
+core → (niente)   platform → core   fx → core
+game → core, platform, fx           render → core, game, fx
+ui → core, game   audio → core, game   main → tutti
+```
+
+**Regole d'oro**: `game/` non chiama mai una funzione di disegno; `render/` non modifica mai lo stato di gioco; `fx/` non sa niente del gioco. Il dettaglio operativo sta in `CLAUDE.md`, la tabella di migrazione file per file in `ROADMAP.md`.
 
 ---
 
@@ -466,6 +582,9 @@ Termini di progetto da usare in modo coerente in tutta la documentazione e nel c
 | **Flip** | L'azione di invertire la gravità premendo la barra spaziatrice |
 | **Mondo Reale** | Corsia bassa / pavimento |
 | **Mondo Onirico** | Corsia alta / soffitto |
+| **Limine** **[v1.1]** | La fascia centrale, terzo stato giocabile: ci si arriva tenendo premuto |
+| **Tap / Hold** **[v1.1]** | I due gesti sull'unico tasto: viaggio completo / sospensione a metà |
+| **world_t** **[v1.1]** | Valore continuo 0-1 che descrive dove si trova il giocatore tra i tre stati, e guida tutta la resa grafica |
 | **Switch** | Sinonimo di Flip, usato quando si parla del cambio di corsia nel level design |
 | **Corsia** | Una delle due fasce (Reale o Onirico) in cui possono trovarsi personaggio e ostacoli |
 | **Pattern** | Segmento di livello pre-disegnato (3-5s) usato dal generatore procedurale |
@@ -478,9 +597,13 @@ Termini di progetto da usare in modo coerente in tutta la documentazione e nel c
 
 ---
 
-## 16. Scope del Primo Prototipo (MVP)
+## 16. Scope del Primo Prototipo (MVP) — *completato*
 
-Per validare il gioco nel modo più rapido possibile, il prototipo minimo dovrebbe includere:
+> **[v1.1]** Questa sezione è **storica**: l'MVP è stato raggiunto e chiuso con l'Alpha. La lascio come traccia di cosa era stato previsto e di cosa è effettivamente arrivato a destinazione.
+>
+> Delle voci qui sotto sono rimaste **non realizzate**: il sistema particellare, l'audio (nessun file audio esiste nel progetto), e la struttura a cartelle — il codice è cresciuto in un unico `package main`. Il Referto Onirico esiste solo come schermata di game over minima. Tutte e tre sono riprogrammate in `ROADMAP.md`.
+
+Per validare il gioco nel modo più rapido possibile, il prototipo minimo doveva includere:
 
 - [ ] Movimento automatico + flip gravità (singolo input, barra spaziatrice)
 - [ ] Spazio di gioco secondo le proporzioni e velocità base definite in sezione 6
@@ -508,7 +631,9 @@ Per validare il gioco nel modo più rapido possibile, il prototipo minimo dovreb
 
 ---
 
-## 17. Roadmap Post-MVP
+## 17. Roadmap Post-MVP — *superata*
+
+> **[v1.1]** Sostituita da `ROADMAP.md`, che è il piano operativo vivo: fasi divise in task, ciascuna con test di verifica. Questa lista resta come traccia dell'ordine originariamente immaginato.
 
 Ordine suggerito per le fasi successive alla validazione del prototipo minimo:
 
@@ -524,7 +649,11 @@ Ordine suggerito per le fasi successive alla validazione del prototipo minimo:
 
 ## 18. Domande aperte / da decidere in seguito
 
+**[v1.1]** Alcune di queste sono state chiuse dalla revisione: la distribuzione del punteggio è ora legata alla Lucidità come risorsa a due facce (sezione 8), e la palette definitiva è stata fissata a livello di valori di partenza (sezione 12). Restano aperte:
+
 - Curva esatta di aumento velocità nel tempo (lineare, a scalini, altro?)
+- **[v1.1]** Ritmo di consumo della Lucidità nel Limine, e se debba esistere una soglia minima sotto la quale la sospensione non è possibile
+- **[v1.1]** Se il Limine debba avere ostacoli propri dedicati o solo ostacoli che attraversano più fasce
 - Durata precisa del frame di grazia sul flip
 - Se e come introdurre suoni/musica generativa legata al ritmo dei pattern onirici
 - Meccanismo di distribuzione punteggio: lineare o con moltiplicatori legati alla Lucidità
@@ -535,4 +664,10 @@ Ordine suggerito per le fasi successive alla validazione del prototipo minimo:
 
 ---
 
-*Documento completo — Versione 1.0. Include: concept, loop di gioco, i due mondi, il flip, anatomia degli ostacoli, spazio di gioco e timing (con target di performance), level design procedurale, metriche e punteggio, flusso schermate e UI, persistenza dati (locale e note anti-cheat per leaderboard futura), nome e identità, identità visiva (con principio di accessibilità cromatica e tecniche di animazione con primitive), audio design, stack tecnico con struttura a cartelle scalabile, glossario, scope MVP, roadmap post-MVP con metodo di playtesting, e domande aperte residue. Da qui in poi lo sviluppo pratico (codice Odin/raylib) proseguirà in una chat dedicata, step by step, usando questo documento come riferimento vincolante.*
+---
+
+*Documento di design — **Versione 1.1**, 2 settembre 2026.*
+
+*La v1.0 conteneva il concept completo ma era stata scritta prima dell'inizio dello sviluppo: portava ancora lo stack Haxe, una struttura a cartelle incompatibile con Odin, e un modello a due soli stati di gioco. La v1.1 corregge questi punti alla luce dell'Alpha effettivamente costruita e della revisione di design che ne è seguita.*
+
+*Questo documento dice **cosa** e **perché**. Per il **come e in che ordine** vedi `ROADMAP.md`; per le **regole operative di sviluppo** (architettura, convenzioni, workflow) vedi `CLAUDE.md`.*
