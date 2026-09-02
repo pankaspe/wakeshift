@@ -42,7 +42,7 @@ Regola pratica: se il task si può descrivere completamente in tre righe senza l
 
 ## Stato attuale
 
-Verificato sul codice, 2 settembre 2026 — aggiornato a chiusura Fase 1.
+Verificato sul codice, 2 settembre 2026 — aggiornato a chiusura Fase 2.5.
 
 **Funziona**
 - Loop one-button: corsa automatica, `SPACE` inverte la gravità, due corsie
@@ -50,11 +50,12 @@ Verificato sul codice, 2 settembre 2026 — aggiornato a chiusura Fase 1.
 - Pattern concatenati con `entry_lane`/`exit_lane`: il generatore non può produrre sequenze irrisolvibili
 - Lucidity: streak di near-miss → moltiplicatore fino a +100%
 - 3 tier di difficoltà con pool cumulative
-- Canvas virtuale 1280×720 letterboxato → il gioco è già indipendente dalla risoluzione, nessun codice di gameplay sa che monitor c'è
+- Coordinate di gioco fisse a 1280×720, letterboxate → nessun codice di gameplay sa che monitor c'è (dalla Fase 2.5 i pixel sono però nativi, non un upscale)
 - Menu, pausa, game over, salvataggio record
 - **[Fase 1]** Codice riorganizzato nei package (`core/platform/game/render/ui`; `fx` e `audio` non ancora creati) con grafo di dipendenze aciclico; `main.odin` ricablato, `draw_gameplay` estratto
 - **[Fase 2]** Salvataggio cifrato (CBOR + XChaCha20-Poly1305) nella directory dati utente, che rifiuta file corrotti o manomessi senza mai far crashare il gioco
 - **[Fase 2]** Simulazione deterministica: seed esplicito, input come dato, timestep fisso a 60 Hz. Ogni record salva il `RunManifest` della run che l'ha ottenuto — seed più i tick di ogni flip
+- **[Fase 2.5]** Presentazione: parte a schermo pieno senza lampeggiare e senza toccare il modo video del monitor, render target alla risoluzione nativa del monitor (il codice di gioco continua a ragionare in 1280×720), schermata opzioni raggiungibile da menu e pausa, impostazioni salvate dentro il salvataggio cifrato
 
 **Non funziona / manca**
 - Ogni ostacolo pone la stessa domanda: l'unica leva di difficoltà è la velocità (270 → 330 → 400 px/s)
@@ -65,7 +66,7 @@ Verificato sul codice, 2 settembre 2026 — aggiornato a chiusura Fase 1.
 - Sfondo `rl.ClearBackground(rl.BEIGE)`, contorni neri da 1.8px
 - Nessuna particella, nessun bloom, nessun parallax, nessun audio
 - Nessun replay o ghost visibile in gioco: il `RunManifest` viene registrato e salvato, ma non ancora rigiocato dall'interfaccia
-- **Presentazione da prototipo**: la finestra nasce a 1280×720 fissi, `F11` fa da interruttore fullscreen e basta. Nessuna schermata opzioni, nessuna impostazione ricordata fra un avvio e l'altro, e il canvas 720p viene ingrandito in raster su schermi più grandi (Fase 2.5)
+- Menu e opzioni usano ancora il font bitmap di default di raylib e i colori di sistema: leggibili, ma non hanno identità visiva (Fase 3 / T13.3)
 
 ---
 
@@ -208,7 +209,7 @@ main      ← tutti
 | `src/display/display.odin` | `src/platform/display.odin` | `platform` |
 | `src/persistence.odin` | `src/platform/save.odin` | `platform` |
 | — nuovo — | `src/platform/input.odin`, `src/platform/paths.odin` | `platform` |
-| — nuovo — | `src/platform/settings.odin` (Fase 2.5) | `platform` |
+| — nuovo — | `src/core/settings.odin` + `src/platform/window.odin` (Fase 2.5) | `core`, `platform` |
 | `src/world.odin` | `src/game/world.odin` | `game` |
 | `src/player.odin` | `src/game/player.odin` | `game` |
 | `src/obstacle.odin` | `src/game/obstacle.odin` | `game` |
@@ -295,7 +296,7 @@ Il determinismo è verificato, non solo progettato: stessa sequenza di step → 
 
 ---
 
-### Fase 2.5 — Presentazione e finestra
+### ✅ Fase 2.5 — Presentazione e finestra *(completata)*
 
 **Obiettivo**: il gioco si comporta come un gioco vero — parte a schermo pieno alla risoluzione del monitor, ha una schermata opzioni, e ricorda come lo hai lasciato. Nessun cambiamento al gameplay.
 
@@ -309,7 +310,11 @@ Il determinismo è verificato, non solo progettato: stessa sequenza di step → 
 
 #### Le tre decisioni prese
 
-**Fullscreen borderless, mai fullscreen esclusivo.** Niente cambio del modo video del monitor: con il canvas virtuale non si guadagna né campo visivo né performance, e si paga in alt-tab lento, sfarfallio, desktop che resta a 720p se il gioco crasha, e comportamento inaffidabile su Wayland. `ToggleBorderlessWindowed()` esiste già nelle bindings v55.
+**Fullscreen vero, ma sempre sul modo video già attivo.** ~~Fullscreen borderless, mai fullscreen esclusivo.~~ *Decisione rivista in corso d'opera, vedi sotto.* La motivazione originale — niente cambio del modo video del monitor, perché non si guadagna né campo visivo né performance e si paga in alt-tab lento, sfarfallio e desktop lasciato alla risoluzione sbagliata — **resta valida**, ma il borderless non è il modo di ottenerla.
+
+Su KDE una finestra senza decorazioni grande quanto lo schermo resta una finestra *normale*: il compositor la massimizza dentro l'area di lavoro (monitor 2560×1440 → finestra 2560×1398) e continua a disegnarci sopra il pannello, anche con `_NET_WM_STATE_ABOVE` e `_STAYS_ON_TOP` impostati — cosa che raylib fa già. L'unico stato che mette una finestra sopra i pannelli è `_NET_WM_STATE_FULLSCREEN`.
+
+Quindi: fullscreen vero, chiedendo però **il modo video che il desktop sta già usando**. Nessun cambio di risoluzione avviene, e con esso nessuno dei costi che avevano fatto scartare l'esclusivo.
 
 **Il canvas passa alla risoluzione nativa.** Oggi il canvas 1280×720 è un upscale *raster*: su un 1080p viene ingrandito ×1.5, su un 4K ×3, e l'immagine è morbida — proprio dove silhouette e rim light dovrebbero essere taglienti. Ma Wake Shift disegna primitive vettoriali, non pixel art: il render target viene allocato alla risoluzione reale dell'output e alle coordinate si applica una scala, così **il codice di gioco continua a ragionare in 1280×720** e non cambia una riga, mentre i pixel sono nativi. Il letterbox resta, per i monitor non 16:9. Da qui esce anche, gratis, la leva per una voce "Qualità" quando arriva il bloom.
 
@@ -317,19 +322,36 @@ Il determinismo è verificato, non solo progettato: stessa sequenza di step → 
 
 | Task | Descrizione | Modello |
 |---|---|---|
-| T2.5.1 | `platform/display.odin`: render target dimensionato sull'output reale, con le coordinate di gioco che restano 1280×720. Riallocazione al cambio di dimensione | **Opus** |
-| T2.5.2 | `DisplayMode` (Fullscreen borderless / Windowed) e cambio a caldo che non perturba la simulazione — il frame lungo è già tagliato da `MAX_FRAME_TIME`, il render target no | **Opus** |
-| T2.5.3 | Query monitor: lista di risoluzioni finestra valide sul monitor corrente, più una voce "adatta al monitor"; gestione multi-monitor | Sonnet |
-| T2.5.4 | `Settings` (modalità, dimensione finestra, vsync) persistite dentro `SaveData` → `SAVE_FORMAT_VERSION` a 3 | Sonnet |
-| T2.5.5 | Avvio: impostazioni lette **prima** di `InitWindow` (non serve una finestra per leggerle), così la finestra nasce già giusta invece di lampeggiare; primo lancio = fullscreen sul monitor primario | Sonnet |
-| T2.5.6 | `ui/menu.odin` esteso: voce con valore che cicla con ←/→. Due campi nuovi in `core.Input` (`menu_left`, `menu_right`), **meta-input**: fuori dalla simulazione e fuori dal `RunManifest`, come `pause` e `toggle_fullscreen` | **Opus** |
-| T2.5.7 | `GameState.Options`, raggiungibile dal menu principale e dalla pausa, ESC per tornare indietro | Sonnet |
-| T2.5.8 | VSync on/off e limite FPS (60 / monitor / illimitato). La simulazione resta a 60 Hz fissi: cambia solo la frequenza di disegno, e `interpolated_world` in `main.odin` c'è già. Attenzione a non lasciare `SetTargetFPS` e vsync attivi insieme | Sonnet |
-| T2.5.9 ⚑ | Playtest: fullscreen, windowed, cambio a caldo durante una run, riavvio con le impostazioni ricordate | — |
+| T2.5.1 | `platform/display.odin`: render target dimensionato sull'output reale, con le coordinate di gioco che restano 1280×720. Riallocazione al cambio di dimensione | **Opus** ✅ |
+| T2.5.2 | `DisplayMode` (Fullscreen / Windowed) e cambio a caldo che non perturba la simulazione — il frame lungo è già tagliato da `MAX_FRAME_TIME`, il render target no | **Opus** ✅ |
+| T2.5.3 | Query monitor: lista di risoluzioni finestra valide sul monitor corrente, più una voce "adatta al monitor"; gestione multi-monitor | Sonnet ✅ |
+| T2.5.4 | `Settings` (modalità, dimensione finestra, vsync) persistite dentro `SaveData` → `SAVE_FORMAT_VERSION` a 3 | Sonnet ✅ |
+| T2.5.5 | Avvio: impostazioni lette **prima** di `InitWindow` (non serve una finestra per leggerle), così la finestra nasce già giusta invece di lampeggiare; primo lancio = fullscreen sul monitor primario | Sonnet ✅ |
+| T2.5.6 | `ui/menu.odin` esteso: voce con valore che cicla con ←/→. Due campi nuovi in `core.Input` (`menu_left`, `menu_right`), **meta-input**: fuori dalla simulazione e fuori dal `RunManifest`, come `pause` e `toggle_fullscreen` | **Opus** ✅ |
+| T2.5.7 | `GameState.Options`, raggiungibile dal menu principale e dalla pausa, ESC per tornare indietro | Sonnet ✅ |
+| T2.5.8 | VSync on/off e limite FPS (60 / monitor / illimitato). La simulazione resta a 60 Hz fissi: cambia solo la frequenza di disegno, e `interpolated_world` in `main.odin` c'è già. Attenzione a non lasciare `SetTargetFPS` e vsync attivi insieme | Sonnet ✅ |
+| T2.5.9 ⚑ | Playtest: fullscreen, windowed, cambio a caldo durante una run, riavvio con le impostazioni ricordate | — ✅ |
 
-**Test di verifica**: il gioco si apre a schermo pieno alla prima esecuzione senza lampeggiare; le impostazioni sopravvivono al riavvio; un cambio di modalità durante una run non fa saltare né la fisica né il punteggio; `odin check src` verde dopo ogni task.
+#### Cosa è emerso strada facendo
+
+- **`Settings` sta in `core`, non in `platform`**, esattamente per il motivo per cui ci sta `Input`: `ui` deve disegnarle e `platform` deve applicarle, e `ui` non ha il permesso di importare `platform`. Il livello che *applica* le impostazioni è `platform/window.odin`; il valore che le descrive è vocabolario condiviso.
+- **Il canvas non viene più letterboxato dentro il render target.** Il target è grande esattamente quanto il canvas scalato, e le bande nere sono la parte di finestra che il blit non copre. Costa zero adesso e serve alla Fase 4: il bright-pass del bloom lavorerebbe altrimenti anche sulle bande.
+- **CBOR non protegge dagli enum fuori range.** Un `DisplayMode(200)` viene serializzato e rideserializzato senza un solo errore (verificato). Le impostazioni sono l'unica parte del salvataggio che finisce dritta in chiamate di sistema, quindi `decode_save_data` le passa per `validate_settings` prima di restituirle.
+- **Il borderless è stato provato, misurato e scartato.** Su KWin 6 (Wayland, quindi XWayland) la finestra borderless esce 2560×1398 con `MAXIMIZED_VERT/HORZ` e senza `FULLSCREEN`, e il pannello resta sopra. È il bug che hai segnalato con lo screenshot. Sostituito da fullscreen vero: `FULLSCREEN` presente, 2560×1440, modo video del monitor intatto prima, durante e dopo.
+- **`ToggleFullscreen` di raylib passa a GLFW la dimensione *corrente della finestra* come modo video desiderato.** Chiamato su una finestra 1280×720 non ingrandisce la finestra al monitor: rimpicciolisce il monitor a 1280×720. Misurato — in un test la scrivania è finita a 1024×768. Per questo la finestra fullscreen nasce con `InitWindow(0, 0, ...)`, che raylib legge come "la dimensione del monitor" e applica *mentre* crea la finestra, e per questo il toggle a caldo è protetto da una guardia: si tocca solo quando la dimensione è già quella giusta, altrimenti si richiede il resize e si riprova al frame dopo.
+- **`SetWindowState` di raylib agisce su `FLAG_FULLSCREEN_MODE` ogni volta che l'insieme richiesto *differisce* da quello corrente**, a differenza di ogni altro flag che gestisce. Conseguenza: cambiare il vsync faceva uscire la finestra dal fullscreen come effetto collaterale. Si passa il bit della modalità corrente insieme alla richiesta, così il confronto resta pari.
+- **Uscire dal fullscreen non basta a riavere la finestra che si voleva.** raylib ripristina la geometria che la finestra aveva *entrando*, che è la dimensione del monitor; KDE massimizza una finestra di quella misura, e una finestra massimizzata ignora il ridimensionamento. Va prima de-massimizzata. Misurato senza: una richiesta di 1600×900 si assestava a 2560×1370 massimizzata.
+- **Un cambio di modalità non è una chiamata, è una trattativa.** Il window manager risponde al resize quando gli pare, un frame o due dopo. Per questo `apply_display_mode` fa *un passo* ed è idempotente, e `main` lo richiama per 30 frame dopo ogni cambio. Numero di tentativi limitato di proposito: a un WM che insiste va lasciato vincere.
+- **La finestra nasce nascosta.** `.WINDOW_HIDDEN` fra i config flag, modalità applicata, poi `ClearWindowState`: è così che il passaggio a fullscreen non si vede. Senza, il primo avvio mostra per un istante una finestra decorata.
+- **`FLAG_FULLSCREEN_MODE` nei config flag non serve e non funziona.** Provato: raylib riporta `IsWindowFullscreen() = true`, ma la finestra che arriva al compositor non porta `_NET_WM_STATE_FULLSCREEN` ed è massimizzata nell'area di lavoro, pannello ancora sopra. Il fullscreen si raggiunge con un toggle dopo la creazione.
+- **Il testo non guadagna nitidezza dal target nativo**, perché il font bitmap di default non ha risoluzione da dare. Le primitive vettoriali sì — ed è quello che serviva a silhouette e rim light. Un font vero arriva con l'identità visiva.
+- Il salvataggio esistente è stato invalidato dal bump a `SAVE_FORMAT_VERSION = 3`, come previsto: il decoder rifiuta di proposito le versioni che non conosce, quindi il record precedente è andato e si riparte dai default.
+
+**Test di verifica**: superato. Il gioco si apre a schermo pieno alla prima esecuzione senza lampeggiare, le impostazioni sopravvivono al riavvio, un cambio di modalità durante una run non fa saltare né la fisica né il punteggio, `odin check src` resta verde. Confermato dal tuo playtest il 2 settembre 2026.
 
 **Ricaduta sulla Fase 13**: la `T13.3` smette di essere "costruire la schermata opzioni" e diventa "ridisegnarla sulla palette definitiva". La `T13.4` resta, ma le si toglie la parte sulle opzioni: le rimane lo storico delle ultime run.
+
+**Deciso di non fare**: ricordare la dimensione di una finestra ridimensionata a mano trascinandone il bordo. La dimensione salvata è quella scelta nelle opzioni, e basta — leggerla dalla finestra viva ogni frame significa rischiare che un `SetWindowSize` appena richiesto venga sovrascritto dalla vecchia dimensione prima che il window manager l'abbia applicata.
 
 ---
 

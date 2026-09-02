@@ -15,6 +15,11 @@ GameState :: enum {
 	Playing,
 	Paused,
 	GameOver,
+
+	// Presentation settings (roadmap T2.5.7). Reachable from both the main
+	// menu and the pause menu, so the state it returns to is remembered by
+	// the caller rather than fixed here.
+	Options,
 }
 
 // Starts a fresh run. The seed arrives from the caller rather than being

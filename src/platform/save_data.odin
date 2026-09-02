@@ -19,7 +19,8 @@ import "core:encoding/cbor"
 //
 // 1: high score only
 // 2: + the best run's RunManifest (roadmap T2.8)
-SAVE_FORMAT_VERSION :: 2
+// 3: + display settings (roadmap T2.5.4)
+SAVE_FORMAT_VERSION :: 3
 
 SaveData :: struct {
 	format_version: int,
@@ -32,15 +33,21 @@ SaveData :: struct {
 	// which is what a ghost — or a server checking the score — needs.
 	best_run:       core.RunManifest,
 
-	// Options and recent-run history land here in roadmap T12.4, not
-	// guessed at ahead of time.
+	// Display mode, window size, vsync and frame limit (roadmap T2.5.4).
+	// Read before the window exists at startup, which is what lets the
+	// window be created the right size instead of being corrected into it
+	// a frame later.
+	settings:       core.Settings,
+
+	// Recent-run history lands here in roadmap T13.4, not guessed at ahead
+	// of time.
 }
 
 // A freshly initialized SaveData: what a brand new install starts with,
 // and what callers should fall back to whenever loading fails for any
 // reason (missing file, corrupted bytes, unrecognized format_version).
 new_save_data :: proc() -> SaveData {
-	return SaveData{format_version = SAVE_FORMAT_VERSION}
+	return SaveData{format_version = SAVE_FORMAT_VERSION, settings = core.new_settings()}
 }
 
 // Frees the heap allocations inside a SaveData.
@@ -78,5 +85,11 @@ decode_save_data :: proc(bytes: []byte, allocator := context.allocator) -> (data
 	if err != nil || data.format_version != SAVE_FORMAT_VERSION {
 		return SaveData{}, false
 	}
+
+	// Settings are the one part of a save handed straight to OS calls, and
+	// CBOR reports no error for an enum value outside the declared range
+	// (verified) — so a payload that decoded cleanly still has to be forced
+	// into a state the window code can act on.
+	core.validate_settings(&data.settings)
 	return data, true
 }

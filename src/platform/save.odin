@@ -101,6 +101,35 @@ load_high_score :: proc() -> f32 {
 	return data.high_score
 }
 
+// Reads just the display settings.
+//
+// Deliberately usable before InitWindow: nothing on this path touches
+// raylib, so the window can be created at the size and mode the player
+// left it in instead of being born wrong and corrected a frame later
+// (roadmap T2.5.5). Already range-checked by decode_save_data.
+load_settings :: proc() -> core.Settings {
+	data := load_save()
+	defer destroy_save_data(&data)
+	return data.settings
+}
+
+// Records the display settings, preserving whatever else the save holds.
+//
+// Same read-modify-write shape as save_best_run below, for the same
+// reason: the save is one sealed blob, so writing one field must never
+// be allowed to drop the others. Here the destroy can wait until after
+// the write, because everything in `data` was allocated by the load —
+// unlike save_best_run, which is handed a borrowed tick log.
+save_settings :: proc(settings: core.Settings) {
+	data := load_save()
+	defer destroy_save_data(&data)
+
+	data.settings = settings
+	if !store_save(data) {
+		fmt.println("WARNING: failed to save settings to disk")
+	}
+}
+
 // Records a new personal best together with the recording of the run that
 // set it (core/manifest.odin), preserving whatever else the save holds.
 //

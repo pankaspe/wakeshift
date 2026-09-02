@@ -21,6 +21,8 @@ read_input :: proc() -> core.Input {
 		confirm = rl.IsKeyPressed(.ENTER),
 		menu_up = rl.IsKeyPressed(.UP),
 		menu_down = rl.IsKeyPressed(.DOWN),
+		menu_left = rl.IsKeyPressed(.LEFT),
+		menu_right = rl.IsKeyPressed(.RIGHT),
 		toggle_fullscreen = rl.IsKeyPressed(.F11),
 	}
 }

@@ -56,14 +56,14 @@ order before touching anything:
 2. **`docs/design_doc.md`** — binding on *what* to build. v1.2 is current.
 3. The rest of this file — architecture rules and conventions.
 
-**Where the project stands:** phases 0-2 are complete. The code is split into packages with
-an acyclic dependency graph, saves are encrypted in the OS user data directory, and the
-simulation is deterministic and verified (seeded generation, input as data, fixed timestep,
-run manifests recorded). Phase 2.5 — presentation and window: borderless fullscreen by
-default, a native-resolution render target, an options screen and persisted settings — is
-next and has not been started; phase 3 (palette, the character's body, the first layer)
-follows it. The game still renders on `rl.ClearBackground(rl.BEIGE)`, in a fixed 1280x720
-window.
+**Where the project stands:** phases 0-2.5 are complete (T2.5.9, the playtest, is the
+user's). The code is split into packages with an acyclic dependency graph, saves are
+encrypted in the OS user data directory, and the simulation is deterministic and verified
+(seeded generation, input as data, fixed timestep, run manifests recorded). The game opens
+in fullscreen at the monitor's own resolution, has an options screen reachable from the
+main menu and the pause menu, and remembers what was set there. Phase 3 — palette, the character's body,
+the first layer — is next and has not been started. The game still renders on
+`rl.ClearBackground(rl.BEIGE)`: the visual identity has not begun.
 
 **How verification works here:** `odin check src` after every edit, `odin build src` and a
 short launch before reporting a task done. For anything with real logic, write a throwaway
@@ -118,6 +118,36 @@ Odin forbids cyclic imports between packages, and one directory is exactly one p
 The split is **by level of abstraction, not by game entity** — `player`, `obstacle`,
 `pattern` and `world` all live together inside `game/` because they reference each other
 constantly, and splitting them would force premature interfaces.
+
+### Presentation
+
+The game draws in a fixed 1280x720 coordinate space (`core/screen.odin`) and always will:
+no gameplay, layout or render code knows what monitor it is on. What changed in phase 2.5
+is only where those coordinates land.
+
+- The render target is allocated at the **real output resolution**, and
+  `platform.begin_game_canvas` pushes a `Camera2D` zoom that maps a 1280x720 coordinate
+  onto a native pixel. Draw in canvas coordinates as before; the pixels are native.
+- The target is sized to the *scaled canvas*, not to the window. Letterbox bars are the
+  part of the window the blit does not cover, and stay outside the target — a bright-pass
+  bloom (phase 4) must not see them.
+- It is rebuilt only on the frames the output size actually changes
+  (`platform.update_display`, called once per frame from the main loop).
+- Fullscreen means **real fullscreen at the desktop's existing video mode** — the game
+  never changes a monitor's resolution. Borderless windowed was tried first and does not
+  work: on KDE a screen-sized undecorated window is still a normal window, so the
+  compositor maximizes it into the work area and keeps the panel on top of it. The file
+  header of `platform/window.odin` records the three raylib behaviors that make this
+  delicate — read it before touching a window call, because two of them silently change
+  the player's desktop resolution or drop the window out of fullscreen.
+- A mode change is a short negotiation, not one call. `platform.apply_display_mode` does
+  **one step** and is idempotent; the main loop calls it for `WINDOW_SETTLE_FRAMES` frames
+  after any change. Never assume a window call has taken effect on the line after it.
+- `core.Settings` lives in `core` for the same reason `core.Input` does: `ui` renders it
+  and `platform` applies it, and `ui` may not import `platform`. `platform/window.odin` is
+  the only file that turns a Settings value into window calls.
+- Drawing rate is a setting; the simulation rate is not. Whatever vsync and the frame
+  limit are set to, the simulation advances at `core.TICK_RATE` in fixed steps.
 
 ### Golden rules
 
@@ -252,5 +282,9 @@ Tracked here so they are not rediscovered. Each is scheduled in `ROADMAP.md`.
   design doc's "same character, different lighting" rule. (T3.5)
 - The background is still `rl.ClearBackground(rl.BEIGE)` with hard black outlines: the
   visual identity has not been started. (Phase 3)
+- Menus, HUD and the options screen use raylib's default bitmap font and system colors.
+  Now that the render target is native-resolution, everything drawn from primitives is
+  crisp and only the text is not — a real font is part of the visual identity work.
+  (Phase 3 / T13.3)
 - Recorded run manifests are saved but never played back — there is no replay or ghost in
   the game yet, only the data needed for one. (Phase 13 / post-MVP)

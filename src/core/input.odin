@@ -30,5 +30,13 @@ Input :: struct {
 	confirm:           bool, // ENTER
 	menu_up:           bool, // UP
 	menu_down:         bool, // DOWN
+
+	// Cycle the value of a settings row (roadmap T2.5.6). Meta input like
+	// the rest of this block: the options screen can be opened mid-run from
+	// the pause menu, and nothing it changes may reach the simulation or
+	// the RunManifest.
+	menu_left:         bool, // LEFT
+	menu_right:        bool, // RIGHT
+
 	toggle_fullscreen: bool, // F11
 }

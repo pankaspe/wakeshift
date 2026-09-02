@@ -13,8 +13,10 @@ draw_main_menu :: proc(menu: Menu, high_score: f32) {
 	draw_centered_text("WAKE SHIFT", 220, 50, rl.BLACK)
 	draw_menu(menu, 340, 50, 28)
 
+	// Below the last menu row: the menu starts at 340 with 50 between
+	// rows, and gained a third row when the options screen arrived.
 	best_text := fmt.ctprintf("Best Depth: %.0f", high_score)
-	draw_centered_text(best_text, 470, 20, rl.DARKGRAY)
+	draw_centered_text(best_text, 520, 20, rl.DARKGRAY)
 }
 
 // In-game score readout, current difficulty tier, plus the Lucidity

@@ -7,7 +7,9 @@
 *   1. draw_gameplay and interpolated_world — the two helpers that live
 *      here rather than in a package: pure orchestration of game/render
 *      calls, neither a game nor a render concern in its own right
-*   2. Window + one-time setup
+*   2. Window + one-time setup — settings are read from disk *before*
+*      the window exists, so it is created in the mode and size the
+*      player left it in (platform/settings, roadmap T2.5.5)
 *   3. State declarations (one variable per subsystem, roughly in the
 *      order each subsystem was introduced across the roadmap sections)
 *   4. Main loop:
@@ -57,17 +59,33 @@ interpolated_world :: proc(world: game.World, accumulator: f32) -> game.World {
 
 main :: proc() {
 	// --- Window + one-time setup ---
-	// resizable so the window can be dragged to any size; combined with
-	// Display's letterboxed scaling, the game always fills it correctly
-	rl.SetConfigFlags({.WINDOW_RESIZABLE})
-	rl.InitWindow(1280, 720, "Wake Shift")
+
+	// Read first, before there is a window to read them for: nothing on
+	// this path touches raylib (platform/save.odin), which is what lets the
+	// window be born in the right mode instead of flashing through a
+	// default one (roadmap T2.5.5).
+	settings := platform.load_settings()
+
+	// Born in the mode the settings ask for, and hidden until it is set up
+	// (platform/window.odin). Resizable so the window can be dragged to any
+	// size; combined with Display's letterboxed scaling, the game always
+	// fills whatever size it ends up at.
+	platform.open_window(settings, "Wake Shift")
 	defer rl.CloseWindow()
-	rl.SetTargetFPS(60)
 	// disable raylib's default ESC-closes-window behavior: we use ESC to pause instead
 	rl.SetExitKey(.KEY_NULL)
 
-	// virtual canvas the whole game draws to, scaled to fill the real
-	// window/fullscreen at the end of each frame (see platform/display.odin)
+	platform.show_window()
+
+	// Frames left in which to re-assert the window's bounds after a mode
+	// change. A window manager applies its own constraints a frame or two
+	// late, so the mode set above has to be insisted on for a moment
+	// (platform/window.odin).
+	window_settle := platform.WINDOW_SETTLE_FRAMES
+
+	// canvas the whole game draws to. Game code keeps working in 1280x720
+	// coordinates; the target itself is allocated at the real output
+	// resolution and rebuilt whenever that changes (platform/display.odin).
 	disp := platform.new_display()
 	defer platform.destroy_display(disp)
 
@@ -82,9 +100,35 @@ main :: proc() {
 	// personal best, loaded once at startup, saved on every new record (section 14)
 	high_score := platform.load_high_score()
 
-	// navigable menus, shared widget (section 13)
-	main_menu := ui.new_menu([]string{"Start Run", "Quit"})
-	pause_menu := ui.new_menu([]string{"Resume", "Main Menu"})
+	// navigable menus, shared widget (section 13). The item arrays live
+	// here because a Menu borrows its rows rather than owning them (see
+	// ui/menu.odin) — they have to outlive the menu, and main's scope is
+	// the whole program.
+	main_menu_items := [?]ui.MenuItem {
+		{label = "Start Run"},
+		{label = "Options"},
+		{label = "Quit"},
+	}
+	pause_menu_items := [?]ui.MenuItem {
+		{label = "Resume"},
+		{label = "Options"},
+		{label = "Main Menu"},
+	}
+	main_menu := ui.new_menu(main_menu_items[:])
+	pause_menu := ui.new_menu(pause_menu_items[:])
+
+	// options screen, plus the state it returns to — it is reachable from
+	// both the main menu and the pause menu, and going "back" has to mean
+	// whichever one opened it (roadmap T2.5.7)
+	options_screen: ui.OptionsScreen
+	ui.init_options_screen(&options_screen)
+	options_return := game.GameState.MainMenu
+
+	// window sizes worth offering on the monitor the window is on. Rebuilt
+	// on entering the options screen and after a mode change, because a
+	// window moved to another monitor gets a different list.
+	resolution_storage: [core.MAX_WINDOW_RESOLUTIONS]core.Resolution
+	resolutions := platform.list_window_resolutions(resolution_storage[:])
 
 	should_quit := false
 
@@ -139,12 +183,38 @@ main :: proc() {
 	// --- Main loop ---
 	for !rl.WindowShouldClose() && !should_quit {
 
+		// Anything formatted for this frame's HUD and menus is allocated
+		// from the temporary arena; released here so a long session does
+		// not accumulate a frame's worth of strings sixty times a second.
+		defer free_all(context.temp_allocator)
+
+		// A mode change is not one call but a short negotiation with the
+		// window manager (platform/window.odin), so for a moment afterwards
+		// the window is nudged toward the mode it was asked for. A no-op
+		// once it is there.
+		if window_settle > 0 {
+			window_settle -= 1
+			platform.apply_display_mode(settings)
+		}
+
+		// Rebuild the render target if the window changed size since the
+		// last frame — a drag, a monitor change, or the fullscreen switch
+		// below (platform/display.odin).
+		platform.update_display(&disp)
+
 		// Sample the keyboard exactly once per frame, here. Nothing
 		// downstream polls raylib for itself — see core/input.odin.
 		input := platform.read_input()
 
+		// F11 is the same switch the options screen offers, so it changes
+		// the setting rather than the window directly: however the mode was
+		// changed, it is what the next launch starts in.
 		if input.toggle_fullscreen {
-			rl.ToggleFullscreen()
+			settings.display_mode = settings.display_mode == .Fullscreen ? .Windowed : .Fullscreen
+			platform.apply_settings(settings)
+			window_settle = platform.WINDOW_SETTLE_FRAMES
+			resolutions = platform.list_window_resolutions(resolution_storage[:])
+			platform.save_settings(settings)
 		}
 
 		// ============================================================
@@ -154,8 +224,9 @@ main :: proc() {
 		// ============================================================
 		switch game_state {
 		case .MainMenu:
-			if ui.update_menu(&main_menu, input) {
-				if main_menu.selected == 0 {
+			if confirmed, _ := ui.update_menu(&main_menu, input); confirmed {
+				switch main_menu.selected {
+				case 0:
 					run_seed = rand.uint64()
 					game.reset_run(&player, &world, &score, &obstacles, &generator, &lucidity, run_seed)
 					accumulator = 0
@@ -163,7 +234,12 @@ main :: proc() {
 					core.destroy_run_recorder(&recorder)
 					recorder = core.new_run_recorder(run_seed)
 					game_state = .Playing
-				} else {
+				case 1:
+					options_return = .MainMenu
+					resolutions = platform.list_window_resolutions(resolution_storage[:])
+					ui.sync_options_screen(&options_screen, settings, resolutions)
+					game_state = .Options
+				case:
 					should_quit = true
 				}
 				main_menu.selected = 0
@@ -274,15 +350,47 @@ main :: proc() {
 			}
 
 		case .Paused:
-			if ui.update_menu(&pause_menu, input) {
-				if pause_menu.selected == 0 {
+			if confirmed, _ := ui.update_menu(&pause_menu, input); confirmed {
+				switch pause_menu.selected {
+				case 0:
 					game_state = .Playing
-				} else {
+				case 1:
+					options_return = .Paused
+					resolutions = platform.list_window_resolutions(resolution_storage[:])
+					ui.sync_options_screen(&options_screen, settings, resolutions)
+					game_state = .Options
+				case:
 					game_state = .MainMenu
 				}
 			}
 		// deliberately nothing else runs here: world, player, obstacles
 		// all stay frozen exactly as they were when ESC was pressed
+
+		case .Options:
+			// A setting is applied the moment it changes, so the player sees
+			// what they picked, and written to disk on the way out — one save
+			// per visit instead of one per keypress.
+			//
+			// Safe to do mid-run: nothing here reaches the simulation, and the
+			// long frame a mode change costs is capped by core.MAX_FRAME_TIME
+			// before it can become catch-up steps.
+			leave, changed := ui.update_options_screen(
+				&options_screen,
+				&settings,
+				resolutions,
+				input,
+			)
+			if changed {
+				platform.apply_settings(settings)
+				window_settle = platform.WINDOW_SETTLE_FRAMES
+				resolutions = platform.list_window_resolutions(resolution_storage[:])
+			}
+			if leave {
+				platform.save_settings(settings)
+				pause_menu.selected = 0
+				main_menu.selected = 0
+				game_state = options_return
+			}
 
 		case .GameOver:
 			if input.confirm {
@@ -334,6 +442,15 @@ main :: proc() {
 		case .GameOver:
 			draw_gameplay(world, obstacles[:], player)
 			ui.draw_game_over(score, high_score)
+
+		case .Options:
+			// Opened from the pause menu, the frozen run stays visible behind
+			// it — the same overlay relationship the pause screen has, so
+			// changing a setting mid-run does not look like leaving it.
+			if options_return == .Paused {
+				draw_gameplay(world, obstacles[:], player)
+			}
+			ui.draw_options_screen(options_screen)
 		}
 
 		platform.end_game_canvas()
