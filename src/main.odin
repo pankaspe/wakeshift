@@ -42,7 +42,7 @@ draw_gameplay :: proc(
 	player: game.Player,
 	palettes: core.PaletteSet,
 ) {
-	render.draw_terrain(world, palettes)
+	render.draw_terrain(world, obstacles, palettes)
 	for obstacle in obstacles {
 		render.draw_obstacle(obstacle, world, palettes)
 	}

@@ -48,7 +48,7 @@ Quello che si scopre strada facendo non si butta, si **sposta dove verrà rilett
 
 ## Stato attuale
 
-Verificato sul codice, 2 settembre 2026 — aggiornato a chiusura Fase 4. Prossima: Fase 6, ostacoli veri.
+Verificato sul codice, 2 settembre 2026 — aggiornato a chiusura Fase 6.
 
 **Funziona**
 - Loop one-button: corsa automatica, `SPACE` inverte la gravità, due corsie
@@ -64,13 +64,13 @@ Verificato sul codice, 2 settembre 2026 — aggiornato a chiusura Fase 4. Prossi
 - **[Fase 2.5]** Presentazione: parte a schermo pieno senza lampeggiare e senza toccare il modo video del monitor, render target alla risoluzione nativa del monitor (il codice di gioco continua a ragionare in 1280×720), schermata opzioni raggiungibile da menu e pausa, impostazioni salvate dentro il salvataggio cifrato
 - **[Fase 3]** Identità visiva avviata: nessun colore scritto a mano fuori da `core/palette.odin`, i due mondi disegnati insieme con l'orizzonte in mezzo, la convergenza che li avvicina col passare della run, il personaggio con un corpo che corre e frusta nel flip, glow additivo da primitive, HUD e menu ricolorati sulla palette
 - **[Fase 4]** Bloom vero: bright-pass + blur gaussiano separabile su shader, intensità e soglia guidate da `world_t` e `depth_t` come la palette. 0.17 ms a frame nel caso peggiore
+- **[Fase 6]** Sei ostacoli con **sei letture**: presenza vs assenza come regole di collisione diverse, voragini ritagliate davvero nel terreno, e i tre archetipi anticipatori (Eco, Finta, Pattugliatore). Il Pattugliatore attraversa il Limine, quindi il centro ha smesso di essere gratis
 - **[Fase 5]** **Il Limine è giocabile**: tap e hold sullo stesso tasto, il viaggio si ferma a metà e riparte nella direzione in cui stavi andando, Lucidity che si spende invece di accumularsi soltanto, ritmo di punteggio a 40/s al centro, barra della risorsa nell'HUD
 
 **Non funziona / manca**
-- Ogni ostacolo pone la stessa domanda: l'unica leva di difficoltà è la velocità (270 → 330 → 400 px/s)
-- I 4 tipi di ostacolo sono **un tipo solo con 4 skin**: `Chasm` e `DreamHole` usano la stessa identica collisione di `Block`
-- Il "pieno vs vuoto" non esiste: la voragine è disegnata a `y = 720 - 54 = 666`, la linea del pavimento sta a ~690-706 → **sporge dal terreno di 25-40px, è un blocco in piedi, non un buco**
-- **Il centro è sicuro**: dalla Fase 5 la fascia centrale è il terzo stato, ma tutti gli ostacoli sono ancora attaccati alle pareti, quindi restarci non rischia niente se non il carburante. Squilibrio previsto, si chiude in T6.6
+- La curva di difficoltà viene ancora quasi solo dalla velocità (270 → 330 → 400 px/s): le letture ora sono sei, ma la tabella dei tier cambia solo quanto in fretta arrivano (T7.3)
+- Il contratto `entry_lane`/`exit_lane` dei pattern non sa che esiste il Limine: un pattern risolto sospendendosi esce nella corsia opposta a quello risolto con i flip (T7.1)
+- Pochi pattern: 11 in tutto su tre tier, contro i 12-16 previsti (T7.2)
 - Nessuna particella, nessun parallax, nessun audio
 - Nessun replay o ghost visibile in gioco: il `RunManifest` viene registrato e salvato, ma non ancora rigiocato dall'interfaccia
 - Menu e opzioni prendono ora i colori dalla palette, ma usano ancora il font bitmap di default di raylib: tutto quello che è disegnato da primitive è nitido alla risoluzione nativa, il testo no (T13.3)
@@ -241,19 +241,19 @@ Il gesto c'è: tap e hold sullo stesso tasto, il viaggio si ferma a metà e ripa
 
 ---
 
-### Fase 6 — Ostacoli veri
+### ✅ Fase 6 — Ostacoli veri
 
-**Obiettivo**: smettere di avere quattro skin dello stesso ostacolo. Riferimento: Design Doc sez. 5, incluso il principio **anticipatori, non reattivi**.
+Sei tipi, e finalmente sei letture invece di una regola con sei pelli. Le voragini sono ritagliate davvero nel terreno, la fase delle animazioni è ancorata e autorata, e il Pattugliatore attraversa il Limine — che è il momento in cui il centro smette di essere gratis.
 
-| Task | Descrizione | Modello |
-|---|---|---|
-| T6.1 | Terreno interrompibile: il disegno del suolo deve sapere dove sono i vuoti | **Opus** |
-| T6.2 | `Chasm` e `DreamHole` diventano **vere assenze**, disegnate come buchi reali | **Opus** |
-| T6.3 | Regole di collisione differenziate: il blocco uccide al contatto, la voragine solo se sei nella corsia bassa e appoggiato | **Opus** |
-| T6.4 | Fix `PulsingShape`: fase ancorata all'`arrival_time` invece che al tempo globale | Sonnet |
-| T6.5 | **Archetipi anticipatori**: Eco, Finta, Pattugliatore (Design Doc sez. 5) | **Opus** |
-| T6.6 | **Ostacolo che minaccia il Limine** — chiude lo squilibrio della Fase 5 | **Opus** |
-| T6.7 ⚑ | Playtest: due ostacoli diversi devono richiedere due **letture** diverse | — |
+**Le decisioni che restano vincolanti**
+
+- **Pieno contro vuoto sono due *regole*, non due disegni.** Una presenza uccide chi la tocca; un'assenza uccide solo chi ci sta appoggiato sopra. Una voragine quindi non fa niente a chi è a mezz'aria, sospeso o al soffitto, ed essendo larga fino a 2.6 volte un blocco chiede "non stare quaggiù per questo tratto" dove il blocco chiede "spostati, ora". È da lì che nascono due letture diverse, non dalla grafica.
+- **Il terreno ritaglia i propri buchi.** È l'unico codice che sa dov'è la propria superficie, quindi la campiona come funzione di x, sottrae i vuoti dalla larghezza dello schermo e disegna quel che resta una campata alla volta. `draw_obstacle` esce subito per `Chasm` e `DreamHole`. Disegnarli come oggetti è ciò che li ha fatti sembrare scatole in piedi sul pavimento per tutto il prototipo.
+- **Un ostacolo non legge mai il giocatore.** Ciò che fa sembrare intelligente un ostacolo è *anticipare* la risposta ovvia, non reagire a quella vera: un ostacolo che si adatta si percepisce come rubato anche quando è risolvibile (pilastro 3). Eco e Finta sono interamente autorati, e la spazzata del Pattugliatore è funzione del proprio `arrival_time` e di nient'altro.
+- **La fase di un'animazione è ancorata all'`arrival_time` e autorata nel pattern.** Il tempo globale fa presentare allo stesso pattern una faccia diversa ogni run — né l'autore né il giocatore possono impararla — e estrarla a caso sposta il problema nel seed invece di risolverlo. È la differenza tra "una forma che pulsa" e "una forma che sarà un muro quando ti raggiunge".
+- **Il pavimento si rompe, il soffitto si dissolve.** Stesso taglio, lettura opposta: bordi netti e fossa buia da una parte, bordi che sfumano e bagliore dietro dall'altra.
+
+**Come si verifica un ostacolo**: rigiocandolo. Il programma usa-e-getta guida la simulazione vera con input scriptati e chiede *se un pattern si può sopravvivere e come*. Ha stabilito che l'Eco punisce il flip di panico e si risolve sia con due flip stretti sia con una sospensione, e che l'Eco guardato si risolve ancora con i flip ma **non più sospendendosi**. Un test che verifica una regola di collisione non basta: quello che conta è se la domanda che l'ostacolo pone ha una risposta.
 
 ---
 

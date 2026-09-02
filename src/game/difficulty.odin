@@ -20,13 +20,13 @@ tiers := []Tier {
 		name = "Drifting",
 		start_time = 25,
 		scroll_speed = 330,
-		added_patterns = []Pattern{pattern_tight_double_switch},
+		added_patterns = []Pattern{pattern_tight_double_switch, pattern_echo, pattern_patrol_high},
 	},
 	{
 		name = "Deep Dream",
 		start_time = 55,
 		scroll_speed = 400,
-		added_patterns = []Pattern{pattern_triple_switch},
+		added_patterns = []Pattern{pattern_triple_switch, pattern_echo_guarded},
 	},
 }
 

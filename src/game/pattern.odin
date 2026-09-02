@@ -17,6 +17,13 @@ PatternEvent :: struct {
 	time_offset:   f32, // seconds since the pattern started
 	lane:          core.Lane, // lane the obstacle occupies (player must be in the OTHER lane to survive)
 	obstacle_type: ObstacleType,
+
+	// Where an animated obstacle is in its cycle when it reaches the
+	// player, in turns (0..1). This is the pattern *saying what it is
+	// asking*: a Patroller at 0 is at the ceiling when it gets there, at
+	// 0.25 in the middle, at 0.5 on the floor. Ignored by types that do
+	// not animate.
+	phase_offset:  f32,
 }
 
 Pattern :: struct {
@@ -44,7 +51,9 @@ pattern_steady_chasm := Pattern {
 
 // A single Pulsing Shape in the Dream lane: player must be in Real to survive.
 pattern_steady_dream := Pattern {
-	events     = []PatternEvent{{time_offset = 1.0, lane = .Dream, obstacle_type = .PulsingShape}},
+	events     = []PatternEvent {
+		{time_offset = 1.0, lane = .Dream, obstacle_type = .PulsingShape, phase_offset = 0.25},
+	},
 	duration   = 2.0,
 	entry_lane = .Real,
 	exit_lane  = .Real,
@@ -62,7 +71,7 @@ pattern_steady_dreamhole := Pattern {
 pattern_double_switch := Pattern {
 	events     = []PatternEvent {
 		{time_offset = 0.8, lane = .Real, obstacle_type = .Block},
-		{time_offset = 1.8, lane = .Dream, obstacle_type = .PulsingShape},
+		{time_offset = 1.8, lane = .Dream, obstacle_type = .PulsingShape, phase_offset = 0.25},
 	},
 	duration   = 2.6,
 	entry_lane = .Dream,
@@ -74,7 +83,7 @@ pattern_double_switch := Pattern {
 // graph has a dead end (Real can never lead back to Dream).
 pattern_double_switch_reverse := Pattern {
 	events     = []PatternEvent {
-		{time_offset = 0.8, lane = .Dream, obstacle_type = .PulsingShape},
+		{time_offset = 0.8, lane = .Dream, obstacle_type = .PulsingShape, phase_offset = 0.25},
 		{time_offset = 1.8, lane = .Real, obstacle_type = .Chasm},
 	},
 	duration   = 2.6,
@@ -82,13 +91,97 @@ pattern_double_switch_reverse := Pattern {
 	exit_lane  = .Dream,
 }
 
+// --- Anticipatory patterns (Design Doc, section 5) ---
+//
+// What makes an obstacle feel intelligent is not reacting to the player —
+// that reads as unfair even when it is survivable — but *anticipating the
+// obvious answer*. All three archetypes below are fully authored and
+// fully visible in advance. The player who reads survives; the player who
+// reacts to the first thing they see does not.
+
+// The Echo: something arrives in the lane you are in, and the lane you
+// would flip into closes half a second later. The panic flip is exactly
+// wrong, and there are two right answers — two flips timed tightly, or
+// one hold through the middle, which is the pattern that first gives the
+// Limen a reason to exist.
+//
+// exit_lane names where the two-flip answer ends up. A player who solves
+// it by suspending comes out in the other lane instead, which is why the
+// duration leaves over a second of slack afterwards: the next pattern's
+// first obstacle is at least that far in, so either answer has time to
+// be somewhere safe. Making the contract itself understand the Limen is
+// roadmap T7.1.
+pattern_echo := Pattern {
+	events     = []PatternEvent {
+		{time_offset = 1.0, lane = .Dream, obstacle_type = .PulsingShape, phase_offset = 0.25},
+		{time_offset = 1.45, lane = .Real, obstacle_type = .Block},
+	},
+	duration   = 3.0,
+	entry_lane = .Dream,
+	exit_lane  = .Dream,
+}
+
+// The Feint: what looks like a block growing in your own lane is a bluff
+// that retracts before it arrives, and the lane you would flip into is
+// the one that is actually closed. Staying put is correct.
+//
+// The bluff resolves 0.6s before it would have reached the player
+// (FEINT_GONE), which is more than the 0.24s a flip takes: the player who
+// waits is never made to guess.
+pattern_feint_real := Pattern {
+	events     = []PatternEvent {
+		{time_offset = 1.2, lane = .Real, obstacle_type = .Feint},
+		{time_offset = 1.25, lane = .Dream, obstacle_type = .PulsingShape, phase_offset = 0.25},
+	},
+	duration   = 2.6,
+	entry_lane = .Real,
+	exit_lane  = .Real,
+}
+
+pattern_feint_dream := Pattern {
+	events     = []PatternEvent {
+		{time_offset = 1.2, lane = .Dream, obstacle_type = .Feint},
+		{time_offset = 1.25, lane = .Real, obstacle_type = .Block},
+	},
+	duration   = 2.6,
+	entry_lane = .Dream,
+	exit_lane  = .Dream,
+}
+
 // --- Harder patterns, unlocked at higher difficulty tiers (section 18) ---
+
+// The Patroller sweeping up to the ceiling as it reaches the player: the
+// low lane is the safe one, and the pattern says so a full cycle before
+// it matters.
+pattern_patrol_high := Pattern {
+	events     = []PatternEvent {
+		{time_offset = 1.3, lane = .Dream, obstacle_type = .Patroller, phase_offset = 0},
+	},
+	duration   = 2.6,
+	entry_lane = .Real,
+	exit_lane  = .Real,
+}
+
+// The Echo with the middle taken away: the Patroller is in the Limen at
+// exactly the moment the hold would have been resting there, so the only
+// answer left is the two flips. This is the pattern that closes the
+// imbalance phase 5 shipped with — the centre stops being free.
+pattern_echo_guarded := Pattern {
+	events     = []PatternEvent {
+		{time_offset = 1.0, lane = .Dream, obstacle_type = .PulsingShape, phase_offset = 0.25},
+		{time_offset = 1.2, lane = .Real, obstacle_type = .Patroller, phase_offset = 0.25},
+		{time_offset = 1.45, lane = .Real, obstacle_type = .Block},
+	},
+	duration   = 3.2,
+	entry_lane = .Dream,
+	exit_lane  = .Dream,
+}
 
 // Tighter timing than pattern_double_switch_reverse: less reaction time
 // between the two obstacles.
 pattern_tight_double_switch := Pattern {
 	events     = []PatternEvent {
-		{time_offset = 0.5, lane = .Dream, obstacle_type = .PulsingShape},
+		{time_offset = 0.5, lane = .Dream, obstacle_type = .PulsingShape, phase_offset = 0.25},
 		{time_offset = 1.1, lane = .Real, obstacle_type = .Chasm},
 	},
 	duration   = 1.6,
@@ -100,7 +193,7 @@ pattern_tight_double_switch := Pattern {
 pattern_triple_switch := Pattern {
 	events     = []PatternEvent {
 		{time_offset = 0.6, lane = .Real, obstacle_type = .Block},
-		{time_offset = 1.3, lane = .Dream, obstacle_type = .PulsingShape},
+		{time_offset = 1.3, lane = .Dream, obstacle_type = .PulsingShape, phase_offset = 0.25},
 		{time_offset = 2.0, lane = .Real, obstacle_type = .Chasm},
 	},
 	duration   = 2.4,
@@ -118,6 +211,8 @@ all_patterns := []Pattern {
 	pattern_steady_dreamhole,
 	pattern_double_switch,
 	pattern_double_switch_reverse,
+	pattern_feint_real,
+	pattern_feint_dream,
 }
 
 // Picks a random pattern from the pool whose entry_lane matches the lane
@@ -216,6 +311,7 @@ generate_ahead :: proc(
 					generator.generated_until + event.time_offset,
 					event.lane,
 					event.obstacle_type,
+					event.phase_offset,
 					rng,
 				),
 			)
@@ -226,15 +322,33 @@ generate_ahead :: proc(
 	}
 }
 
-// Checks that every event in every pattern uses an obstacle_type consistent
-// with its lane (see expected_lane_for_type). Meant to be called once at
-// startup, in debug builds, to catch pattern-authoring mistakes immediately
-// instead of relying on noticing it during a playtest.
+// Checks a pool for the two authoring mistakes that produce no error and
+// no crash, only a game that is quietly wrong.
+//
+// The first is an obstacle in the lane it does not belong to. The second
+// is a pool that cannot be chained: pick_next_pattern falls back to
+// pool[0] when no pattern accepts the required entry lane, which silently
+// hands the player a pattern they were never set up for. Every lane a
+// pattern can *exit* into must have at least one pattern that *enters*
+// from it, or the fallback is only a matter of time.
 validate_pattern_pool :: proc(pool: []Pattern) {
+	for lane in core.Lane {
+		reachable := false
+		for pattern in pool {
+			if pattern.entry_lane == lane {
+				reachable = true
+				break
+			}
+		}
+		if !reachable {
+			fmt.printf("WARNING: no pattern in this pool can start from the %v lane\n", lane)
+		}
+	}
+
 	for pattern, pattern_index in pool {
 		for event in pattern.events {
-			expected := expected_lane_for_type(event.obstacle_type)
-			if event.lane != expected {
+			expected, bound := expected_lane_for_type(event.obstacle_type)
+			if bound && event.lane != expected {
 				fmt.printf(
 					"WARNING: pattern %d has a %v obstacle in the %v lane, expected %v\n",
 					pattern_index,

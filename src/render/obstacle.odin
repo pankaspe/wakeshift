@@ -10,11 +10,12 @@
 * a color of its own: an obstacle in the Dream lane goes violet or washes
 * out with the convergence without this file knowing that happened.
 *
-* The shapes themselves are unchanged and still wrong in the two ways
-* recorded in CLAUDE.md: a Chasm is drawn standing on the floor instead
-* of cut into it, and it collides like a Block. Both are roadmap phase 6
-* — this pass was about color, and repainting a shape does not make it
-* the right shape.
+* The two void types are **not drawn here**. A Chasm and a Dream Hole are
+* the ground failing to exist, and the only code that knows where the
+* ground is, is the terrain — so it cuts its own holes and this file
+* returns early for them (render/terrain.odin). Drawing them here is what
+* made them read as boxes standing on the floor for the whole of the
+* prototype.
 */
 package render
 
@@ -39,13 +40,57 @@ draw_obstacle :: proc(obstacle: game.Obstacle, world: game.World, palettes: core
 	switch obstacle.obstacle_type {
 	case .Block:
 		draw_block(position, size, palette, alive)
-	case .Chasm:
-		draw_chasm(position, size, palette, alive)
-	case .DreamHole:
-		draw_dream_hole(position, size, palette, alive)
+
 	case .PulsingShape:
 		draw_pulsing_shape(position, size, palette, alive)
+
+	case .Feint:
+		// It has to be indistinguishable from the thing it is pretending
+		// to be, or it is not a bluff — the tell is that it retracts, in
+		// full view, with time to spare (game/obstacle.odin).
+		if size.y <= 0 {
+			return
+		}
+		if is_real {
+			draw_block(position, size, palette, alive)
+		} else {
+			draw_pulsing_shape(position, size, palette, alive)
+		}
+
+	case .Patroller:
+		draw_patroller(position, size, palettes)
+
+	case .Chasm, .DreamHole:
+	// drawn by the terrain, which owns where its own surface is
 	}
+}
+
+// --- Patroller: the one presence that crosses the whole column ---
+
+// It samples the palette at its *own* height rather than its lane's, so
+// it takes on the colour of wherever it currently is — cold near the
+// floor, washed out through the middle, warm against the ceiling. That
+// is the accessibility rule paying for itself: the thing that tells you
+// where it is, is also the thing that tells you which world it is in.
+PATROLLER_GLOW :: 0.40
+PATROLLER_CORE_RATIO :: 0.42
+
+draw_patroller :: proc(position, size: rl.Vector2, palettes: core.PaletteSet) {
+	center := rl.Vector2{position.x + size.x * 0.5, position.y + size.y * 0.5}
+	radius := size.x * 0.5
+
+	local_t := 1 - center.y / core.SCREEN_HEIGHT
+	palette := core.sample_palette(palettes, local_t)
+
+	draw_glow_circle(center, radius * 2.6, palette.accent, PATROLLER_GLOW)
+	rl.DrawCircleV(center, radius, palette.silhouette)
+	rl.DrawCircleLinesV(center, radius, core.with_alpha(palette.light, 0.75))
+
+	// A bright core, so the silhouette does not disappear against a dark
+	// background at the exact moment it matters — this is the only
+	// obstacle that can be anywhere vertically, including in front of the
+	// darkest part of the picture.
+	rl.DrawCircleV(center, radius * PATROLLER_CORE_RATIO, palette.accent)
 }
 
 // --- Block: an irregular stone ---
@@ -94,100 +139,6 @@ draw_lit_outline :: proc(points: []rl.Vector2, palette: core.Palette, alive: f32
 	for i in 0 ..< len(points) {
 		next := (i + 1) % len(points)
 		rl.DrawLineEx(points[i], points[next], core.RIM_THICKNESS, rim_color)
-	}
-}
-
-// --- Chasm: a crack in the ground, with a sense of depth ---
-
-// Layered dark bands, each narrower and darker than the last, receding
-// toward the bottom — a cheap depth illusion without real 3D. A hole is
-// an absence of world, so the layers run from the world's silhouette
-// down to nothing at all rather than to another color.
-CHASM_LAYER_COUNT :: 4
-CHASM_VOID_COLOR :: rl.Color{0, 0, 0, 255}
-
-draw_chasm :: proc(position, size: rl.Vector2, palette: core.Palette, alive: f32) {
-	for i in 0 ..< CHASM_LAYER_COUNT {
-		t := f32(i) / f32(CHASM_LAYER_COUNT - 1) // 0 at top, 1 at bottom
-
-		// Each layer is narrower than the last, centered horizontally,
-		// so the crack appears to taper as it goes down.
-		inset := size.x * 0.12 * t
-		layer_rect := rl.Rectangle {
-			position.x + inset,
-			position.y + size.y * t * 0.5,
-			size.x - inset * 2,
-			size.y * (1 - t * 0.5),
-		}
-
-		rl.DrawRectangleRec(layer_rect, core.lerp_color(palette.silhouette, CHASM_VOID_COLOR, t))
-	}
-
-	// A jagged top edge (a simple zigzag), reading as broken/cracked ground
-	// rather than a clean rectangular hole.
-	ZIGZAG_STEPS :: 5
-	step_width := size.x / f32(ZIGZAG_STEPS)
-	edge_color := core.with_alpha(palette.light, 0.30 + 0.40 * alive)
-	for i in 0 ..< ZIGZAG_STEPS {
-		x1 := position.x + f32(i) * step_width
-		x2 := x1 + step_width
-		y_offset: f32 = i % 2 == 0 ? 0 : 5
-		rl.DrawLineEx(
-			rl.Vector2{x1, position.y + y_offset},
-			rl.Vector2{x2, position.y + (5 - y_offset)},
-			core.RIM_THICKNESS,
-			edge_color,
-		)
-	}
-}
-
-// --- Dream Hole: a jagged tear in the ceiling, glowing faintly ---
-
-// Same layered-depth trick as the Chasm, but inverted (recedes upward)
-// and lit from inside instead of going black: the Real world's absence is
-// a void, the Dream world's is a way through — same structure, opposite
-// reading, which is the "full vs void" pairing of Design Doc section 5.
-DREAM_HOLE_LAYER_COUNT :: 4
-DREAM_HOLE_GLOW_STRENGTH :: 0.30
-
-draw_dream_hole :: proc(position, size: rl.Vector2, palette: core.Palette, alive: f32) {
-	for i in 0 ..< DREAM_HOLE_LAYER_COUNT {
-		t := f32(i) / f32(DREAM_HOLE_LAYER_COUNT - 1) // 0 at the ceiling, 1 deepest
-
-		inset := size.x * 0.12 * t
-		layer_rect := rl.Rectangle {
-			position.x + inset,
-			position.y,
-			size.x - inset * 2,
-			size.y * (1 - t * 0.5),
-		}
-
-		rl.DrawRectangleRec(layer_rect, core.lerp_color(palette.silhouette, palette.accent, t))
-	}
-
-	// The light that leaks out of the tear, centered on its deepest part.
-	draw_glow_circle(
-		rl.Vector2{position.x + size.x * 0.5, position.y + size.y * 0.3},
-		size.x * 0.8,
-		palette.accent,
-		DREAM_HOLE_GLOW_STRENGTH * (0.4 + 0.6 * alive),
-	)
-
-	// Jagged bottom edge (the tear "hangs" from the ceiling), zigzag pattern.
-	ZIGZAG_STEPS :: 5
-	step_width := size.x / f32(ZIGZAG_STEPS)
-	edge_y := position.y + size.y
-	edge_color := core.with_alpha(palette.light, 0.35 + 0.45 * alive)
-	for i in 0 ..< ZIGZAG_STEPS {
-		x1 := position.x + f32(i) * step_width
-		x2 := x1 + step_width
-		y_offset: f32 = i % 2 == 0 ? 0 : 5
-		rl.DrawLineEx(
-			rl.Vector2{x1, edge_y - y_offset},
-			rl.Vector2{x2, edge_y - (5 - y_offset)},
-			core.RIM_THICKNESS,
-			edge_color,
-		)
 	}
 }
 

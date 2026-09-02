@@ -56,7 +56,7 @@ order before touching anything:
 2. **`docs/design_doc.md`** — binding on *what* to build. v1.3 is current.
 3. The rest of this file — architecture rules and conventions.
 
-**Where the project stands:** phases 0-5 are complete. The code is split into packages with an acyclic dependency
+**Where the project stands:** phases 0-6 are complete. The code is split into packages with an acyclic dependency
 graph, saves are encrypted in the OS user data directory, and the simulation is
 deterministic and verified (seeded generation, input as data, fixed timestep, run
 manifests recorded). The game opens in fullscreen at the monitor's own resolution, has an
@@ -159,6 +159,25 @@ Odin forbids cyclic imports between packages, and one directory is exactly one p
 The split is **by level of abstraction, not by game entity** — `player`, `obstacle`,
 `pattern` and `world` all live together inside `game/` because they reference each other
 constantly, and splitting them would force premature interfaces.
+
+### Obstacles
+
+Six types, and — since phase 6 — six behaviours rather than one behaviour with six skins.
+The split follows the design doc's own axis (section 5):
+
+- **Full vs void.** A Block is something that appears; a Chasm is the floor failing to be
+  there. That is two *rules*, not two sprites: a presence kills whoever overlaps it, an
+  absence kills only whoever is resting on it. A Chasm therefore does nothing to a player
+  who is mid-flip, suspended, or on the ceiling, and being wider than a Block it asks
+  "do not be down here for this stretch" where a Block asks "move, now".
+- **The terrain owns the holes.** `render/terrain.odin` is the only code that knows where
+  its own surface is, so it samples the surface as a function of x, subtracts the void
+  obstacles from the width of the screen, and draws what is left one span at a time.
+  `draw_obstacle` returns early for `Chasm` and `DreamHole`. Drawing them as objects is
+  what made them read as boxes standing on the floor for the whole of the prototype.
+- **The floor breaks, the ceiling dissolves.** Hard lit edges and a dark pit on one side;
+  edges fading out over tens of pixels and a faint glow on the other. Same cut, opposite
+  reading.
 
 ### Presentation
 
@@ -334,21 +353,16 @@ raise it with the user before writing code.
 
 Tracked here so they are not rediscovered. Each is scheduled in `ROADMAP.md`.
 
-- `Chasm` and `DreamHole` use the same collision rule as `Block` — four types, one behavior.
-  (T6.3)
-- `Chasm` renders at `y = SCREEN_HEIGHT - 54`, above the terrain surface line at ~690-706,
-  so it reads as a solid block standing on the floor rather than a hole. (T6.2)
-- `PulsingShape` phase is driven by global elapsed time rather than the obstacle's own
-  `arrival_time`, so identical patterns can present a 55px wall or an ignorable 8px stub.
-  (T6.4)
+- A pattern's `entry_lane`/`exit_lane` contract does not know the Limen exists. A pattern
+  solved by suspending comes out in the opposite lane to the one solved by flipping, so
+  `exit_lane` names the flipping answer and the pattern carries a second of slack
+  afterwards for the other one. Teaching the contract about the third state is T7.1.
+- Difficulty still comes mostly from scroll speed. There are six readings now, but the
+  tier table only changes how fast they arrive. (T7.3)
 - Menus, HUD and the options screen now take their colors from the palette, but still use
   raylib's default bitmap font. Everything drawn from primitives is crisp at native
   resolution and only the text is not — a real font is the remaining half of that job.
   (T13.3)
-- The centre of the screen is **safe**: every obstacle is still attached to a wall, so
-  holding in the Limen risks nothing but fuel. Deliberate and temporary — the imbalance is
-  closed by the obstacle that threatens the middle (T6.6), and until then the Lucidity
-  drain is tuned harder than it should end up being.
 - `Lucidity` changed meaning in phase 5: it is a spendable resource in 0..LUCIDITY_MAX, not
   a streak counter. Anything that used to read `lucidity.streak` wants `lucidity.value`.
 - There are now two glows: the real frame-wide bloom in `fx/bloom.odin`, and the stacked
