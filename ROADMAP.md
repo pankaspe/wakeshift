@@ -48,13 +48,13 @@ Quello che si scopre strada facendo non si butta, si **sposta dove verrà rilett
 
 ## Stato attuale
 
-Verificato sul codice, 2 settembre 2026 — aggiornato a chiusura Fase 3.
+Verificato sul codice, 2 settembre 2026 — aggiornato a chiusura Fase 5. La Fase 4 (bloom) era stata scavalcata per scelta ed è la prossima.
 
 **Funziona**
 - Loop one-button: corsa automatica, `SPACE` inverte la gravità, due corsie
 - Ostacoli come **eventi nel tempo** (`arrival_time`), non posizioni in pixel — la scelta architetturale migliore del progetto
 - Pattern concatenati con `entry_lane`/`exit_lane`: il generatore non può produrre sequenze irrisolvibili
-- Lucidity: streak di near-miss → moltiplicatore fino a +100%
+- Lucidity: risorsa unica che si guadagna dai near-miss e si spende nel Limine, e che è insieme il moltiplicatore di punteggio (fino a +100%)
 - 3 tier di difficoltà con pool cumulative
 - Coordinate di gioco fisse a 1280×720, letterboxate → nessun codice di gameplay sa che monitor c'è (dalla Fase 2.5 i pixel sono però nativi, non un upscale)
 - Menu, pausa, game over, salvataggio record
@@ -63,13 +63,13 @@ Verificato sul codice, 2 settembre 2026 — aggiornato a chiusura Fase 3.
 - **[Fase 2]** Simulazione deterministica: seed esplicito, input come dato, timestep fisso a 60 Hz. Ogni record salva il `RunManifest` della run che l'ha ottenuto — seed più i tick di ogni flip
 - **[Fase 2.5]** Presentazione: parte a schermo pieno senza lampeggiare e senza toccare il modo video del monitor, render target alla risoluzione nativa del monitor (il codice di gioco continua a ragionare in 1280×720), schermata opzioni raggiungibile da menu e pausa, impostazioni salvate dentro il salvataggio cifrato
 - **[Fase 3]** Identità visiva avviata: nessun colore scritto a mano fuori da `core/palette.odin`, i due mondi disegnati insieme con l'orizzonte in mezzo, la convergenza che li avvicina col passare della run, il personaggio con un corpo che corre e frusta nel flip, glow additivo da primitive, HUD e menu ricolorati sulla palette
+- **[Fase 5]** **Il Limine è giocabile**: tap e hold sullo stesso tasto, il viaggio si ferma a metà e riparte nella direzione in cui stavi andando, Lucidity che si spende invece di accumularsi soltanto, ritmo di punteggio a 40/s al centro, barra della risorsa nell'HUD
 
 **Non funziona / manca**
 - Ogni ostacolo pone la stessa domanda: l'unica leva di difficoltà è la velocità (270 → 330 → 400 px/s)
 - I 4 tipi di ostacolo sono **un tipo solo con 4 skin**: `Chasm` e `DreamHole` usano la stessa identica collisione di `Block`
 - Il "pieno vs vuoto" non esiste: la voragine è disegnata a `y = 720 - 54 = 666`, la linea del pavimento sta a ~690-706 → **sporge dal terreno di 25-40px, è un blocco in piedi, non un buco**
-- La Lucidity è un cricchetto: sale e non scende mai
-- La fascia centrale (40% dello schermo) è inutilizzata *dal gameplay* — dalla Fase 3 è però già disegnata come fascia di orizzonte, quindi quando il Limine diventerà giocabile il giocatore starà nel punto dell'immagine che è sempre stato disegnato come soglia
+- **Il centro è sicuro**: dalla Fase 5 la fascia centrale è il terzo stato, ma tutti gli ostacoli sono ancora attaccati alle pareti, quindi restarci non rischia niente se non il carburante. Squilibrio previsto, si chiude in T6.6
 - Nessuna particella, nessun parallax, nessun audio. Il bloom non è vero bloom: è glow additivo impilato da primitive, non un bright-pass sul frame (Fase 4)
 - Nessun replay o ghost visibile in gioco: il `RunManifest` viene registrato e salvato, ma non ancora rigiocato dall'interfaccia
 - Menu e opzioni prendono ora i colori dalla palette, ma usano ancora il font bitmap di default di raylib: tutto quello che è disegnato da primitive è nitido alla risoluzione nativa, il testo no (T13.3)
@@ -217,21 +217,22 @@ Il gioco ha smesso di essere disegnato su fondo beige. I due mondi sono ora semp
 
 ---
 
-### Fase 5 — Il Limine: il terzo stato
+### ✅ Fase 5 — Il Limine: il terzo stato
 
-**Obiettivo**: il cuore dell'evoluzione. Dipende da T2.5 (input come dato), già fatto.
+Il gesto c'è: tap e hold sullo stesso tasto, il viaggio si ferma a metà e riparte nella direzione in cui stavi andando, la Lucidity si spende invece di accumularsi soltanto. Il centro paga 40/s e costa 30/s di carburante.
 
-| Task | Descrizione | Modello |
-|---|---|---|
-| T5.1 | Riconoscimento tap vs hold sulla barra spaziatrice | **Opus** |
-| T5.2 | Fisica della sospensione: arresto a metà viaggio, completamento nella direzione di marcia al rilascio | **Opus** |
-| T5.3 | **La posa del galleggiamento**: la rotazione si completa e si assesta, braccia aperte, oscillazione lenta (Design Doc sez. 12) | **Opus** |
-| T5.4 | Lucidity come carburante: consumo nel Limine, accumulo dai near-miss, soglia minima | **Opus** |
-| T5.5 | Ritmo di punteggio del Limine (40/s) | Sonnet |
-| T5.6 | HUD: la Lucidity diventa una barra di risorsa, non un numero | Sonnet |
-| T5.7 ⚑ | **Playtest decisivo**: il gesto deve risultare naturale entro 30 secondi senza spiegazioni | — |
+**Le decisioni che restano vincolanti**
 
-**Squilibrio noto e voluto**: a fine fase il centro è **sicuro**, perché tutti gli ostacoli sono attaccati alle pareti. Si chiude in T6.6. Nel frattempo il consumo di Lucidity va tarato aggressivo.
+- **La sospensione è una pausa dell'orologio del viaggio, non un movimento a parte.** Si congela a metà e riparte da lì, ed è per questo che nessuna riga deve ricordare da dove venivi: c'è una sola direzione di marcia e non cambia mai. Qualunque modifica al flip deve preservarlo — nel momento in cui la sospensione diventa un moto suo, la frase che spiega i comandi smette di essere vera.
+- **La durata del viaggio è la soglia tra i due gesti.** Il punto in cui ci si ferma è metà viaggio, quindi il tempo per arrivarci *è* il confine tra tap e hold. `FLIP_DURATION` non è una manopola di feel: è anche quanto deve durare una pressione per contare come hold. Sotto ~0.20s la sospensione involontaria torna a rischio.
+- **Velocità costante, e non è pigrizia.** Qualunque curva che parta più veloce della media deve restituire il tempo prima di metà strada — aritmetica, non tuning — e restituirlo significa decelerare a mezz'aria. Il primo tentativo lo faceva apposta, per far *vedere* la soglia; al playtest era un intoppo nell'unico gesto del gioco. **Lezione generale per le fasi 9 e 11**: un fronzolo messo sul movimento del giocatore non è decorazione, è attrito. Si insegna con lo sfondo, la luce, le particelle — mai facendo fare al personaggio qualcosa che il giocatore non ha chiesto.
+- **Un near-miss è "l'ostacolo è arrivato nella corsia che avevi appena lasciato"**, ancorato alla partenza e non all'atterraggio. La versione precedente guardava solo se il giocatore si fosse sistemato da poco, senza guardare dove fosse l'ostacolo: pagava per schivate immaginarie e non pagava quelle vere colte a mezz'aria. Ancorare alla partenza rende la regola indipendente dallo stato in cui ti trova l'ostacolo, e si difende da sola dentro il Limine perché la finestra si misura da una partenza che si allontana.
+- **Una risorsa sola, e si vede quando incassa.** Lucidity è insieme carburante e moltiplicatore: da lì nasce la domanda "banco o brucio?". La barra lampeggia sull'incasso — non era un vezzo, al playtest la risorsa sembrava rotta solo perché non si vedeva guadagnare.
+- **Niente invulnerabilità nel Limine**, e la grazia del flip (0.15s) è più corta del viaggio: senza cooldown sul flip, una grazia lunga quanto il viaggio significherebbe invulnerabilità permanente per chi martella il tasto.
+
+**Ricaduta sul salvataggio**: `SAVE_FORMAT_VERSION` 3 → 4 e `GAME_VERSION` → 0.2.0-alpha. Il manifesto registra anche i rilasci del tasto, senza i quali una run col Limine non è riproducibile.
+
+**Squilibrio ancora aperto**: il centro è **sicuro**, tutti gli ostacoli sono attaccati alle pareti. Si chiude in T6.6; fino ad allora il consumo di Lucidity è tarato più duro di quanto dovrà restare.
 
 ---
 

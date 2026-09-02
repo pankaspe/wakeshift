@@ -20,7 +20,11 @@ import "core:encoding/cbor"
 // 1: high score only
 // 2: + the best run's RunManifest (roadmap T2.8)
 // 3: + display settings (roadmap T2.5.4)
-SAVE_FORMAT_VERSION :: 3
+// 4: + the manifest's release ticks, needed to replay the Limen's holds
+//    (roadmap T5.1). Discards every existing save, which is correct here
+//    for a second reason: a score set before the third state existed was
+//    set in a different game.
+SAVE_FORMAT_VERSION :: 4
 
 SaveData :: struct {
 	format_version: int,
@@ -59,6 +63,7 @@ new_save_data :: proc() -> SaveData {
 destroy_save_data :: proc(data: ^SaveData, allocator := context.allocator) {
 	delete(data.best_run.game_version, allocator)
 	delete(data.best_run.flip_ticks, allocator)
+	delete(data.best_run.release_ticks, allocator)
 	data.best_run = core.RunManifest{}
 }
 

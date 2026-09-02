@@ -22,7 +22,11 @@ package core
 // Identifies the build a run was played on. A manifest is only
 // reproducible against the simulation it was recorded from, so a replay
 // or a server check has to know which one that was.
-GAME_VERSION :: "0.1.0-alpha"
+// 0.1.0: two lanes, tap-only flip
+// 0.2.0: the Limen — a flip is a longer journey and holding stops it
+//        halfway, so the same input log played against 0.1.0 produces a
+//        different run
+GAME_VERSION :: "0.2.0-alpha"
 
 RunManifest :: struct {
 	game_version:  string,
@@ -30,14 +34,22 @@ RunManifest :: struct {
 	tick_rate:     u32, // simulation steps per second this run was played at
 	tick_count:    u64, // how many steps the run lasted
 	flip_ticks:    []u64, // every tick the player pressed flip on, in order
+
+	// Every tick the key came back up, in order. A press and its release
+	// bracket one hold: the key is down over [press, release), which is
+	// all a replay needs to rebuild Input.flip_held tick by tick. Without
+	// this the Limen would be unreproducible — the same presses with
+	// different hold lengths are different runs.
+	release_ticks: []u64,
 	claimed_depth: f32, // what the client says it scored — to be verified, not trusted
 }
 
 // Collects flip presses as a run happens. Kept separate from RunManifest
 // because a manifest is a finished, immutable record while this grows.
 RunRecorder :: struct {
-	seed:       u64,
-	flip_ticks: [dynamic]u64,
+	seed:          u64,
+	flip_ticks:    [dynamic]u64,
+	release_ticks: [dynamic]u64,
 }
 
 new_run_recorder :: proc(seed: u64) -> RunRecorder {
@@ -47,7 +59,9 @@ new_run_recorder :: proc(seed: u64) -> RunRecorder {
 // Frees a recorder's storage. Call before overwriting one for a new run.
 destroy_run_recorder :: proc(recorder: ^RunRecorder) {
 	delete(recorder.flip_ticks)
+	delete(recorder.release_ticks)
 	recorder.flip_ticks = nil
+	recorder.release_ticks = nil
 }
 
 // Notes that flip was pressed on the given tick. Called once per
@@ -55,6 +69,15 @@ destroy_run_recorder :: proc(recorder: ^RunRecorder) {
 // the steps a replay would run.
 record_flip :: proc(recorder: ^RunRecorder, tick: u64) {
 	append(&recorder.flip_ticks, tick)
+}
+
+// Notes that the key came back up on the given tick, closing the hold
+// opened by the last recorded press. Called from the same place, on the
+// same clock: a press and a release on the same tick describe a hold that
+// no step ever saw, which is exactly what a tap short enough to fall
+// inside one step is.
+record_release :: proc(recorder: ^RunRecorder, tick: u64) {
+	append(&recorder.release_ticks, tick)
 }
 
 // Freezes the recording into a manifest describing the finished run.
@@ -69,6 +92,7 @@ build_manifest :: proc(recorder: RunRecorder, tick_count: u64, claimed_depth: f3
 		tick_rate = u32(TICK_RATE),
 		tick_count = tick_count,
 		flip_ticks = recorder.flip_ticks[:],
+		release_ticks = recorder.release_ticks[:],
 		claimed_depth = claimed_depth,
 	}
 }

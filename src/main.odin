@@ -191,6 +191,17 @@ main :: proc() {
 	// apply it twice.
 	pending_input := core.Input{}
 
+	// The simulation's own view of whether the flip key is down
+	// (core/input.odin). It goes up on the step that consumed a press and
+	// comes down on the first step that sees the key released, and it
+	// starts every run false — a key already held when a run begins does
+	// nothing until it is released and pressed again.
+	//
+	// Kept here rather than read straight off the keyboard because it is
+	// simulation state: the Limen depends on it, so a run is only
+	// reproducible if every change to it is recorded (core/manifest.odin).
+	flip_down := false
+
 	// --- Main loop ---
 	for !rl.WindowShouldClose() && !should_quit {
 
@@ -254,6 +265,7 @@ main :: proc() {
 					game.reset_run(&player, &world, &score, &obstacles, &generator, &lucidity, run_seed)
 					accumulator = 0
 					pending_input = core.Input{}
+					flip_down = false
 					core.destroy_run_recorder(&recorder)
 					recorder = core.new_run_recorder(run_seed)
 					game_state = .Playing
@@ -293,9 +305,20 @@ main :: proc() {
 				// world.tick is still the count of completed steps here,
 				// so it names the step this input is about to drive —
 				// exactly the index a replay would feed it back on.
+				//
+				// Press first, then release: a key tapped and let go
+				// inside a single frame records both on the same tick,
+				// which describes a hold no step ever saw. That is what a
+				// tap that short is.
 				if step_input.flip {
+					flip_down = true
 					core.record_flip(&recorder, world.tick)
 				}
+				if flip_down && !input.flip_held {
+					flip_down = false
+					core.record_release(&recorder, world.tick)
+				}
+				step_input.flip_held = flip_down
 
 				// figure out the current difficulty tier (based on the previous
 				// step's elapsed_time — one step of lag here is irrelevant)
@@ -313,8 +336,14 @@ main :: proc() {
 					game.tiers[tier_index].scroll_speed,
 				)
 
-				// update the player (input, flip/transition state)
-				game.update_player(&player, world, step_input, core.FIXED_TIMESTEP)
+				// update the player (input, the journey, the Limen).
+				// Lucidity goes in by pointer because suspension spends
+				// it, and it has to be spent before the score is paid at
+				// the multiplier it leaves behind.
+				game.update_player(&player, world, &lucidity, step_input, core.FIXED_TIMESTEP)
+
+				// run down the HUD's payout flash
+				game.update_lucidity(&lucidity, core.FIXED_TIMESTEP)
 
 				// update the score, scaled by the current Lucidity multiplier
 				game.update_score(
@@ -368,6 +397,7 @@ main :: proc() {
 				if game_state != .Playing {
 					accumulator = 0
 					pending_input = core.Input{}
+					flip_down = false
 					break
 				}
 			}
@@ -421,6 +451,7 @@ main :: proc() {
 				game.reset_run(&player, &world, &score, &obstacles, &generator, &lucidity, run_seed)
 				accumulator = 0
 				pending_input = core.Input{}
+				flip_down = false
 				core.destroy_run_recorder(&recorder)
 				recorder = core.new_run_recorder(run_seed)
 				game_state = .Playing

@@ -1,5 +1,5 @@
 # WAKE SHIFT
-### Game Design Document — v1.2
+### Game Design Document — v1.3
 
 *(già "Hypnagogia" nelle versioni precedenti — rinominato per evitare sovrapposizioni con titoli già pubblicati, vedi sezione 11)*
 
@@ -141,7 +141,7 @@ Questa singola frase deve bastare a spiegare l'intero sistema di controllo. Se s
 
 | Gesto | Effetto |
 |---|---|
-| **Tap** (< ~0.15s) | Viaggio completo fino alla parete opposta |
+| **Tap** (rilascio prima di metà viaggio) | Viaggio completo fino alla parete opposta |
 | **Hold** | Il viaggio si ferma a metà: sospensione nel Limine, finché tieni premuto e hai Lucidità |
 | **Rilascio** | Il viaggio si completa **nella direzione in cui stavi andando** |
 
@@ -149,7 +149,11 @@ La scelta di far *proseguire* il viaggio al rilascio (invece di riportare indiet
 
 ### Dettagli
 
-- Il flip **non è istantaneo**: una micro-transizione di ~0.1–0.15s con distorsione visiva (blur/dissolve) e un suono che cambia pitch (sale passando al sogno, scende tornando al reale)
+- Il flip **non è istantaneo**: il viaggio da parete a parete dura ~0.24s, con distorsione visiva (blur/dissolve) e un suono che cambia pitch (sale passando al sogno, scende tornando al reale)
+- **[v1.3] La durata del viaggio è la soglia tra i due gesti.** Il punto in cui si può fermarsi è metà viaggio, quindi il tempo per arrivarci *è* il confine tra tap e hold: se il viaggio è troppo breve, un tap normale (60–130ms di pressione) si sospende per sbaglio. Il viaggio dura quindi ~0.24s invece dei ~0.12s del prototipo a due stati, e la decisione cade a ~0.12s
+- **[v1.3] Il viaggio è a velocità costante, e non è pigrizia.** Qualunque curva che parta dalla parete più veloce della media deve restituire il tempo prima di metà strada — è aritmetica, non una scelta di tuning — e restituirlo significa decelerare a mezz'aria. Un primo prototipo lo faceva apposta, per far *vedere* la soglia rallentando al centro: al playtest il personaggio partiva a razzo, si fermava a mezz'aria e ripartiva, e quello che si legge è un intoppo nell'unico gesto di cui è fatto il gioco. **Lezione generale, non locale**: un fronzolo messo sul movimento del giocatore non è decorazione, è attrito. Si insegna con lo sfondo, la luce, le particelle — mai facendo fare al personaggio qualcosa che il giocatore non ha chiesto
+- **[v1.3] La velocità costante non costa niente alla schivata.** Quello che conta non è uscire dalla fascia, è togliere il proprio corpo da dove passerà l'ostacolo: 54px su 675, cioè **~19ms**. La sensazione di lentezza, se c'è, non viene dalla schivata ma dall'arrivo sulla parete opposta
+- **[v1.3] La grazia non copre tutto il viaggio.** L'invulnerabilità dura ~0.15s dalla pressione, meno del viaggio: serve a perdonare il flip fatto all'ultimo istante, non a rendere intoccabile chi martella il tasto — senza cooldown sul flip, una grazia lunga quanto il viaggio significherebbe invulnerabilità permanente
 - Durante la transizione il personaggio è **momentaneamente invulnerabile** (frame di grazia) per evitare la frustrazione da "collisione ingiusta" nel momento del cambio
 - Nessun cooldown sul flip: il ritmo lo detta il livello, non un vincolo artificiale
 - **[v1.1]** Nessuna invulnerabilità nel Limine: la sospensione è uno stato, non un frame di grazia prolungato. Deve esistere almeno un tipo di ostacolo che minaccia il centro, altrimenti tenere premuto diventa la strategia dominante

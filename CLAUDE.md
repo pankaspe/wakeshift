@@ -53,10 +53,11 @@ order before touching anything:
 
 1. **`ROADMAP.md`** — the phase table says exactly what is done (✅) and what is next. Each
    phase lists numbered tasks with a recommended model.
-2. **`docs/design_doc.md`** — binding on *what* to build. v1.2 is current.
+2. **`docs/design_doc.md`** — binding on *what* to build. v1.3 is current.
 3. The rest of this file — architecture rules and conventions.
 
-**Where the project stands:** phases 0-3 are complete. The code is split into packages with an acyclic dependency
+**Where the project stands:** phases 0-3 and 5 are complete (phase 4, real bloom, was
+skipped over on the user's call and is still open). The code is split into packages with an acyclic dependency
 graph, saves are encrypted in the OS user data directory, and the simulation is
 deterministic and verified (seeded generation, input as data, fixed timestep, run
 manifests recorded). The game opens in fullscreen at the monitor's own resolution, has an
@@ -189,6 +190,11 @@ is only where those coordinates land.
 - **`render/` never mutates game state.** It takes state by value and produces pixels.
 - **`fx/` knows nothing about the game.** It is a parametric particle/post-processing
   module; gameplay may emit into it, but it never imports `game`.
+- **The Limen is a pause in the flip, not a separate move.** A flip is one journey with one
+  clock; holding freezes that clock at its midpoint and releasing resumes it, which is why
+  nothing anywhere needs to remember which wall the player came from. Any change to the
+  flip has to keep that true — the moment suspension becomes its own motion, the one
+  sentence that explains the controls stops being true.
 - **Input is passed in, never read inside gameplay.** Gameplay and UI procedures take a
   `core.Input` value. Exactly one procedure in the project polls the keyboard
   (`platform.read_input`) and exactly one reads the clock (`rl.GetFrameTime`, in the main
@@ -321,6 +327,12 @@ Tracked here so they are not rediscovered. Each is scheduled in `ROADMAP.md`.
   raylib's default bitmap font. Everything drawn from primitives is crisp at native
   resolution and only the text is not — a real font is the remaining half of that job.
   (T13.3)
+- The centre of the screen is **safe**: every obstacle is still attached to a wall, so
+  holding in the Limen risks nothing but fuel. Deliberate and temporary — the imbalance is
+  closed by the obstacle that threatens the middle (T6.6), and until then the Lucidity
+  drain is tuned harder than it should end up being.
+- `Lucidity` changed meaning in phase 5: it is a spendable resource in 0..LUCIDITY_MAX, not
+  a streak counter. Anything that used to read `lucidity.streak` wants `lucidity.value`.
 - The glow is drawn with stacked additive primitives, not a shader. It is deliberately
   cheap and does not bloom the whole frame — a bright-pass and separable blur replace it
   in phase 4, after which most of `render/glow.odin` stays useful only for local halos.
