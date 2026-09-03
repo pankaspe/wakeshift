@@ -240,12 +240,21 @@ get_obstacle_position :: proc(obstacle: Obstacle, world: World) -> rl.Vector2 {
 	x := core.PLAYER_X + time_until_arrival * world.scroll_speed
 	size := get_obstacle_size(obstacle, world)
 
+	ground := get_ground(world)
+
 	if obstacle.obstacle_type == .Patroller {
+		// It crosses the column between the two walls, not between the two
+		// screen edges: over raised ground the second would put it inside
+		// the terrain. The phase still means what it always meant — 0 at
+		// the ceiling, 0.5 on the floor — because the ends of the sweep
+		// are the walls themselves.
 		sweep := get_patroller_sweep(obstacle, world)
-		return rl.Vector2{x, sweep * (core.SCREEN_HEIGHT - size.y)}
+		ceiling := core.get_lane_y(ground, .Dream, x, size)
+		floor := core.get_lane_y(ground, .Real, x, size)
+		return rl.Vector2{x, ceiling + (floor - ceiling) * sweep}
 	}
 
-	return rl.Vector2{x, core.get_lane_y(obstacle.lane, size)}
+	return rl.Vector2{x, core.get_lane_y(ground, obstacle.lane, x, size)}
 }
 
 get_obstacle_rect :: proc(obstacle: Obstacle, world: World) -> rl.Rectangle {

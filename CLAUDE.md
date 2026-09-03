@@ -70,8 +70,8 @@ order before touching anything:
    (phase 8) are the third case — neither, but solid light.
 3. The rest of this file — architecture rules and conventions.
 
-**Where the project stands: phases 0-7 are complete, and phase 7.5 is next** (the ground
-and the Sprout).
+**Where the project stands: phases 0-7 are complete, and phase 7.5 is in progress** — the
+ground is done (T7.5.1), the neon stroke, the Sprout and the step are not.
 
 The game is playable end to end and all three states work. A flip is a journey from wall to
 wall and holding stops it halfway in the Limen, paid for out of Lucidity — one resource
@@ -86,9 +86,9 @@ Underneath: packages with an acyclic dependency graph, saves encrypted in the OS
 directory, and a simulation that is deterministic and verified — seeded generation, input
 as data, a fixed timestep, and every record storing the manifest that reproduces it.
 
-**What is missing, in the order the roadmap tackles it:** the terrain is still
-decoration the simulation cannot see, which is why the player is drawn sunk into the
-ground, and the character is not yet the Sprout (phase 7.5); no light pickups (phase 8);
+**What is missing, in the order the roadmap tackles it:** the terrain is geometry the
+simulation stands on since T7.5.1, but its height still asks nothing of anyone, and the
+character is not yet the Sprout (rest of phase 7.5); no light pickups (phase 8);
 nothing drains Lucidity, so nothing yet gives the player a reason to be brave (phase 8);
 no particles (phase 9); no parallax scenery (phase 10); no game feel pass (phase 11); no
 audio at all (phase 12); no Dream Report and still raylib's default bitmap font
@@ -217,6 +217,44 @@ The split follows the design doc's own axis (section 5):
 - **The floor breaks, the ceiling dissolves.** Hard lit edges and a dark pit on one side;
   edges fading out over tens of pixels and a faint glow on the other. Same cut, opposite
   reading.
+
+### The ground is simulation
+
+`core/terrain.odin` owns the shape of the floor and the ceiling, and everything that
+stands on either of them samples it: `get_lane_y` is where a body of a given size rests
+against a given wall at a given x. Before phase 7.5 the lanes were pinned to the screen
+edges and the profile lived in `render/`, which is why the player ran with two thirds of
+its body under the ground.
+
+- **The profile is a function of time, not of scrolled pixels.** One entry lasts
+  `TERRAIN_SEGMENT_TIME`, and screen x becomes world time with exactly the mapping
+  `get_obstacle_position` uses in reverse. Anchoring it to pixels would slide the terrain
+  against the patterns the moment scroll speed changed, which is the one property the
+  whole "obstacles are events in time" architecture exists to protect. The visible price
+  is that the undulation stretches as a run speeds up.
+- **A body rests on the highest ground under its whole width**, not on the ground under
+  one chosen point (`terrain_support_height`). Exact rather than sampled: the profile is
+  linear between its entries, so an extreme can only sit at an end or at a boundary
+  inside, and there are at most three of those under anything in the game.
+- **Both walls carry the same profile, and that is load-bearing.** Floor y is
+  `SCREEN_HEIGHT - h` and ceiling y is `h`, so the midpoint of a journey between them is
+  `(SCREEN_HEIGHT - size) / 2` with `h` cancelling out: the Limen never moves vertically,
+  and it keeps landing on the horizon the background draws at the middle of the screen.
+  **A step on one wall only would break that** — the first thing to check in T7.5.5.
+- **A flip resamples both of its endpoints every step** (`game.get_player_y`), rather than
+  capturing where the ground was when it began. A journey that starts before a change in
+  the ground and ends after it therefore always lands on the ground that is actually
+  there, at the cost of a path that curves a little while the terrain slides underneath.
+  Aiming at where the ground will be on arrival was the alternative, and it trades a
+  straight path for a target the player cannot see yet.
+- **`get_player_y` is a pure function of a player and a world**, which is why render can
+  call it with the world nudged forward by the leftover fraction of a step and get a body
+  riding the same interpolated ground the terrain is drawn on. Without that the character
+  walks down a slope at the tick rate while the slope slides smoothly, and the higher the
+  frame rate the more visible it is.
+- **`world_t` is measured between the two walls, not the two screen edges.** Otherwise the
+  palette of a player standing still would depend on the shape of the ground under their
+  feet.
 
 ### The pattern contract
 
@@ -448,19 +486,6 @@ raise it with the user before writing code.
 
 Tracked here so they are not rediscovered. Each is scheduled in `ROADMAP.md`.
 
-- **The player and the obstacles are sunk into the ground.** `core.get_lane_y` anchors the
-  Real lane to the screen edge (`SCREEN_HEIGHT - size.y`), so the player's feet are at
-  y=720, while the terrain's surface runs at y=690-706 — 14 to 30 px of a 45 px character
-  is below the ground it is supposed to be running on, and the same on the ceiling. It
-  dates from the terrain gaining an irregular profile; nothing was ever changed to follow
-  it. Fixing it properly means the *simulation* knowing where the ground is: the profile
-  moves to `core`, `get_lane_y` samples it, and the player rides the terrain instead of the
-  screen edge — which also makes the flip's endpoints and `world_t` move with the ground,
-  so it is a scheduled change, not a constant to nudge. Was scheduled with the layer work
-  (phase 10), where the terrain is regenerated anyway; pulled forward to **T7.5.1**,
-  because until the lanes sit where they belong, any work on the character has to be done
-  twice. Moving the lanes changes the outcome of every recorded run, so it goes with a
-  `GAME_VERSION` bump — say so before doing it.
 - Menus, HUD and the options screen now take their colors from the palette, but still use
   raylib's default bitmap font. Everything drawn from primitives is crisp at native
   resolution and only the text is not — a real font is the remaining half of that job.

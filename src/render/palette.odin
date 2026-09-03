@@ -22,12 +22,26 @@ import "core:math"
 CONVERGENCE_START_TIME :: 30
 CONVERGENCE_FULL_TIME :: 100
 
-// Design Doc, section 12: world_t = 1 - player_center_y / SCREEN_HEIGHT.
-// Reads the drawn box rather than the lane, so it sweeps continuously
-// through the flip instead of snapping when the lane changes.
-get_world_t :: proc(player: game.Player) -> f32 {
-	center_y := player.position.y + player.size.y * 0.5
-	return clamp(1 - center_y / core.SCREEN_HEIGHT, 0, 1)
+// Design Doc, section 12: world_t is how far up the column the player is,
+// 0 on the floor and 1 at the ceiling. Reads the drawn box rather than the
+// lane, so it sweeps continuously through the flip instead of snapping
+// when the lane changes.
+//
+// Measured between the two walls rather than between the two screen
+// edges. Since phase 7.5 the walls are the terrain, and normalising
+// against the screen would leave a player standing on raised ground short
+// of a fully Real palette — the colour would depend on the shape of the
+// ground under their feet, which is not something the palette has any
+// business knowing about.
+get_world_t :: proc(player: game.Player, world: game.World) -> f32 {
+	ground := game.get_ground(world)
+	half := player.size.y * 0.5
+
+	center := player.position.y + half
+	real_center := core.get_lane_y(ground, .Real, player.position.x, player.size) + half
+	dream_center := core.get_lane_y(ground, .Dream, player.position.x, player.size) + half
+
+	return clamp((real_center - center) / (real_center - dream_center), 0, 1)
 }
 
 get_depth_t :: proc(world: game.World) -> f32 {
@@ -38,7 +52,7 @@ get_depth_t :: proc(world: game.World) -> f32 {
 // The palette of a live run: the player's height picks the blend, the
 // elapsed time converges the two worlds toward the Limen.
 new_scene_palette :: proc(player: game.Player, world: game.World) -> core.PaletteSet {
-	return core.new_palette_set(get_world_t(player), get_depth_t(world))
+	return core.new_palette_set(get_world_t(player, world), get_depth_t(world))
 }
 
 // The palette for a screen with no run behind it (menus, options). It

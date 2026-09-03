@@ -77,7 +77,6 @@ Player :: struct {
 	state:                 PlayerState,
 	target_lane:           core.Lane, // the wall this journey ends at
 	transition_timer:      f32, // seconds travelled along the journey; frozen while suspended
-	transition_start_y:    f32, // y position when the journey began
 	is_invulnerable:       bool,
 	invulnerability_timer: f32, // seconds elapsed since invulnerability started
 	settle_timer:          f32, // seconds since landing, drives the post flip squash bounce
@@ -105,10 +104,14 @@ Player :: struct {
 new_player :: proc() -> Player {
 	player_size := rl.Vector2{PLAYER_SIZE, PLAYER_SIZE}
 
+	// The opening ground: the run has not started, so it is the profile at
+	// time zero, at the speed a run opens at.
+	ground := core.Ground{time = 0, speed = INITIAL_SCROLL_SPEED}
+
 	return Player {
-		position   = rl.Vector2 {
+		position     = rl.Vector2 {
 			core.PLAYER_X,
-			core.SCREEN_HEIGHT - player_size.y, // bottom edge touches the floor
+			core.get_lane_y(ground, .Real, core.PLAYER_X, player_size),
 		},
 		size         = player_size,
 		lane         = .Real,
@@ -118,6 +121,40 @@ new_player :: proc() -> Player {
 		// be mistaken for something this player dodged.
 		left_lane_at = -NEVER,
 	}
+}
+
+// Where the player's box sits for a given world state.
+//
+// The journey is between the two walls, and since phase 7.5 the walls
+// are the terrain, so both of its endpoints are sampled fresh every step
+// rather than captured when the flip began. A flip that starts before a
+// change in the ground and ends after it therefore always lands on the
+// ground that is actually there — at the cost of a path that curves a
+// little while the terrain slides underneath, which is the trade the
+// alternative (aiming at where the ground will be on arrival) makes in
+// reverse, with a target the player cannot see yet.
+//
+// It is a pure function of the player and the world on purpose: the
+// simulation calls it with the stepped world, and render calls it with
+// the world nudged forward by the leftover fraction of a step, so the
+// character rides the same interpolated ground the terrain is drawn on
+// instead of stepping down it at the tick rate.
+get_player_y :: proc(player: Player, world: World) -> f32 {
+	ground := get_ground(world)
+
+	switch player.state {
+	case .Real, .Dream:
+		return core.get_lane_y(ground, player.lane, player.position.x, player.size)
+
+	case .Transitioning, .Suspended:
+		// player.lane is still the wall we left; target_lane is the one we
+		// are going to. Suspension is the same journey with its clock
+		// frozen at the midpoint, so it needs no case of its own.
+		from := core.get_lane_y(ground, player.lane, player.position.x, player.size)
+		to := core.get_lane_y(ground, player.target_lane, player.position.x, player.size)
+		return from + (to - from) * flip_progress(player.transition_timer / FLIP_DURATION)
+	}
+	return player.position.y
 }
 
 // Where along the journey we are (0 at the wall we left, 1 at the wall we
@@ -187,6 +224,10 @@ update_player :: proc(
 
 	player.settle_timer += delta_time
 	advance_opening(player, delta_time)
+
+	// One place decides where the body is, for every state: the walls
+	// moved under it this step even if the player did nothing.
+	player.position.y = get_player_y(player^, world)
 }
 
 // How long the body takes to open into the float, or to close back out of
@@ -211,7 +252,6 @@ start_flip :: proc(player: ^Player, world: World) {
 	player.target_lane = .Dream if player.lane == .Real else .Real
 	player.state = .Transitioning
 	player.transition_timer = 0
-	player.transition_start_y = player.position.y
 
 	player.is_invulnerable = true
 	player.invulnerability_timer = 0
@@ -234,15 +274,13 @@ advance_flip :: proc(player: ^Player, lucidity: ^Lucidity, input: core.Input, de
 		return
 	}
 
-	target_y := core.get_lane_y(player.target_lane, player.size)
-	progress := flip_progress(player.transition_timer / FLIP_DURATION)
-	player.position.y = player.transition_start_y + (target_y - player.transition_start_y) * progress
-
 	if player.transition_timer >= FLIP_DURATION {
 		// Journey complete: settle onto the wall it was always headed for.
+		// The position is not written here — get_player_y answers with the
+		// settled wall from this step on, and it is the same value the
+		// journey was approaching, so the landing has nothing to snap to.
 		player.lane = player.target_lane
 		player.state = .Real if player.lane == .Real else .Dream
-		player.position.y = target_y
 
 		// landing moment: start the squash bounce from zero
 		player.settle_timer = 0
@@ -252,16 +290,17 @@ advance_flip :: proc(player: ^Player, lucidity: ^Lucidity, input: core.Input, de
 // Freezing the clock at the midpoint is all it takes to stop there: the
 // position is whatever the journey's own curve says at that instant, so
 // suspension cannot drift away from the path and resuming cannot jump.
-// flip_progress(0.5) is exactly 0.5, which for a player of uniform size
-// puts its centre on the centre of the screen.
+//
+// flip_progress(0.5) is exactly 0.5, and the midpoint between the two
+// walls does not move even on the most uneven ground: both walls carry
+// the same profile, so the protrusion that lowers one raises the other
+// by as much and cancels out of the average (core/terrain.odin). The
+// Limen stays on the middle of the screen, where the horizon is drawn.
 @(private)
 enter_suspension :: proc(player: ^Player, half_duration: f32) {
 	player.state = .Suspended
 	player.transition_timer = half_duration
 	player.suspended_time = 0
-
-	target_y := core.get_lane_y(player.target_lane, player.size)
-	player.position.y = player.transition_start_y + (target_y - player.transition_start_y) * 0.5
 
 	// No invulnerability in the Limen (Design Doc, section 4): the
 	// suspension is a state, not a prolonged grace period. Whatever is

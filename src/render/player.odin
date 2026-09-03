@@ -367,6 +367,16 @@ draw_player_bones :: proc(
 }
 
 draw_player :: proc(player: game.Player, world: game.World, palettes: core.PaletteSet) {
+	// The terrain is drawn against the world nudged forward by the
+	// leftover fraction of a simulation step (main/interpolated_world),
+	// so the body is placed on that same ground rather than on the ground
+	// of the last whole step. Without it the character walks down a slope
+	// in 60 Hz steps while the slope itself slides smoothly underneath,
+	// which is most visible exactly where the frame rate is highest.
+	// A local copy: render never mutates game state.
+	player := player
+	player.position.y = game.get_player_y(player, world)
+
 	pose := new_player_pose(player)
 
 	opening := player.opening

@@ -33,7 +33,12 @@ package core
 //        None of that touches the save format, but every one of them
 //        changes what a seed generates, so a 0.2.0 manifest replays into
 //        a different level here.
-GAME_VERSION :: "0.3.0-alpha"
+// 0.4.0: the ground became geometry. The lanes are sampled off the
+//        terrain profile instead of being pinned to the screen edges, so
+//        the endpoints of every flip, the height of every obstacle and
+//        the Patroller's sweep all moved. The same input log survives a
+//        different set of collisions here than it did on 0.3.0.
+GAME_VERSION :: "0.4.0-alpha"
 
 RunManifest :: struct {
 	game_version:  string,

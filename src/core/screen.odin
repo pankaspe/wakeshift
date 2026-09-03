@@ -13,9 +13,9 @@ SCREEN_HEIGHT :: 720
 
 // Vertical split of the play area (Design Doc, section 6):
 // Dream lane 30% / Limen 40% / Real lane 30%.
-// Nothing reads these yet: the Limen only becomes a playable state in
-// roadmap phase 5, and until then both lanes are derived straight from
-// the screen edges by get_lane_y.
+// Nothing reads these: they describe the *reading* of the column, and the
+// two walls are where the terrain says they are (core/terrain.odin) while
+// the Limen is the midpoint of the journey between them.
 DREAM_LANE_RATIO :: 0.30
 LIMEN_RATIO :: 0.40
 REAL_LANE_RATIO :: 0.30

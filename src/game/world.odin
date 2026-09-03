@@ -5,6 +5,8 @@
 */
 package game
 
+import "../core"
+
 // Initial scroll speed, in pixels per second (Design Doc, section 6: ~260-280 px/s)
 INITIAL_SCROLL_SPEED :: 270
 
@@ -23,6 +25,17 @@ World :: struct {
 
 new_world :: proc() -> World {
 	return World{scroll_speed = INITIAL_SCROLL_SPEED, scroll_offset = 0}
+}
+
+// The world reduced to what the ground depends on (core/terrain.odin).
+//
+// The terrain profile is authored in time and asked about in screen x,
+// so answering "where is the ground here" needs the run's clock and its
+// current speed — and nothing else. Handing over those two rather than
+// the whole World is what lets core own the shape of the ground without
+// importing anything.
+get_ground :: proc(world: World) -> core.Ground {
+	return core.Ground{time = world.elapsed_time, speed = world.scroll_speed}
 }
 
 // How quickly scroll_speed eases toward a new target when the tier

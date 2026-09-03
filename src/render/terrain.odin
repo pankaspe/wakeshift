@@ -3,6 +3,11 @@
 * Draws the floor and the ceiling — and, since phase 6, the places where
 * they are not there.
 *
+* It no longer decides where they are. Since phase 7.5 the profile lives
+* in core/terrain.odin, because the player and the obstacles stand on it:
+* this file draws the surface the simulation is already using, and the
+* two cannot drift apart because there is only one of them.
+*
 * A Chasm and a Dream Hole are not objects standing on the ground: they
 * are the ground failing to exist. Until now they were drawn as dark
 * boxes sitting *on top of* the floor line, which is why the design doc's
@@ -35,10 +40,6 @@ import "core:math"
 import "core:slice"
 import rl "vendor:raylib/v55"
 
-TERRAIN_SEGMENT_WIDTH :: 50
-TERRAIN_BASE_HEIGHT :: 14 // minimum protrusion from the screen edge
-TERRAIN_PROFILE := [6]f32{0, 12, 4, 16, 6, 9} // extra height per segment, hand-authored once
-
 // The lit edge: how bright it is when its world is dormant, and how much
 // it gains once that world is the one being played in.
 TERRAIN_RIM_DORMANT :: 0.30
@@ -47,8 +48,9 @@ TERRAIN_GLOW_STRENGTH :: 0.35
 TERRAIN_GLOW_SPREAD :: 5
 
 // How far past each screen edge the terrain is built, so a hole whose
-// edge is just off screen still cuts correctly.
-TERRAIN_MARGIN :: TERRAIN_SEGMENT_WIDTH
+// edge is just off screen still cuts correctly. Comfortably more than one
+// profile entry at the fastest tier, which is 74 px wide.
+TERRAIN_MARGIN :: 100
 
 // How deep the lit cross-section of a broken floor runs, in pixels.
 CHASM_WALL_DEPTH :: 22
@@ -58,29 +60,15 @@ DREAM_HOLE_FADE :: 30
 DREAM_HOLE_FADE_STEP :: 3
 DREAM_HOLE_GLOW :: 0.30
 
-// The surface height at any screen x, sampled from the scrolling profile.
+// The surface height at any screen x, from the shared profile.
 //
-// A function rather than a list of points, because a hole can begin
-// anywhere: the spans on either side of it need a vertex exactly at its
-// edge, not at the nearest multiple of the segment width. Linear between
-// profile entries, which is exactly what the straight lines between the
-// old sample points already drew.
+// A thin wrapper on core rather than a copy of it: a hole can begin
+// anywhere, so the spans on either side of it need a vertex exactly at
+// its edge, and asking for the surface as a function of x is what makes
+// that possible.
 terrain_surface_y :: proc(world: game.World, is_floor: bool, x: f32) -> f32 {
-	position := (world.scroll_offset + x) / TERRAIN_SEGMENT_WIDTH
-	index := int(math.floor(position))
-	t := position - f32(index)
-
-	count := len(TERRAIN_PROFILE)
-	// Odin's % keeps the sign of the dividend, and x can be slightly
-	// negative at the left margin.
-	first := ((index % count) + count) % count
-	second := (first + 1) % count
-	variation := TERRAIN_PROFILE[first] + (TERRAIN_PROFILE[second] - TERRAIN_PROFILE[first]) * t
-
-	if is_floor {
-		return core.SCREEN_HEIGHT - TERRAIN_BASE_HEIGHT - variation
-	}
-	return TERRAIN_BASE_HEIGHT + variation
+	lane: core.Lane = is_floor ? .Real : .Dream
+	return core.terrain_surface_y(game.get_ground(world), lane, x)
 }
 
 // A range of screen x, used for both gaps and the solid spans between them.
@@ -147,16 +135,29 @@ solid_spans :: proc(gaps: []Span, allocator := context.temp_allocator) -> [dynam
 }
 
 // The x positions to sample a span at: both ends, plus every profile
-// boundary inside it, so the drawn edge follows the same line the
-// profile describes.
+// vertex inside it, so the drawn edge follows the same line the profile
+// describes.
+//
+// The vertices are spaced in time, not in pixels, so how far apart they
+// land on screen is the scroll speed — the undulation stretches as a run
+// gets faster (core/terrain.odin).
 @(private)
-span_samples :: proc(span: Span, allocator := context.temp_allocator) -> [dynamic]f32 {
+span_samples :: proc(
+	world: game.World,
+	span: Span,
+	allocator := context.temp_allocator,
+) -> [dynamic]f32 {
 	samples := make([dynamic]f32, 0, 32, allocator)
 	append(&samples, span.start)
 
-	first := math.ceil(span.start / TERRAIN_SEGMENT_WIDTH) * TERRAIN_SEGMENT_WIDTH
-	for x := first; x < span.end; x += TERRAIN_SEGMENT_WIDTH {
-		if x > span.start {
+	ground := game.get_ground(world)
+	start_time := core.ground_time_at_x(ground, span.start)
+	end_time := core.ground_time_at_x(ground, span.end)
+
+	first := math.ceil(start_time / core.TERRAIN_SEGMENT_TIME) * core.TERRAIN_SEGMENT_TIME
+	for boundary := first; boundary < end_time; boundary += core.TERRAIN_SEGMENT_TIME {
+		x := span.start + (boundary - start_time) * max(ground.speed, 1)
+		if x > span.start && x < span.end {
 			append(&samples, x)
 		}
 	}
@@ -175,7 +176,7 @@ draw_terrain_span :: proc(
 	alive: f32,
 	is_floor: bool,
 ) {
-	samples := span_samples(span)
+	samples := span_samples(world, span)
 	if len(samples) < 2 {
 		return
 	}
