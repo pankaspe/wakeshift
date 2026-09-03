@@ -176,6 +176,16 @@ Le due semplificazioni decise sono state fatte così:
 
 **Un limite da non superare**: la posa cambia, il *moto* no. La lezione della Fase 5 vale ancora — un fronzolo messo sul movimento del giocatore non è decorazione, è attrito. La capriola è una posa che ruota lentamente mentre il giocatore è sospeso; non deve toccare l'orologio del viaggio né aggiungere un istante che il giocatore non ha chiesto.
 
+### Le tre pose ✅ (T7.5.4)
+
+Sono **tre strati su una figura sola**, non tre animazioni: ognuna è un peso 0..1 verso cui la posa fin lì viene interpolata, in quest'ordine — corsa (già incrociata col deriva onirica da `world_t`), frustata, raccolta. Perché sono strati e non stati, c'è un solo costruttore di figura e un solo posto da cui esce l'angolo di un arto, e un flip che sfiora la soglia mostra un accenno della terza forma senza che nessuno debba deciderlo.
+
+- **La frustata** cavalca `sin(frustata * π)`: zero a *tutti e due* i capi della giravolta per costruzione, quindi nasce dal ciclo di corsa e ci ritorna senza cucitura. La giravolta dura sei fotogrammi, quindi tutto ciò che la riguarda si muove in fretta: il peso della posa fa 0.5 in un passo, sullo stesso passo in cui il *corpo* ruota di 1.9 radianti. Il secondo è molto più grande del primo, ed è per questo che il primo non si vede saltare.
+- **La capriola è una posa che ruota, non una rotazione libera**, ed è la scelta che tiene in piedi il limite qui sopra. Un giro continuo sarebbe la cosa ovvia e sarebbe sbagliata: l'angolo nell'istante in cui il giocatore molla è arbitrario, e al viaggio restano 0.12 s per atterrare — il corpo scatterebbe dove il flip ha bisogno che sia. È invece un seno lungo scalato da quanto il corpo è raccolto, quindi si sbroglia da solo mentre il corpo si riapre. Misurato: picco 0.38 rad su mezzo secondo di hold, azzerato venti passi dopo il rilascio.
+- **La raccolta doveva diventare la posa più compatta delle tre, e lo è per misura**: 0.177 di portata dall'anca contro 0.274 di corsa, deriva e frustata. Non è gusto — il pilastro 6 dice che il terzo stato si legge senza il colore, e "raccolto" è un indizio solo se è misurabilmente più piccolo. Le ginocchia salgono davanti all'anca, che è il resto della posa: senza, "raccolto" è solo "più piccolo", che legge come *più lontano* invece che come sospeso.
+- **L'occhio ad anelli** sono increspature che escono dall'occhio mentre il corpo è raccolto, guidate dall'orologio libero del mondo e non da quanto dura *questa* sospensione: così l'onda non ha una fase da far saltare quando una sospensione comincia o finisce, e quanto se ne vede è compito della raccolta.
+- **Il passo si è accorciato** (`PLAYER_STRIDE_LENGTH` 74 → 50). Le gambe hanno perso un terzo della loro lunghezza nella T7.5.3, quindi alla vecchia cadenza i piedi coprivano un terzo di terreno in meno mentre il mondo scorreva uguale: cioè il personaggio pattinava. È una costante sola, se la cadenza sembra frenetica.
+
 ---
 
 ## La Corruzione — la seconda metà della Lucidity
@@ -424,7 +434,7 @@ Perché qui e non nella Fase 10, dove il terreno era programmato: il suolo affon
 | T7.5.1 ✅ | **Il terreno diventa geometria di gioco, non decorazione** (ex T10.0): il profilo si sposta in `core`, `get_lane_y` lo campiona, e il giocatore corre *sopra* il suolo invece che dentro. Tocca la simulazione — gli estremi del viaggio del flip e `world_t` si muovono col terreno — quindi è un task, non una costante da ritoccare | **Opus** |
 | T7.5.2 ✅ | `render/stroke.odin`: la primitiva del **tratto al neon**. Polilinea di spessore dato, cappucci e giunti tondi, nucleo chiaro più alone additivo, colore dalla palette. È la base di tutta la grafica delle fasi 10 e 13 | **Opus** |
 | T7.5.3 ✅ | Il **Germoglio**: proporzioni nuove sullo scheletro esistente, testa-bulbo, occhio luminoso singolo, germoglio a due ossa con inerzia. Corpo scuro nei tre mondi, cambia solo la luce | **Opus** |
-| T7.5.4 | Le tre pose: corsa, frustata del flip, e la **capriola** raccolta del Limine con l'occhio ad anelli. Solo posa: l'orologio del viaggio non si tocca | Sonnet |
+| T7.5.4 ✅ | Le tre pose: corsa, frustata del flip, e la **capriola** raccolta del Limine con l'occhio ad anelli. Solo posa: l'orologio del viaggio non si tocca | Sonnet |
 | T7.5.5 | **Il gradino come evento di pattern**: il pavimento a quote diverse, autorato nel tempo, che chiede "non essere quaggiù quando arriva la parete". Vedi [Il terreno a piattaforme](#il-terreno-a-piattaforme--appunti-non-ancora-un-piano) — le quattro conseguenze tecniche sono lì | **Opus** |
 | T7.5.6 ⚑ | Playtest: il personaggio appoggia davvero, si legge a 1280×720, i tre stati si distinguono anche a fermo immagine dalla sola posa, e la corsa non è più piatta | — |
 

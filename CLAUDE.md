@@ -71,8 +71,8 @@ order before touching anything:
 3. The rest of this file — architecture rules and conventions.
 
 **Where the project stands: phases 0-7 are complete, and phase 7.5 is in progress** — the
-ground (T7.5.1), the neon stroke (T7.5.2) and the Sprout (T7.5.3) are done; the three poses
-and the step are not.
+ground (T7.5.1), the neon stroke (T7.5.2), the Sprout (T7.5.3) and its three poses (T7.5.4)
+are done; the step (T7.5.5) is not.
 
 The game is playable end to end and all three states work. A flip is a journey from wall to
 wall and holding stops it halfway in the Limen, paid for out of Lucidity — one resource
@@ -298,6 +298,27 @@ difference between a character that rests on the floor and one that floats or si
   which is a vertical flip, so the feet are at the *top* of the box there and whatever
   grows out of the crown points into open air in both worlds. That is why the sprout may
   overhang the box and the feet may not.
+
+**The three poses are three layers over one figure**, not three animations: each is a 0..1
+weight the pose so far is lerped toward, in a fixed order — run (already crossfaded with the
+Dream's drift by `world_t`), whip, tuck. That is what keeps one figure builder and one place
+a limb angle comes from, and it is why a flip that only brushes the threshold shows a hint
+of the third shape without anything having to decide that it did.
+
+- **The whip rides `sin(whip * PI)`**: zero at *both* ends of the turn by construction, so it
+  grows out of the run cycle and settles back into it with no seam. The turn is six frames
+  long, so the weight moves 0.5 in a single step — on the same step the body itself rotates
+  1.9 radians, which is why the smaller of the two is not what anyone sees.
+- **The somersault is a pose that rotates, never a free spin.** A continuously running roll
+  is the obvious thing and it is wrong: the angle at the instant the player lets go is
+  arbitrary and the journey has 0.12 s left to land, so the body would snap to where the
+  flip needs it. It is a long sine scaled by how tucked the body is, which unwinds as the
+  body opens back out.
+- **The tuck has to be the most compact of the three, by measurement** (0.177 of reach from
+  the hip against 0.274 for the others). Pillar 6 says the third state reads without colour,
+  and "curled" is only a cue if it is measurably smaller. Knees up in front are the rest of
+  it — without them, curled is merely smaller, which reads as *further away* rather than as
+  suspended.
 
 The sprout's inertia is **measured, not integrated**: everything that moves the head is a
 pure function of the world's clock, so "where was it a moment ago" is one more evaluation

@@ -30,13 +30,30 @@
 * world, a dark one in the Dream — which read as two different
 * characters. That is fixed here.
 *
-* The third pose (Design Doc, section 12 — "a body, two poses", plus the
-* Limen's own): while suspended the body opens into it — arms wide, knees
-* loosely tucked, everything drifting on one slow sine — and closes back
-* out of it when the journey resumes. It is a single 0..1 quantity that
-* the running pose is lerped toward, not a second animation with its own
-* state, so there is exactly one figure builder and one place a limb
-* angle comes from.
+* There are three poses, and they are three layers over one figure rather
+* than three animations (T7.5.4). Each is a 0..1 quantity the pose so far
+* is lerped toward, in this order:
+*
+*   the run      the base, crossfaded with the Dream's drift by world_t
+*   the whip     the turn's own shape: streamlined, arms and legs swept
+*                back. It rides sin(whip * PI), so it is nothing at both
+*                ends of the turn and everything at the middle — which is
+*                what lets it grow out of the run and settle back into it
+*                with no seam
+*   the tuck     the Limen: the body curls into the sheet's "hypnotised"
+*                pose, rolling slowly, with rings spreading out of the eye
+*
+* Because they are layers and not states, there is exactly one figure
+* builder and one place a limb angle comes from, and a flip that only
+* brushes the threshold shows a hint of the third shape without anything
+* having to decide that it did.
+*
+* The somersault is a *pose that rotates*, never a rotation the journey
+* has to account for: the roll is a long sine scaled by how tucked the
+* body is, so it unwinds as the body opens back out. A freely running
+* spin would be the obvious thing and it would be wrong — the angle at
+* the instant the player lets go is arbitrary, and the journey has 0.12 s
+* left to land, so the body would snap back to where the flip needs it.
 *
 * Accessibility (pillar 6): the two worlds are never told apart by color
 * alone. The character bounces on a hard, regular run cycle in the Real
@@ -137,7 +154,15 @@ PLAYER_SPROUT_TIP_FOLLOW :: 1.6 // the tip lags more than the stem does
 // Pixels of world scroll per full two-step stride. Tying the cycle to
 // distance rather than to time means the legs speed up with the world on
 // their own, through every tier change, with nothing to keep in sync.
-PLAYER_STRIDE_LENGTH :: 74
+//
+// Shortened with the Sprout's proportions (T7.5.4). A foot reaches
+// 2*sin(LEG_SWING)*leg px either side of the hip, and the legs lost a
+// third of their length in T7.5.3, so at the old cadence the feet covered
+// a third less ground per step while the world went by just as fast —
+// which is the character skating. This keeps the ratio between what the
+// feet cover and what the ground does where it was: small legs, quick
+// steps.
+PLAYER_STRIDE_LENGTH :: 50
 
 PLAYER_LEG_SWING :: 0.62 // radians the thigh swings either side of vertical
 PLAYER_KNEE_BASE :: 0.18 // knees are never locked straight
@@ -154,26 +179,51 @@ PLAYER_FLOAT_AMOUNT :: 0.055 // box fractions
 PLAYER_WOBBLE_PERIOD :: 1.7
 PLAYER_WOBBLE_AMOUNT :: 0.22 // radians added to the limbs, out of phase
 
-// --- The float: how the body opens at the threshold ---
+// --- The whip: the turn's own pose ---
+//
+// A flip already turned and stretched; what it had no shape for was the
+// turn itself. The sheet's jump pose is streamlined — arms swept back,
+// legs trailing, knees nearly straight — and it belongs to the impulse,
+// so it is weighted by sin(whip * PI) and is gone by the time the
+// journey ends.
 
-// The body opens only when the journey actually stops at the threshold —
+PLAYER_WHIP_ARM :: -0.95 // radians behind the body
+PLAYER_WHIP_ARM_SPLIT :: 0.30 // one arm leads the other
+PLAYER_WHIP_ELBOW :: 0.25 // nearly straight
+PLAYER_WHIP_THIGH :: -0.70 // legs trailing
+PLAYER_WHIP_THIGH_SPLIT :: 0.28
+PLAYER_WHIP_KNEE :: 0.20
+
+// --- The tuck: how the body curls at the threshold ---
+
+// The body curls only when the journey actually stops at the threshold —
 // never on the way past it. An earlier version had every flip bloom
 // halfway open as it crossed the middle, to teach the third state; what
 // it taught instead was that the character does something unasked-for in
 // the middle of the one gesture the game is made of. The easing lives in
 // game/player.odin (Player.opening) so it survives the frame.
+//
+// It used to be a *spread*: arms wide, knees loose. The character sheet
+// replaced it with the opposite (art direction, T7.5.4) — "hypnotised" is
+// a body drawn in on itself with rings turning in its eye, and that pose
+// is the Limen. Curled is also the more useful silhouette: it is the one
+// shape of the three that cannot be mistaken for either wall at a glance,
+// which is pillar 6 paid for a second time and for free.
 
-PLAYER_FLOAT_ARM :: 2.05 // radians from straight down: arms wide, slightly raised
-PLAYER_FLOAT_ELBOW_OPEN :: 0.18 // nearly straight, unlike the running bend
-PLAYER_FLOAT_LEG_SPREAD :: 0.34
-PLAYER_FLOAT_KNEE :: 0.42 // loosely tucked, not locked
+PLAYER_TUCK_THIGH :: 1.85 // knees drawn up in front
+PLAYER_TUCK_THIGH_SPLIT :: 0.16
+PLAYER_TUCK_KNEE :: 1.75 // shins folded under
+PLAYER_TUCK_ARM :: 0.55 // arms hanging forward, loose
+PLAYER_TUCK_ARM_SPLIT :: 0.22
+PLAYER_TUCK_ELBOW :: -0.65 // forearms drawn back toward the chest
 
-// The slow oscillation of the suspended body: a whole-figure lean, and a
-// drift in the limbs, both on long periods so they read as weightless
-// rather than as an idle animation.
+// The slow oscillation of the suspended body: the somersault itself, and
+// a drift in the limbs, on two different long periods so the two never
+// lock into one beat.
 PLAYER_SWAY_PERIOD :: 3.1
-PLAYER_SWAY_ROTATION :: 0.10 // radians
 PLAYER_SWAY_LIMB :: 0.16 // radians
+PLAYER_ROLL_PERIOD :: 4.2 // seconds per full swing of the somersault
+PLAYER_ROLL_AMOUNT :: 0.50 // radians
 
 // --- Squash & stretch ---
 
@@ -196,6 +246,20 @@ PLAYER_SUSPENDED_GLOW :: 0.28 // extra glow while the body is open at the thresh
 PLAYER_EYE_RADIUS :: 0.052
 PLAYER_EYE_OFFSET :: rl.Vector2{0.085, -0.030} // from the head centre: forward, a little up
 PLAYER_EYE_GLOW :: 0.55
+
+// The rings of the "hypnotised" face: ripples leaving the eye while the
+// body is tucked. They make the third state readable from the *face*, not
+// only from where the character is on the screen — pillar 6 again, and
+// the one cue that survives a still frame.
+//
+// Driven by the world's free-running clock rather than by how long this
+// suspension has lasted, so that the ripple has no phase to jump when one
+// begins or ends; how *much* of it shows is the tuck's job.
+PLAYER_EYE_RING_COUNT :: 3
+PLAYER_EYE_RING_PERIOD :: 1.6 // seconds for a ripple to travel out and fade
+PLAYER_EYE_RING_REACH :: 2.6 // multiples of the eye's radius
+PLAYER_EYE_RING_THICKNESS :: 1.3
+PLAYER_EYE_RING_ALPHA :: 0.75
 
 // How the figure's local box lands on screen.
 PlayerPose :: struct {
@@ -374,10 +438,11 @@ sprout_end :: proc(from: rl.Vector2, angle, length: f32) -> rl.Vector2 {
 	return limb_end(from, math.PI - angle, length)
 }
 
-new_player_figure :: proc(stride, time, world_t, opening, sprout_lean: f32) -> PlayerFigure {
+new_player_figure :: proc(stride, time, world_t, opening, whip, sprout_lean: f32) -> PlayerFigure {
 	dream := clamp(world_t, 0, 1)
 	grounded := 1 - dream
 	open := clamp(opening, 0, 1)
+	turn := clamp(whip, 0, 1)
 
 	sway := math.sin(time / PLAYER_SWAY_PERIOD * 2 * math.PI)
 
@@ -411,18 +476,36 @@ new_player_figure :: proc(stride, time, world_t, opening, sprout_lean: f32) -> P
 		arm := -PLAYER_ARM_SWING * math.sin(phase) * grounded - wobble
 		elbow := arm + PLAYER_ELBOW_BEND * grounded
 
-		// The threshold pose: limbs spread wide, knees loosely tucked,
-		// everything drifting on one slow sine. Reached by lerping the
-		// running pose into it rather than by switching to it, so a flip
-		// that only brushes the middle shows a hint of the same shape.
 		side_sign: f32 = side == 0 ? 1 : -1
-		open_arm := PLAYER_FLOAT_ARM * side_sign + PLAYER_SWAY_LIMB * sway * side_sign
-		open_thigh := PLAYER_FLOAT_LEG_SPREAD * side_sign - PLAYER_SWAY_LIMB * 0.5 * sway * side_sign
 
-		thigh += (open_thigh - thigh) * open
-		knee_bend += (PLAYER_FLOAT_KNEE - knee_bend) * open
-		arm += (open_arm - arm) * open
-		elbow += (open_arm + PLAYER_FLOAT_ELBOW_OPEN * side_sign - elbow) * open
+		// The whip's pose, over the top of whatever the run was doing.
+		// Weighted by sin(whip * PI), so it is nothing at the start and the
+		// end of the turn: it grows out of the run cycle and settles back
+		// into it instead of replacing it.
+		whip_arm := PLAYER_WHIP_ARM + PLAYER_WHIP_ARM_SPLIT * side_sign
+		whip_thigh := PLAYER_WHIP_THIGH + PLAYER_WHIP_THIGH_SPLIT * side_sign
+
+		thigh += (whip_thigh - thigh) * turn
+		knee_bend += (PLAYER_WHIP_KNEE - knee_bend) * turn
+		arm += (whip_arm - arm) * turn
+		elbow += (whip_arm + PLAYER_WHIP_ELBOW - elbow) * turn
+
+		// The threshold pose: knees drawn up, forearms folded back in,
+		// everything drifting on one slow sine. Reached by lerping whatever
+		// the body was doing into it rather than by switching to it, so a
+		// flip that only brushes the middle shows a hint of the same shape.
+		// Last, because it is the one that wins: a suspended body is not
+		// running and is no longer turning.
+		tuck_arm := PLAYER_TUCK_ARM + PLAYER_TUCK_ARM_SPLIT * side_sign + PLAYER_SWAY_LIMB * sway * side_sign
+		tuck_thigh :=
+			PLAYER_TUCK_THIGH +
+			PLAYER_TUCK_THIGH_SPLIT * side_sign -
+			PLAYER_SWAY_LIMB * 0.5 * sway * side_sign
+
+		thigh += (tuck_thigh - thigh) * open
+		knee_bend += (PLAYER_TUCK_KNEE - knee_bend) * open
+		arm += (tuck_arm - arm) * open
+		elbow += (tuck_arm + PLAYER_TUCK_ELBOW - elbow) * open
 
 		figure.knees[side] = limb_end(figure.hip, thigh, PLAYER_THIGH_LENGTH)
 		figure.feet[side] = limb_end(figure.knees[side], thigh - knee_bend, PLAYER_SHIN_LENGTH)
@@ -524,10 +607,13 @@ draw_player :: proc(player: game.Player, world: game.World, palettes: core.Palet
 	// Mirrored with the figure, so it leans into the run in both worlds.
 	// The suspended body has no run to lean into, so the lean gives way
 	// to the threshold's slow roll.
+	// The somersault: a long, slow roll, and it is a pose rather than a
+	// motion — scaled by how tucked the body is, so it unwinds as the body
+	// opens back out and the journey finds the figure where it left it.
 	mirror := get_player_mirror(player)
-	sway := math.sin(world.elapsed_time / PLAYER_SWAY_PERIOD * 2 * math.PI)
+	roll := math.sin(world.elapsed_time / PLAYER_ROLL_PERIOD * 2 * math.PI)
 	pose.rotation += PLAYER_LEAN * mirror * (1 - opening)
-	pose.rotation += PLAYER_SWAY_ROTATION * sway * opening
+	pose.rotation += PLAYER_ROLL_AMOUNT * roll * opening
 
 	stride := world.scroll_offset / PLAYER_STRIDE_LENGTH * 2 * math.PI
 
@@ -562,7 +648,18 @@ draw_player :: proc(player: game.Player, world: game.World, palettes: core.Palet
 	lean := -turn * PLAYER_SPROUT_TURN_TRAIL * mirror + rise * PLAYER_SPROUT_RISE_TRAIL
 	lean = clamp(lean, -PLAYER_SPROUT_MAX_LEAN, PLAYER_SPROUT_MAX_LEAN)
 
-	figure := new_player_figure(stride, world.elapsed_time, palettes.world_t, opening, lean)
+	// Zero at both ends of the turn and one in the middle: the same shape
+	// the stretch and the glow boost ride, so all three peak together.
+	whip := math.sin(game.get_whip_progress(player) * math.PI)
+
+	figure := new_player_figure(
+		stride = stride,
+		time = world.elapsed_time,
+		world_t = palettes.world_t,
+		opening = opening,
+		whip = whip,
+		sprout_lean = lean,
+	)
 
 	// The aura: the world's light gathered around the body, brightest at
 	// the peak of a flip. The body itself never takes a world's color —
@@ -571,7 +668,7 @@ draw_player :: proc(player: game.Player, world: game.World, palettes: core.Palet
 	// body stays open at the threshold — the one place the light is
 	// supposed to be washed out and everywhere at once.
 	glow_strength: f32 = PLAYER_GLOW_STRENGTH
-	glow_strength += PLAYER_FLIP_GLOW_BOOST * math.sin(game.get_whip_progress(player) * math.PI)
+	glow_strength += PLAYER_FLIP_GLOW_BOOST * whip
 	glow_strength += PLAYER_SUSPENDED_GLOW * opening
 	draw_glow_circle(
 		pose_point(pose, figure.hip),
@@ -586,7 +683,7 @@ draw_player :: proc(player: game.Player, world: game.World, palettes: core.Palet
 	draw_player_bones(pose, figure, PLAYER_RIM_THICKNESS * 2, palettes.current.light)
 	draw_player_bones(pose, figure, 0, palettes.current.silhouette)
 
-	draw_player_eye(pose, figure, palettes.current.accent)
+	draw_player_eye(pose, figure, palettes.current.accent, opening, world.elapsed_time)
 }
 
 // The one point of light on the head, set toward the front.
@@ -598,12 +695,42 @@ draw_player :: proc(player: game.Player, world: game.World, palettes: core.Palet
 // rotation with no special case — and being single, it has no symmetry
 // to break when the figure turns over.
 @(private)
-draw_player_eye :: proc(pose: PlayerPose, figure: PlayerFigure, color: rl.Color) {
+draw_player_eye :: proc(
+	pose: PlayerPose,
+	figure: PlayerFigure,
+	color: rl.Color,
+	opening, time: f32,
+) {
 	// The eye rides the head rather than the box: the head moves with the
 	// bounce and the float, and an eye that did not would swim inside it.
 	local := figure.head + PLAYER_EYE_OFFSET
+	centre := pose_point(pose, local)
+	radius := PLAYER_EYE_RADIUS * pose.unit
+
+	// The rings, while the body is tucked: ripples leaving the eye, each
+	// one a third of a period behind the last. Drawn under the eye itself
+	// so the bright core still reads as the source they come from.
+	open := clamp(opening, 0, 1)
+	if open > 0 {
+		for i in 0 ..< PLAYER_EYE_RING_COUNT {
+			phase := math.mod(
+				time / PLAYER_EYE_RING_PERIOD + f32(i) / f32(PLAYER_EYE_RING_COUNT),
+				1,
+			)
+			ring := radius * (1 + phase * PLAYER_EYE_RING_REACH)
+			rl.DrawRing(
+				centre,
+				ring,
+				ring + PLAYER_EYE_RING_THICKNESS,
+				0,
+				360,
+				24,
+				core.with_alpha(color, open * (1 - phase) * PLAYER_EYE_RING_ALPHA),
+			)
+		}
+	}
 
 	eye := new_stroke(color, PLAYER_EYE_RADIUS * 2 * pose.unit)
 	eye.glow = PLAYER_EYE_GLOW
-	draw_stroke_dot(pose_point(pose, local), eye)
+	draw_stroke_dot(centre, eye)
 }
