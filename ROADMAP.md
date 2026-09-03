@@ -11,6 +11,7 @@
 - [Come si legge questa roadmap](#come-si-legge-questa-roadmap)
 - [Stato attuale](#stato-attuale)
 - [Il sistema a tre mondi](#il-sistema-a-tre-mondi--riferimento-grafico-trasversale)
+- [La direzione artistica: gli sketch](#la-direzione-artistica--gli-sketch)
 - [Il salvataggio: cosa resta da sapere](#il-salvataggio-cosa-resta-da-sapere)
 - [Struttura del progetto](#struttura-del-progetto)
 - [Le fasi](#le-fasi)
@@ -71,7 +72,7 @@ Verificato sul codice, 2 settembre 2026 — aggiornato a chiusura Fase 6.
 - La curva di difficoltà viene ancora quasi solo dalla velocità (270 → 330 → 400 px/s): le letture ora sono sei, ma la tabella dei tier cambia solo quanto in fretta arrivano (T7.3)
 - Il contratto `entry_lane`/`exit_lane` dei pattern non sa che esiste il Limine: un pattern risolto sospendendosi esce nella corsia opposta a quello risolto con i flip (T7.1)
 - Pochi pattern: 11 in tutto su tre tier, contro i 12-16 previsti (T7.2)
-- **Il giocatore e gli ostacoli sono affondati nel terreno.** `get_lane_y` ancora la corsia Reale al bordo dello schermo (y=675, piedi a 720), ma la superficie del terreno sta a y=690-706: **da 14 a 30px di un personaggio alto 45 stanno sotto il suolo su cui dovrebbe correre**, e lo stesso al soffitto. Viene da quando il terreno ha preso un profilo irregolare e nessuno ha aggiornato le corsie. Vedi la nota nella Fase 10
+- **Il giocatore e gli ostacoli sono affondati nel terreno.** `get_lane_y` ancora la corsia Reale al bordo dello schermo (y=675, piedi a 720), ma la superficie del terreno sta a y=690-706: **da 14 a 30px di un personaggio alto 45 stanno sotto il suolo su cui dovrebbe correre**, e lo stesso al soffitto. Viene da quando il terreno ha preso un profilo irregolare e nessuno ha aggiornato le corsie. È la **T7.5.1**, tirata avanti: era programmata nella Fase 10 perché lì il terreno si rigenera comunque, ma è anche il motivo per cui il personaggio non si può ridisegnare finché non è risolta
 - Nessuna particella, nessun parallax, nessun audio
 - Nessun replay o ghost visibile in gioco: il `RunManifest` viene registrato e salvato, ma non ancora rigiocato dall'interfaccia
 - Menu e opzioni prendono ora i colori dalla palette, ma usano ancora il font bitmap di default di raylib: tutto quello che è disegnato da primitive è nitido alla risoluzione nativa, il testo no (T13.3)
@@ -112,6 +113,49 @@ Con `world_t ≤ 0.5` si interpola Reale→Limine su `world_t * 2`; con `world_t
 
 - **Silhouette unica**: il personaggio è la stessa sagoma scura nei tre stati; cambia solo la luce (rim e glow prendono il colore del mondo corrente). Oggi il codice fa il contrario e va corretto.
 - **Mai il colore da solo**: i tre stati devono restare distinguibili anche da **posizione** e **tipo di movimento** (lineare nel Reale, fluttuante nell'Onirico, sospeso e ondeggiante nel Limine), oltre che dalla densità e dal comportamento delle particelle.
+
+---
+
+## La direzione artistica — gli sketch
+
+Riferimento vincolante quanto la tabella delle tre palette. Gli sketch stanno in `docs/sketch/`, che è **fuori dal repository** (vedi `.gitignore`): restano su disco, non nel clone.
+
+| File | Cosa governa |
+|---|---|
+| `sketch_1.jpeg` | **Il gioco.** Composizione, rapporto fra i due mondi, HUD |
+| `sketch_3.jpeg` | **Il menu** e tutte le schermate che non sono gameplay |
+| `spirito_foresta.jpeg` | **Il personaggio**: il Germoglio, e le sue pose |
+| `sketch_2.jpeg` | Scartato — vedi sotto |
+
+### Cosa si costruisce, cosa si traduce, cosa si butta
+
+Il vincolo è sempre lo stesso: **niente asset esterni**. Tutto è primitive più palette più bloom, ed è quella proprietà che tiene il gioco in un eseguibile solo e permette a `depth_t` di ricolorare l'intera immagine senza ridisegnare niente.
+
+- **Lo sketch 3 è già codice.** Fondo a gradiente verticale, piante come polilinee, piattaforme come rettangoli con bordo illuminato, orizzonte come fila di cerchi additivi. Non c'è niente da inventare: è `background.odin` più `glow.odin` più il bloom, che ci sono già.
+- **Lo sketch 1 si traduce.** La metà onirica è gratis (alberi al neon = tratti luminosi, funghi = archi ed ellissi). La metà reale *sembra* dipinta ma è già silhouette stratificate con nebbia fra uno strato e l'altro, cioè esattamente il parallax da rumore della Fase 10. Quello che **non** si riproduce è la pennellata: la texture pittorica vuole dei PNG, e rincorrerla costerebbe la proprietà per cui il gioco non ha asset. Non serve.
+- **Lo sketch 2 si scarta**, e non per gusto. Il suo valore sta tutto nella pittura e nella nebbia morbida, cioè in ciò che le primitive non fanno; e soprattutto è il meno leggibile dei tre — le barre e le spine stanno su un fondo dello stesso verde e della stessa luminosità. Quando bellezza e leggibilità confliggono vince la leggibilità (pilastro 2), e qui confliggono.
+
+### Le due idee dello sketch 1 da tenere
+
+- **L'HUD è diviso fra i due mondi**: lo stato onirico e il punteggio in alto, lo stato reale e la distanza in basso. Ogni mondo è etichettato dove quel mondo sta. Vale per la T13.1.
+- **I due mondi hanno linguaggi di tratto diversi**, non solo colori diversi: il sogno è *linea* (contorni luminosi, interni vuoti), il reale è *massa* (sagome piene, bordo illuminato). È un altro modo di non affidarsi al colore da solo.
+
+### Il tratto al neon: la primitiva che manca
+
+Sia lo sketch 1 che il 3 sono fatti di **una cosa sola**: un tratto luminoso di spessore variabile con i cappucci tondi. raylib non ce l'ha — `DrawLineEx` non ha cappucci e due segmenti consecutivi non si saldano. Costruirla una volta (nucleo chiaro più alone additivo, colore campionato dalla palette) è il pezzo di codice grafico a maggior leva del progetto: la riusano il bordo del terreno, le piante, gli alberi, i funghi e tutto il menu. È la **T7.5.2**, e viene prima di tutto il resto della grafica proprio per questo.
+
+### Il Germoglio
+
+La scheda personaggio è già conforme alla regola della silhouette unica senza che glielo si sia chiesto: **corpo scuro, testa che emette**. Il personaggio attuale è già uno scheletro di giunti (`render/player.odin`), quindi diventare il Germoglio è un cambio di proporzioni — testa-bulbo grossa, corpo piccolo — più un osso in più per il germoglio sul capo. Non è una riscrittura.
+
+Due semplificazioni rispetto alla scheda, decise:
+
+- **Un occhio solo.** La scheda ne mostra ora uno ora due; uno solo è più leggibile a 45px e non ha un asse di simmetria da mantenere quando la figura specchia a metà rotazione.
+- **Il germoglio è un'appendice a due ossa che insegue il corpo con inerzia.** Stelo più due ellissi per le foglie. Il ritardo sul movimento del corpo è movimento gratuito e legge come "vivo", e non tocca la simulazione perché è solo posa.
+
+E una cosa che la scheda ha trovato e che vale più di un disegno: la posa **"Ipnotizzato"** — corpo raccolto, occhio ad anelli concentrici — **è il Limine**. Vuol dire che il terzo stato diventa riconoscibile *dalla faccia*, non solo dalla posizione nello schermo. È il pilastro "mai il colore da solo" pagato una seconda volta, gratis.
+
+**Un limite da non superare**: la posa cambia, il *moto* no. La lezione della Fase 5 vale ancora — un fronzolo messo sul movimento del giocatore non è decorazione, è attrito. La capriola è una posa che ruota lentamente mentre il giocatore è sospeso; non deve toccare l'orologio del viaggio né aggiungere un istante che il giocatore non ha chiesto.
 
 ---
 
@@ -266,7 +310,25 @@ Sei tipi, e finalmente sei letture invece di una regola con sei pelli. Le voragi
 | T7.2 | 12-16 pattern su tre tier | Sonnet |
 | T7.3 | Curva di velocità e cadenza degli switch ribilanciate: la difficoltà non deve più venire solo dalla velocità | **Opus** |
 | T7.4 | Validazione automatica delle pool estesa ai nuovi vincoli | Sonnet |
-| T7.5 ⚑ | Playtest: una run di 2 minuti non deve ripetere una sensazione già provata nei primi 30 secondi | — |
+| T7.6 ⚑ | Playtest: una run di 2 minuti non deve ripetere una sensazione già provata nei primi 30 secondi | — |
+
+---
+
+### Fase 7.5 — Il suolo e il Germoglio
+
+**Obiettivo**: il personaggio smette di essere affondato nel terreno e diventa il Germoglio. Le due cose sono **un lavoro solo**: posare un personaggio nuovo su un suolo che sta per muoversi vuol dire posarlo due volte. Riferimento: `spirito_foresta.jpeg` e la sezione sulla direzione artistica.
+
+Perché qui e non nella Fase 10, dove il terreno era programmato: il suolo affondato è un bug visibile *adesso*, e finché le corsie sono ancorate al bordo dello schermo qualunque lavoro sul personaggio va rifatto. Anche i bonus della Fase 8 vengono piazzati in corsia, quindi conviene che le corsie abbiano già la loro posizione definitiva.
+
+| Task | Descrizione | Modello |
+|---|---|---|
+| T7.5.1 | **Il terreno diventa geometria di gioco, non decorazione** (ex T10.0): il profilo si sposta in `core`, `get_lane_y` lo campiona, e il giocatore corre *sopra* il suolo invece che dentro. Tocca la simulazione — gli estremi del viaggio del flip e `world_t` si muovono col terreno — quindi è un task, non una costante da ritoccare | **Opus** |
+| T7.5.2 | `render/stroke.odin`: la primitiva del **tratto al neon**. Polilinea di spessore dato, cappucci e giunti tondi, nucleo chiaro più alone additivo, colore dalla palette. È la base di tutta la grafica delle fasi 10 e 13 | **Opus** |
+| T7.5.3 | Il **Germoglio**: proporzioni nuove sullo scheletro esistente, testa-bulbo, occhio luminoso singolo, germoglio a due ossa con inerzia. Corpo scuro nei tre mondi, cambia solo la luce | **Opus** |
+| T7.5.4 | Le tre pose: corsa, frustata del flip, e la **capriola** raccolta del Limine con l'occhio ad anelli. Solo posa: l'orologio del viaggio non si tocca | Sonnet |
+| T7.5.5 ⚑ | Playtest: il personaggio appoggia davvero, si legge a 1280×720, e i tre stati si distinguono anche a fermo immagine dalla sola posa | — |
+
+**Attenzione al determinismo**: la T7.5.1 sposta le corsie, quindi cambia l'esito di ogni run già registrata. Va con un bump di `GAME_VERSION`, e i manifesti vecchi smettono di essere riproducibili — da dire prima di farlo, non dopo.
 
 ---
 
@@ -298,6 +360,7 @@ Sei tipi, e finalmente sei letture invece di una regola con sei pelli. Le voragi
 | T9.4 | Preset **Limine**: particelle che orbitano attorno al giocatore sospeso | Sonnet |
 | T9.5 | Burst sul flip, colori che sfumano dalla palette di partenza a quella di arrivo | Sonnet |
 | T9.6 | Densità e vivacità legate alla Lucidity | Sonnet |
+| T9.8 | La **scia del Germoglio**: il nastro di luce e le foglie che si staccano, dalla scheda personaggio. Emesso dal corpo, mai attaccato al movimento | Sonnet |
 | T9.7 ⚑ | Playtest: nessun calo di framerate a densità massima | — |
 
 ---
@@ -306,18 +369,16 @@ Sei tipi, e finalmente sei letture invece di una regola con sei pelli. Le voragi
 
 **Obiettivo**: validare l'intera idea degli strati su **uno solo**, prima di produrne quattro. Riferimento: Design Doc sez. 3.
 
-**Direzione artistica della Foresta** — indicazione del committente, da approfondire quando ci arriviamo:
+**Direzione artistica della Foresta**: il riferimento vincolante è `sketch_1.jpeg`, letto insieme alla sezione [La direzione artistica](#la-direzione-artistica--gli-sketch). Foresta umida e luminescente, funghi giganti, luce che filtra da lontano — e lo sketch dice due cose che una descrizione di atmosfera da sola non diceva:
 
-> Il *mood* è quello di **Zangarmarsh** (WoW, Terrallenword): foresta umida e luminescente, funghi giganti, luce che filtra, atmosfera satura. Una foresta che da **reale** diventa **onirica** giocando sui colori — palette blu/viola — con il bloom a fare gran parte del lavoro. Il personaggio non resta una figura astratta: **uno scoiattolo, uno spiritello, qualcosa che appartiene alla foresta**.
+- **Le due metà non hanno solo colori diversi, hanno linguaggi di tratto diversi.** Sopra, la chioma onirica è *linea*: alberi e funghi come contorni al neon con l'interno vuoto, costruiti col tratto della T7.5.2. Sotto, la foresta reale è *massa*: tronchi come silhouette piene su più piani, con nebbia fra un piano e l'altro e solo qualche bordo illuminato. Sono due modi di disegnare la stessa foresta, ed è la ragione per cui l'immagine si legge a metà schermo senza etichette.
+- **La profondità viene dalla nebbia, non dal dettaglio.** Ogni strato più lontano è più chiaro, più desaturato e più lento. Non serve disegnare meglio gli alberi lontani: serve disegnarli più annegati.
 
-Due note tecniche da tenere presenti quando si progetta:
-- È **compatibile con l'identità già costruita**, non un cambio di rotta: la palette Onirico è già viola/magenta e il Reale già blu freddo, e "silhouette + luce" con bloom è esattamente il linguaggio di una foresta luminescente. Non servono asset esterni.
-- Il personaggio è già uno **scheletro di giunti** (`render/player.odin`): dargli proporzioni da scoiattolo e una coda è un cambio di costanti più un osso in più, non una riscrittura. La regola della silhouette unica resta — corpo scuro, cambia solo la luce.
+Il personaggio non è più un punto aperto: è il **Germoglio**, ed è già fatto nella Fase 7.5. Anche il terreno arriva qui già dentro la simulazione (ex T10.0, ora T7.5.1), quindi questa fase trova il suolo dove deve stare e ci costruisce sopra soltanto scenografia.
 
 | Task | Descrizione | Modello |
 |---|---|---|
-| T10.0 | **Il terreno diventa geometria di gioco, non decorazione**: il profilo si sposta in `core`, `get_lane_y` lo campiona, e il giocatore corre *sopra* il suolo invece che dentro. Tocca la simulazione — gli estremi del viaggio del flip e `world_t` si muovono col terreno — quindi è un task, non una costante da ritoccare | **Opus** |
-| T10.1 | Generazione procedurale dei layer di parallax (sagome da rumore, non PNG) | **Opus** |
+| T10.1 | Generazione procedurale dei layer di parallax: tronchi come sagome da rumore in basso, chioma come tratti al neon in alto (mai PNG) | **Opus** |
 | T10.2 | Scroll multi-layer a velocità diverse; i layer campionano dalla palette | Sonnet |
 | T10.3 | **Sistema di strati**: uno strato è palette + parallax + pool di ostacoli + traccia | **Opus** |
 | T10.4 | **La transizione come evento**: 2-3 secondi in cui il parallax si scambia senza fermare il gioco | **Opus** |
@@ -358,9 +419,9 @@ Qui il determinismo della Fase 2 ripaga: si rigioca la stessa run identica dopo 
 
 | Task | Descrizione | Modello |
 |---|---|---|
-| T13.1 | HUD definitivo coerente con la palette | Sonnet |
+| T13.1 | HUD definitivo coerente con la palette, **diviso fra i due mondi** come nello `sketch_1`: stato onirico e punteggio in alto, stato reale e distanza in basso | Sonnet |
 | T13.2 | **Referto Onirico**: profondità, Lucidity massima, tempo per stato, strato raggiunto — screenshottabile | **Opus** |
-| T13.3 | Schermata opzioni **ridisegnata** sulla palette definitiva (costruita nella Fase 2.5) | Sonnet |
+| T13.3 | Menu, pausa e opzioni **ridisegnati sullo `sketch_3`**: fondo a gradiente, piante al neon con la primitiva della T7.5.2, orizzonte punteggiato. Più un font vero al posto del bitmap di default di raylib | Sonnet |
 | T13.4 | Persistenza estesa: storico delle ultime run (le opzioni sono già persistite dalla Fase 2.5) | Sonnet |
 | T13.5 | Passata finale di coerenza visiva | **Opus** |
 | T13.6 ⚑ | Playtest completo end-to-end | — |
@@ -374,17 +435,20 @@ Fasi 0-6 completate. Il conteggio qui sotto è **quel che resta**.
 | Fase | Sonnet | Opus |
 |---|---|---|
 | 7 — Pattern e difficoltà | 2 | 2 |
+| 7.5 — Il suolo e il Germoglio | 1 | 3 |
 | 8 — Bonus di luce | 3 | 3 |
-| 9 — Particelle | 5 | 1 |
-| 10 — Strati e transizione (+ T10.0) | 2 | 4 |
+| 9 — Particelle | 6 | 1 |
+| 10 — Strati e transizione | 2 | 3 |
 | 11 — Game feel | 1 | 2 |
 | 12 — Audio | 2 | 3 |
 | 13 — UI e rifinitura | 3 | 2 |
-| **Totale rimanente** | **18** | **17** |
+| **Totale rimanente** | **20** | **19** |
 
 Il piano è a metà: erano 25 Sonnet e 32 Opus a chiusura della Fase 2.5. Le fasi più pesanti in Opus — il gesto del Limine, le regole di collisione, la convergenza delle palette, la matematica dello shader — sono fatte, ed è per questo che il rapporto si è riequilibrato.
 
-Dove conviene spendere Opus da qui, in ordine: la **10** (il sistema degli strati e la transizione come evento, più T10.0 che sposta il terreno dentro la simulazione), la **11** (bilanciamento numerico, dove il determinismo della Fase 2 finalmente ripaga: si rigioca la stessa run identica dopo ogni modifica) e la **8** (il piazzamento dei bonus nella corsia pericolosa, che è una decisione di design non una funzione). Le fasi economiche da mandare in Sonnet restano la **9** (preset di particelle, molto ripetitivi) e la **13** (UI).
+L'arrivo degli sketch ha aggiunto due task Opus veri (il tratto al neon e il Germoglio) e ha spostato il terreno dalla 10 alla 7.5, che è la fase da fare per prima appena la 7 chiude.
+
+Dove conviene spendere Opus da qui, in ordine: la **7.5** (il terreno dentro la simulazione e la primitiva su cui poggia tutta la grafica successiva), la **10** (il sistema degli strati e la transizione come evento, più T10.0 che sposta il terreno dentro la simulazione), la **11** (bilanciamento numerico, dove il determinismo della Fase 2 finalmente ripaga: si rigioca la stessa run identica dopo ogni modifica) e la **8** (il piazzamento dei bonus nella corsia pericolosa, che è una decisione di design non una funzione). Le fasi economiche da mandare in Sonnet restano la **9** (preset di particelle, molto ripetitivi) e la **13** (UI).
 
 ---
 
@@ -396,6 +460,7 @@ Dove conviene spendere Opus da qui, in ordine: la **10** (il sistema degli strat
 - [x] Run riproducibile da seed + log input (base della leaderboard e dei replay)
 - [~] Tre stati giocabili: ci sono e hanno costi diversi, il bilanciamento vero è la Fase 11
 - [x] Il personaggio ha un corpo e due pose leggibili: la frustata del tap, il galleggiamento dell'hold
+- [ ] Il personaggio è il **Germoglio**, appoggia davvero sul terreno, e i tre stati si distinguono dalla sola posa
 - [~] Sistema visivo a tre palette con blending continuo e bloom attivi insieme; mancano particelle e parallax
 - [x] **La convergenza funziona**: scendendo, i due mondi si somigliano sempre di più — palette *e* bloom convergono insieme — e posizione e movimento reggono da soli
 - [x] Almeno 6 tipi di ostacolo con **letture distinte**, di cui almeno uno che minaccia il Limine e almeno uno anticipatorio (Eco / Finta / Pattugliatore)

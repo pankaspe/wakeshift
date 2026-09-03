@@ -104,8 +104,8 @@ easing between them rather than jumping.
 
 Where the game is going — the descent through layered worlds, the two palettes converging
 as you go deeper, the third playable state, obstacles that anticipate rather than react —
-is settled in [`docs/design_doc.md`](docs/design_doc.md), which drives every technical
-decision in the code.
+is settled in the design document, which drives every technical decision in the code but
+is kept out of this repository (see below).
 
 ---
 
@@ -224,9 +224,9 @@ A learning project, and a few things cost real time to work out:
 
 | File | What it is |
 | --- | --- |
-| [`docs/design_doc.md`](docs/design_doc.md) | The design: what the game is and why. Binding on *what* to build. |
-| `ROADMAP.md` | Working plan, phase by phase. Italian — the author's notebook, not project documentation. |
 | `CLAUDE.md` | Development conventions: architecture rules, naming, invariants. |
+| `ROADMAP.md` | Working plan, phase by phase. Italian — the author's notebook, not project documentation. |
+| `docs/` | Design document and art direction sketches. **Not in this repository**: working material kept on the author's disk. The code and `CLAUDE.md` are written to stand on their own without it. |
 
 ---
 

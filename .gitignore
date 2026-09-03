@@ -12,3 +12,7 @@ wakeshift.exe
 *.swp
 .vscode/
 .idea/
+
+# Working material, not public docs: design doc, sketches, archived roadmaps.
+# Lives on the author's disk only — CLAUDE.md and ROADMAP.md still point at it.
+docs/

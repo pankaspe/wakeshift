@@ -3,6 +3,9 @@
 Operational rules for developing this project.
 
 - **What and why** → `docs/design_doc.md` (v1.1)
+- **What it looks like** → `docs/sketch/` — binding art direction, summarised in
+  `ROADMAP.md` under "La direzione artistica". `docs/` is deliberately **not tracked by
+  git**: it is the author's working material and lives only on their disk.
 - **How, in what order, with which model** → `ROADMAP.md` (Italian; the user's working file, not public docs)
 - **How we work** → this file
 
@@ -54,9 +57,14 @@ order before touching anything:
 1. **`ROADMAP.md`** — the phase table says exactly what is done (✅) and what is next. Each
    phase lists numbered tasks with a recommended model.
 2. **`docs/design_doc.md`** — binding on *what* to build. v1.3 is current.
+   `docs/sketch/` is binding on what it *looks* like: `sketch_1` governs the game,
+   `sketch_3` the menu, `spirito_foresta` the character. Everything in them is reachable
+   with primitives plus palette plus bloom — the project has no external art assets and
+   is not getting any.
 3. The rest of this file — architecture rules and conventions.
 
-**Where the project stands: phases 0-6 are complete, and phase 7 is next.**
+**Where the project stands: phases 0-6 are complete, and phase 7 is next**, followed by the newly
+inserted phase 7.5 (the ground and the Sprout).
 
 The game is playable end to end and all three states work. A flip is a journey from wall to
 wall and holding stops it halfway in the Limen, paid for out of Lucidity — one resource
@@ -72,11 +80,12 @@ directory, and a simulation that is deterministic and verified — seeded genera
 as data, a fixed timestep, and every record storing the manifest that reproduces it.
 
 **What is missing, in the order the roadmap tackles it:** difficulty still comes almost
-entirely from scroll speed and there are only 11 patterns (phase 7); no light pickups
-(phase 8); no particles (phase 9); no parallax scenery, and the terrain is still
-decoration the simulation cannot see (phase 10, T10.0 — which is also why the player is
-drawn sunk into the ground); no game feel pass (phase 11); no audio at all (phase 12); no
-Dream Report and still raylib's default bitmap font (phase 13).
+entirely from scroll speed and there are only 11 patterns (phase 7); the terrain is still
+decoration the simulation cannot see, which is why the player is drawn sunk into the
+ground, and the character is not yet the Sprout (phase 7.5); no light pickups (phase 8);
+no particles (phase 9); no parallax scenery (phase 10); no game feel pass (phase 11); no
+audio at all (phase 12); no Dream Report and still raylib's default bitmap font
+(phase 13).
 
 **How verification works here:** `odin check src` after every edit, `odin build src` and a
 short launch before reporting a task done. For anything with real logic, write a throwaway
@@ -373,8 +382,11 @@ Tracked here so they are not rediscovered. Each is scheduled in `ROADMAP.md`.
   it. Fixing it properly means the *simulation* knowing where the ground is: the profile
   moves to `core`, `get_lane_y` samples it, and the player rides the terrain instead of the
   screen edge — which also makes the flip's endpoints and `world_t` move with the ground,
-  so it is a scheduled change, not a constant to nudge. Scheduled with the layer work
-  (phase 10), where the terrain is regenerated anyway.
+  so it is a scheduled change, not a constant to nudge. Was scheduled with the layer work
+  (phase 10), where the terrain is regenerated anyway; pulled forward to **T7.5.1**,
+  because until the lanes sit where they belong, any work on the character has to be done
+  twice. Moving the lanes changes the outcome of every recorded run, so it goes with a
+  `GAME_VERSION` bump — say so before doing it.
 - A pattern's `entry_lane`/`exit_lane` contract does not know the Limen exists. A pattern
   solved by suspending comes out in the opposite lane to the one solved by flipping, so
   `exit_lane` names the flipping answer and the pattern carries a second of slack
