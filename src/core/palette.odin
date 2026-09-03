@@ -110,6 +110,21 @@ dim_color :: proc(color: rl.Color, amount: f32) -> rl.Color {
 	return rl.Color{u8(f32(color.r) * k), u8(f32(color.g) * k), u8(f32(color.b) * k), color.a}
 }
 
+// Lifts a color toward white without touching alpha — the opposite of
+// dim_color, and the reason both live here rather than at their call
+// sites: white and black are colors too, and the rule is that no file
+// outside this one writes one down.
+//
+// What it is for is the core of a light source. A neon line is not its
+// own color at the centre: the color is what the light does to the air
+// around it, and the middle of it is closer to white the brighter it is.
+lighten_color :: proc(color: rl.Color, amount: f32) -> rl.Color {
+	white := rl.Color{255, 255, 255, color.a}
+	result := lerp_color(color, white, amount)
+	result.a = color.a
+	return result
+}
+
 lerp_palette :: proc(a, b: Palette, t: f32) -> Palette {
 	return Palette {
 		deep = lerp_color(a.deep, b.deep, t),

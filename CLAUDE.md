@@ -71,7 +71,7 @@ order before touching anything:
 3. The rest of this file — architecture rules and conventions.
 
 **Where the project stands: phases 0-7 are complete, and phase 7.5 is in progress** — the
-ground is done (T7.5.1), the neon stroke, the Sprout and the step are not.
+ground (T7.5.1) and the neon stroke (T7.5.2) are done, the Sprout and the step are not.
 
 The game is playable end to end and all three states work. A flip is a journey from wall to
 wall and holding stops it halfway in the Limen, paid for out of Lucidity — one resource
@@ -255,6 +255,32 @@ its body under the ground.
 - **`world_t` is measured between the two walls, not the two screen edges.** Otherwise the
   palette of a player standing still would depend on the shape of the ground under their
   feet.
+
+### The neon stroke
+
+`render/stroke.odin` is the one drawing primitive the art direction is made of: a polyline
+with a bright core, an additive halo, round ends and welded joins, which raylib has no
+equivalent of. Everything the sketches contain — the terrain's lit edge, plants, trees,
+mushrooms, the menus — is that same mark at a different weight, so it is worth being fussy
+about. Three things it is fussy about, all of them established by reading pixels back:
+
+- **A triangle strip's winding is not free.** Backface culling drops the entire ribbon if
+  the vertex pairs come out the other way round, silently and with nothing on screen. The
+  convention is the one `terrain.odin` already happened to use: for a line running left to
+  right, the first vertex of each pair is the upper one.
+- **The halo has to start outside the core**, at `STROKE_HALO_INNER` times its width. Its
+  brightest layers are the innermost ones, so starting them at the core's own width spends
+  them under the opaque pass that then covers them — measured, the profile fell from 642 to
+  36 in one pixel, which is a line with an outline rather than a line that glows.
+- **Joins are mitred and caps are tessellated into the ribbon**, never stamped on as
+  circles. Additive geometry that overlaps itself adds twice, so a circle at each vertex is
+  a bright bead at each vertex. A circle is used only where a mitre cannot exist.
+
+It is written to know nothing about the game. That matters because of an open question:
+`ui` may not import `render`, so the menus cannot reach the stroke as things stand, and
+T13.3 wants it. Either `ui` gains that import (the graph stays acyclic) or `stroke.odin`
+and `glow.odin` move into a package of primitives below both. Keep this file free of
+`game` imports so that stays a file move.
 
 ### The pattern contract
 
@@ -499,7 +525,8 @@ Tracked here so they are not rediscovered. Each is scheduled in `ROADMAP.md`.
   dead) but the run does not: one near-miss brings it back. Deliberately not lethal,
   because everything else in this game shows you the blow coming before it lands.
 - There are now two glows: the real frame-wide bloom in `fx/bloom.odin`, and the stacked
-  additive primitives in `render/glow.odin` that predate it. The second was a stand-in for
+  additive primitives in `render/glow.odin` that predate it — `render/stroke.odin` builds
+  its halo out of the second, sharing `glow_layer_alpha` so a stroke and a plain halo agree. The second was a stand-in for
   the first and now feeds it — a primitive halo is bright, so the bright pass picks it up
   and blooms it again. Worth knowing before phase 9: particles will go through the same
   pass. Where a halo looks doubled, remove the primitive one rather than lowering the bloom.

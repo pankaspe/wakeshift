@@ -190,26 +190,33 @@ draw_terrain_span :: proc(
 	}
 	rl.DrawTriangleStrip(raw_data(strip[:]), i32(len(strip)), palette.silhouette)
 
-	// The rim: a hard line in the world's own light, plus an additive halo
-	// that only really shows on the live side. The line is always drawn at
-	// full opacity even when dormant — it is the boundary between ground
-	// and air, and losing it would cost readability (pillar 2) to buy mood.
+	// The rim: the world's own light run along the surface, as one neon
+	// stroke (stroke.odin) rather than as a segment per sample. Same
+	// shape, three differences that only a single mark can have — the
+	// turns weld instead of leaving a wedge, the ends round over the lip
+	// of a hole, and the halo stops beading at every vertex, which it did
+	// for as long as the rim was a row of separate glowing lines.
+	//
+	// The line is always drawn at full opacity even when its world is
+	// dormant: it is the boundary between ground and air, and losing it
+	// would cost readability (pillar 2) to buy mood.
 	rim_alpha := TERRAIN_RIM_DORMANT + (TERRAIN_RIM_ALIVE - TERRAIN_RIM_DORMANT) * alive
-	rim_color := core.with_alpha(palette.light, rim_alpha)
 
-	for i in 0 ..< len(samples) - 1 {
-		a := rl.Vector2{samples[i], terrain_surface_y(world, is_floor, samples[i])}
-		b := rl.Vector2{samples[i + 1], terrain_surface_y(world, is_floor, samples[i + 1])}
-		draw_glow_line(
-			a,
-			b,
-			core.LIGHT_RIM_THICKNESS,
-			TERRAIN_GLOW_SPREAD,
-			palette.light,
-			TERRAIN_GLOW_STRENGTH * alive,
-		)
-		rl.DrawLineEx(a, b, core.LIGHT_RIM_THICKNESS, rim_color)
+	surface := make([dynamic]rl.Vector2, 0, len(samples), context.temp_allocator)
+	for x in samples {
+		append(&surface, rl.Vector2{x, terrain_surface_y(world, is_floor, x)})
 	}
+
+	rim := new_stroke(core.with_alpha(palette.light, rim_alpha), core.LIGHT_RIM_THICKNESS)
+	rim.glow = TERRAIN_GLOW_STRENGTH * alive
+	rim.spread = TERRAIN_GLOW_SPREAD
+	// The ground keeps the colour it had. A neon core lifted toward white
+	// is what the sketch asks of a *plant*; on a rim that runs the whole
+	// width of the screen it is a brightness change nobody asked for, and
+	// the bloom would pick it up twice over. One number to turn up if the
+	// terrain should join the rest of the style later.
+	rim.core_light = 0
+	draw_stroke(surface[:], rim)
 }
 
 // A break in the floor: the ground stops, and you can see down into it.

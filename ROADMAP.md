@@ -147,9 +147,17 @@ Così lo stile resta quello dello sketch 3 e un ostacolo non è mai confondibile
 
 Stato onirico e punteggio in alto, stato reale e distanza in basso: ogni mondo etichettato dove quel mondo sta. Vale per la T13.1.
 
-### Il tratto al neon: la primitiva che manca
+### Il tratto al neon ✅ (T7.5.2)
 
-Sia lo sketch 1 che il 3 sono fatti di **una cosa sola**: un tratto luminoso di spessore variabile con i cappucci tondi. raylib non ce l'ha — `DrawLineEx` non ha cappucci e due segmenti consecutivi non si saldano. Costruirla una volta (nucleo chiaro più alone additivo, colore campionato dalla palette) è il pezzo di codice grafico a maggior leva del progetto: la riusano il bordo del terreno, le piante, gli alberi, i funghi e tutto il menu. È la **T7.5.2**, e viene prima di tutto il resto della grafica proprio per questo.
+Sia lo sketch 1 che il 3 sono fatti di **una cosa sola**: un tratto luminoso di spessore variabile con i cappucci tondi. raylib non ce l'ha — `DrawLineEx` non ha cappucci e due segmenti consecutivi non si saldano. Ora c'è: `render/stroke.odin`, `new_stroke(colore, spessore)` più `draw_stroke` / `draw_stroke_line` / `draw_stroke_dot`, con rastremazione lungo la *lunghezza*, tratti chiusi per i contorni vuoti, alone additivo e nucleo schiarito verso il bianco.
+
+Tre cose imparate costruendola, tutte misurate rileggendo i pixel:
+
+- **Il verso di avvolgimento della strip non è libero.** Il backface culling si mangia l'intero nastro se le coppie di vertici escono nell'ordine sbagliato: niente errore, niente a schermo. La convenzione è quella che `terrain.odin` usava già per caso — per una linea che va da sinistra a destra, il primo vertice della coppia è quello in alto.
+- **L'alone deve cominciare *fuori* dal nucleo.** Con lo strato più interno largo quanto il nucleo, la luce viene spesa sotto la passata opaca che poi lo copre: il profilo misurato crollava da 642 a 36 in un pixel, cioè una linea con un contorno, non una linea che brilla. Partendo a 1.6 volte il nucleo la spalla diventa una rampa (81/81/36/36/12/12/2/2 su un tratto da 6 px).
+- **Le giunzioni si mitrano, non si timbrano.** Un cerchio sul vertice si sovrappone al nastro e in additivo somma due volte: una perla su ogni punto. Il cerchio resta solo dove la mitra non può esistere (curve strettissime), e i cappucci tondi sono tassellati *dentro* il nastro. È il difetto che il bordo del terreno aveva dalla Fase 3, ed è sparito convertendolo.
+
+**Una domanda architetturale aperta, per la T13.3.** Il grafo dice `ui ← core, game`: `ui` non può importare `render`, quindi oggi il menu **non può** usare il tratto. Quando si arriva alla T13.3 le strade sono due: far importare `render` a `ui` (il grafo resta aciclico), oppure spostare `stroke.odin` e `glow.odin` in un pacchetto di primitive sotto entrambi. La seconda è più pulita e `stroke.odin` è scritto apposta per renderla uno spostamento di file: non importa `game`. Da decidere lì, non adesso.
 
 ### Il Germoglio
 
@@ -410,7 +418,7 @@ Perché qui e non nella Fase 10, dove il terreno era programmato: il suolo affon
 | Task | Descrizione | Modello |
 |---|---|---|
 | T7.5.1 ✅ | **Il terreno diventa geometria di gioco, non decorazione** (ex T10.0): il profilo si sposta in `core`, `get_lane_y` lo campiona, e il giocatore corre *sopra* il suolo invece che dentro. Tocca la simulazione — gli estremi del viaggio del flip e `world_t` si muovono col terreno — quindi è un task, non una costante da ritoccare | **Opus** |
-| T7.5.2 | `render/stroke.odin`: la primitiva del **tratto al neon**. Polilinea di spessore dato, cappucci e giunti tondi, nucleo chiaro più alone additivo, colore dalla palette. È la base di tutta la grafica delle fasi 10 e 13 | **Opus** |
+| T7.5.2 ✅ | `render/stroke.odin`: la primitiva del **tratto al neon**. Polilinea di spessore dato, cappucci e giunti tondi, nucleo chiaro più alone additivo, colore dalla palette. È la base di tutta la grafica delle fasi 10 e 13 | **Opus** |
 | T7.5.3 | Il **Germoglio**: proporzioni nuove sullo scheletro esistente, testa-bulbo, occhio luminoso singolo, germoglio a due ossa con inerzia. Corpo scuro nei tre mondi, cambia solo la luce | **Opus** |
 | T7.5.4 | Le tre pose: corsa, frustata del flip, e la **capriola** raccolta del Limine con l'occhio ad anelli. Solo posa: l'orologio del viaggio non si tocca | Sonnet |
 | T7.5.5 | **Il gradino come evento di pattern**: il pavimento a quote diverse, autorato nel tempo, che chiede "non essere quaggiù quando arriva la parete". Vedi [Il terreno a piattaforme](#il-terreno-a-piattaforme--appunti-non-ancora-un-piano) — le quattro conseguenze tecniche sono lì | **Opus** |
