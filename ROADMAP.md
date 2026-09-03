@@ -12,6 +12,8 @@
 - [Stato attuale](#stato-attuale)
 - [Il sistema a tre mondi](#il-sistema-a-tre-mondi--riferimento-grafico-trasversale)
 - [La direzione artistica: gli sketch](#la-direzione-artistica--gli-sketch)
+- [La Corruzione](#la-corruzione--la-seconda-metà-della-lucidity)
+- [Il terreno a piattaforme](#il-terreno-a-piattaforme--appunti-non-ancora-un-piano)
 - [Il salvataggio: cosa resta da sapere](#il-salvataggio-cosa-resta-da-sapere)
 - [Struttura del progetto](#struttura-del-progetto)
 - [Le fasi](#le-fasi)
@@ -51,29 +53,26 @@ Quello che si scopre strada facendo non si butta, si **sposta dove verrà rilett
 
 Verificato sul codice, 3 settembre 2026 — aggiornato a chiusura Fase 7.
 
-**Funziona**
-- Loop one-button: corsa automatica, `SPACE` inverte la gravità, due corsie
-- Ostacoli come **eventi nel tempo** (`arrival_time`), non posizioni in pixel — la scelta architetturale migliore del progetto
-- Pattern concatenati con `entry_lane`/`exit_lane`: il generatore non può produrre sequenze irrisolvibili
-- Lucidity: risorsa unica che si guadagna dai near-miss e si spende nel Limine, e che è insieme il moltiplicatore di punteggio (fino a +100%)
-- 3 tier di difficoltà con pool cumulative
-- Coordinate di gioco fisse a 1280×720, letterboxate → nessun codice di gameplay sa che monitor c'è (dalla Fase 2.5 i pixel sono però nativi, non un upscale)
-- Menu, pausa, game over, salvataggio record
-- **[Fase 1]** Codice riorganizzato nei package (`core/platform/game/render/ui`; `fx` e `audio` non ancora creati) con grafo di dipendenze aciclico; `main.odin` ricablato, `draw_gameplay` estratto
-- **[Fase 2]** Salvataggio cifrato (CBOR + XChaCha20-Poly1305) nella directory dati utente, che rifiuta file corrotti o manomessi senza mai far crashare il gioco
-- **[Fase 2]** Simulazione deterministica: seed esplicito, input come dato, timestep fisso a 60 Hz. Ogni record salva il `RunManifest` della run che l'ha ottenuto — seed più i tick di ogni flip
-- **[Fase 2.5]** Presentazione: parte a schermo pieno senza lampeggiare e senza toccare il modo video del monitor, render target alla risoluzione nativa del monitor (il codice di gioco continua a ragionare in 1280×720), schermata opzioni raggiungibile da menu e pausa, impostazioni salvate dentro il salvataggio cifrato
-- **[Fase 3]** Identità visiva avviata: nessun colore scritto a mano fuori da `core/palette.odin`, i due mondi disegnati insieme con l'orizzonte in mezzo, la convergenza che li avvicina col passare della run, il personaggio con un corpo che corre e frusta nel flip, glow additivo da primitive, HUD e menu ricolorati sulla palette
-- **[Fase 4]** Bloom vero: bright-pass + blur gaussiano separabile su shader, intensità e soglia guidate da `world_t` e `depth_t` come la palette. 0.17 ms a frame nel caso peggiore
-- **[Fase 6]** Sei ostacoli con **sei letture**: presenza vs assenza come regole di collisione diverse, voragini ritagliate davvero nel terreno, e i tre archetipi anticipatori (Eco, Finta, Pattugliatore). Il Pattugliatore attraversa il Limine, quindi il centro ha smesso di essere gratis
-- **[Fase 7]** Pattern concatenati su **insiemi di fasce** invece che su corsie singole, con l'inclusione al posto dell'uguaglianza: un pattern può avere più di una risposta e dichiararle tutte. 19 pattern, curva di difficoltà a tre manopole (velocità, aria fra i pattern, peso della pesca per *demand*), e validazione automatica che ha già trovato due difetti da sola
-- **[Fase 5]** **Il Limine è giocabile**: tap e hold sullo stesso tasto, il viaggio si ferma a metà e riparte nella direzione in cui stavi andando, Lucidity che si spende invece di accumularsi soltanto, ritmo di punteggio a 40/s al centro, barra della risorsa nell'HUD
+**Funziona** — una riga per fase, il dettaglio sta nel recap della fase
+
+- **Base** — loop one-button a corsa automatica; ostacoli come **eventi nel tempo**, non posizioni in pixel (la scelta architetturale migliore del progetto); coordinate fisse a 1280×720 così che nessun codice di gameplay sappia su che monitor gira; menu, pausa, game over, record
+- **[1]** Package `core/platform/game/render/ui` (più `fx`) con grafo di dipendenze aciclico
+- **[2]** Salvataggio cifrato nella directory dati utente, che rifiuta i file manomessi senza crashare; simulazione **deterministica e verificata** — seed esplicito, input come dato, timestep fisso a 60 Hz, e ogni record porta il `RunManifest` che lo riproduce
+- **[2.5]** Avvio a schermo pieno senza toccare il modo video del monitor, render target alla risoluzione nativa, opzioni persistite
+- **[3]** Nessun colore scritto a mano fuori dalla palette; i due mondi disegnati insieme con l'orizzonte in mezzo; la convergenza che li avvicina col passare della run; il personaggio con un corpo che corre e frusta
+- **[4]** Bloom vero su shader, guidato da `world_t` e `depth_t` come la palette. 0.17 ms a frame nel caso peggiore
+- **[5]** **Il Limine è giocabile**: tap e hold sullo stesso tasto, il viaggio si ferma a metà e riparte nella direzione in cui stava andando. Lucidity che si *spende* invece di accumularsi soltanto, ed è insieme il moltiplicatore
+- **[6]** Sei ostacoli con **sei letture**: presenza contro assenza come regole di collisione diverse, voragini ritagliate davvero nel terreno, e i tre archetipi anticipatori. Il Pattugliatore attraversa il Limine, quindi il centro non è più gratis
+- **[7]** Pattern concatenati su **insiemi di fasce**, con l'inclusione al posto dell'uguaglianza: un pattern può avere più di una risposta e dichiararle tutte. 19 pattern, difficoltà a tre manopole (velocità, aria fra i pattern, peso della pesca), e validazione automatica che ha già trovato due difetti da sola
 
 **Non funziona / manca**
-- **Il giocatore e gli ostacoli sono affondati nel terreno.** `get_lane_y` ancora la corsia Reale al bordo dello schermo (y=675, piedi a 720), ma la superficie del terreno sta a y=690-706: **da 14 a 30px di un personaggio alto 45 stanno sotto il suolo su cui dovrebbe correre**, e lo stesso al soffitto. Viene da quando il terreno ha preso un profilo irregolare e nessuno ha aggiornato le corsie. È la **T7.5.1**, tirata avanti: era programmata nella Fase 10 perché lì il terreno si rigenera comunque, ma è anche il motivo per cui il personaggio non si può ridisegnare finché non è risolta
+
+- **Il giocatore e gli ostacoli sono affondati nel terreno.** `get_lane_y` ancora la corsia Reale al bordo dello schermo (piedi a y=720) mentre la superficie sta a 690-706: da 14 a 30 px di un personaggio alto 45 stanno sotto il suolo su cui dovrebbe correre, e lo stesso al soffitto. È la **T7.5.1**
+- **Niente costringe a essere coraggiosi.** La Lucidity si guadagna col rischio ma non cala mai da sola, quindi giocare pulito non costa niente. È il buco che chiude la Fase 8 con la Corruzione
+- **Il terreno è un fondale.** Quota costante nella sostanza, e la simulazione non lo vede. T7.5.1 e T7.5.5
 - Nessuna particella, nessun parallax, nessun audio
-- Nessun replay o ghost visibile in gioco: il `RunManifest` viene registrato e salvato, ma non ancora rigiocato dall'interfaccia
-- Menu e opzioni prendono ora i colori dalla palette, ma usano ancora il font bitmap di default di raylib: tutto quello che è disegnato da primitive è nitido alla risoluzione nativa, il testo no (T13.3)
+- Nessun replay o ghost in gioco: il `RunManifest` si registra e si salva, ma l'interfaccia non lo rigioca
+- Menu e opzioni prendono i colori dalla palette ma usano ancora il font bitmap di raylib (T13.3)
 
 ---
 
@@ -118,25 +117,36 @@ Con `world_t ≤ 0.5` si interpola Reale→Limine su `world_t * 2`; con `world_t
 
 Riferimento vincolante quanto la tabella delle tre palette. Gli sketch stanno in `docs/sketch/`, che è **fuori dal repository** (vedi `.gitignore`): restano su disco, non nel clone.
 
+**Scelto lo `sketch_3` per tutto** (3 settembre 2026): non solo il menu ma anche il gioco. Più semplice, più morbido nei colori, più piacevole da giocare. Gli altri due restano come cave da cui estrarre pezzi.
+
 | File | Cosa governa |
 |---|---|
-| `sketch_1.jpeg` | **Il gioco.** Composizione, rapporto fra i due mondi, HUD |
-| `sketch_3.jpeg` | **Il menu** e tutte le schermate che non sono gameplay |
+| `sketch_3.jpeg` | **Tutto.** Lo stile del gioco e delle schermate |
 | `spirito_foresta.jpeg` | **Il personaggio**: il Germoglio, e le sue pose |
-| `sketch_2.jpeg` | Scartato — vedi sotto |
+| `sketch_1.jpeg` | Cava: il sistema di piattaforme alte e basse, e l'HUD diviso fra i due mondi |
+| `sketch_2.jpeg` | Cava: le stalattiti dal soffitto, e i moscerini di luce (Fase 9) |
 
 ### Cosa si costruisce, cosa si traduce, cosa si butta
 
 Il vincolo è sempre lo stesso: **niente asset esterni**. Tutto è primitive più palette più bloom, ed è quella proprietà che tiene il gioco in un eseguibile solo e permette a `depth_t` di ricolorare l'intera immagine senza ridisegnare niente.
 
-- **Lo sketch 3 è già codice.** Fondo a gradiente verticale, piante come polilinee, piattaforme come rettangoli con bordo illuminato, orizzonte come fila di cerchi additivi. Non c'è niente da inventare: è `background.odin` più `glow.odin` più il bloom, che ci sono già.
-- **Lo sketch 1 si traduce.** La metà onirica è gratis (alberi al neon = tratti luminosi, funghi = archi ed ellissi). La metà reale *sembra* dipinta ma è già silhouette stratificate con nebbia fra uno strato e l'altro, cioè esattamente il parallax da rumore della Fase 10. Quello che **non** si riproduce è la pennellata: la texture pittorica vuole dei PNG, e rincorrerla costerebbe la proprietà per cui il gioco non ha asset. Non serve.
-- **Lo sketch 2 si scarta**, e non per gusto. Il suo valore sta tutto nella pittura e nella nebbia morbida, cioè in ciò che le primitive non fanno; e soprattutto è il meno leggibile dei tre — le barre e le spine stanno su un fondo dello stesso verde e della stessa luminosità. Quando bellezza e leggibilità confliggono vince la leggibilità (pilastro 2), e qui confliggono.
+- **Lo sketch 3 è già codice.** Fondo a gradiente verticale, piante come polilinee, piattaforme come rettangoli con bordo illuminato, orizzonte come fila di cerchi additivi. Non c'è niente da inventare: è `background.odin` più `glow.odin` più il bloom, che ci sono già. È anche l'unico dei tre che non chiede di rinunciare a niente — nessuna pennellata da imitare, nessuna texture da importare.
+- **Dello sketch 1 non si prende il disegno, si prende la struttura**: le piattaforme a quote diverse (vedi sotto) e l'HUD diviso.
+- **Dello sketch 2 non si prende la pittura.** Il suo valore sta tutto nella pennellata e nella nebbia morbida, cioè in ciò che le primitive non fanno. Restano le stalattiti — una buona forma per un ostacolo onirico appeso — e i moscerini, che sono un preset di particelle della Fase 9.
 
-### Le due idee dello sketch 1 da tenere
+### Il rischio dello sketch 3, e la sua risposta
 
-- **L'HUD è diviso fra i due mondi**: lo stato onirico e il punteggio in alto, lo stato reale e la distanza in basso. Ogni mondo è etichettato dove quel mondo sta. Vale per la T13.1.
-- **I due mondi hanno linguaggi di tratto diversi**, non solo colori diversi: il sogno è *linea* (contorni luminosi, interni vuoti), il reale è *massa* (sagome piene, bordo illuminato). È un altro modo di non affidarsi al colore da solo.
+Lo sketch 3 è morbido e **uniforme**: piante, piattaforme e personaggio sono tutti tratti al neon dello stesso peso, su un fondo di bassa contrapposizione. È esattamente ciò che lo rende piacevole, ed è anche l'unico modo in cui questo stile può fallire — se gli ostacoli sono disegnati come la scenografia, **si sciolgono dentro di essa**, e il pilastro 2 dice che quando bellezza e leggibilità confliggono vince la leggibilità.
+
+La risposta è l'idea buona dello sketch 1, riusata su un asse diverso. Lì *linea contro massa* separava il sogno dal reale; qui separa **lo sfondo dal pericolo**:
+
+> La scenografia è **linea**: contorni luminosi con l'interno vuoto. Ciò che può ucciderti è **massa**: sagoma piena e scura col bordo illuminato.
+
+Così lo stile resta quello dello sketch 3 e un ostacolo non è mai confondibile con una pianta, nemmeno a colori spenti o per chi non li distingue. Vale anche per i bonus della Fase 8, che sono il terzo caso: né linea né massa, ma **luce piena** (Design Doc sez. 8 — gli ostacoli sono sagome scure, i bonus sono fatti di luce).
+
+### L'HUD diviso, dallo sketch 1
+
+Stato onirico e punteggio in alto, stato reale e distanza in basso: ogni mondo etichettato dove quel mondo sta. Vale per la T13.1.
 
 ### Il tratto al neon: la primitiva che manca
 
@@ -154,6 +164,73 @@ Due semplificazioni rispetto alla scheda, decise:
 E una cosa che la scheda ha trovato e che vale più di un disegno: la posa **"Ipnotizzato"** — corpo raccolto, occhio ad anelli concentrici — **è il Limine**. Vuol dire che il terzo stato diventa riconoscibile *dalla faccia*, non solo dalla posizione nello schermo. È il pilastro "mai il colore da solo" pagato una seconda volta, gratis.
 
 **Un limite da non superare**: la posa cambia, il *moto* no. La lezione della Fase 5 vale ancora — un fronzolo messo sul movimento del giocatore non è decorazione, è attrito. La capriola è una posa che ruota lentamente mentre il giocatore è sospeso; non deve toccare l'orologio del viaggio né aggiungere un istante che il giocatore non ha chiesto.
+
+---
+
+## La Corruzione — la seconda metà della Lucidity
+
+Indicazione del committente (3 settembre 2026), rielaborata insieme. Va nella **Fase 8**, che cambia nome di conseguenza. Nessun codice finché non si arriva alla fase.
+
+### Il problema che risolve
+
+Oggi il gioco chiede sempre e solo **"dove sto al sicuro?"**, e la risposta sicura è sempre disponibile. Non c'è mai un motivo per essere coraggiosi: la Lucidity si guadagna col rischio, ma niente costringe a guadagnarla — si può giocare pulito, schivare in anticipo, e perdere soltanto moltiplicatore. Manca l'attrito. La Corruzione trasforma la domanda in **"dove devo essere coraggioso?"**, che è la stessa domanda con una posta sopra.
+
+### Cos'è, e cosa non è
+
+**Non è una seconda risorsa.** Il design doc (sez. 8) ha una regola esplicita — una risorsa sola — ed è il motivo per cui la Lucidity fa due mestieri. Due barre in fondo allo schermo la rompono.
+
+Non serve una barra nuova, perché **la Corruzione è la Lucidity letta dal polo opposto**: 100 = lucido, 0 = corrotto. Oggi quel numero cala solo nel Limine; deve calare anche **da solo, di continuo**. Da lì viene tutto il resto senza aggiungere un sistema:
+
+- il moltiplicatore decade se non rischi → bisogna continuare a rischiare per continuare a segnare
+- il Limine diventa **guadagnato invece che dato**: ci si può sospendere solo avendo giocato sporco poco prima
+- il near-miss smette di essere un bonus e diventa **respirare**
+
+**Ordine di grandezza già controllato**: 14 per near-miss su 100, ostacoli ogni 2-3 secondi. Con un drenaggio intorno ai 3/s un serbatoio pieno dura una trentina di secondi da fermo, quindi serve circa un near-miss ogni 5 secondi per stare in pari. Su una run da 45-90 secondi è un ritmo, non una tortura. Da tarare nella Fase 11 come tutto il resto.
+
+### Cosa succede quando arriva — deciso
+
+**Non uccide.** A zero il Limine si chiude (già succede, `LUCIDITY_SUSPEND_MINIMUM`), il moltiplicatore va a 1, e **il mondo si spegne**: si perde tutto ciò che rende il gioco bello, non la run. Si recupera con un solo near-miss.
+
+Il perché di questa scelta e non della morte: un ostacolo ha sempre una fase d'arrivo visibile prima di essere letale (pilastro 3), e una corruzione letale sarebbe l'unica cosa nel gioco a uccidere senza che si veda arrivare il colpo. Spegnere il mondo punisce abbastanza — toglie il punteggio, il terzo stato e il colore in una volta sola.
+
+### La versione scartata, e perché
+
+**Il muro che insegue da sinistra.** Sembra la cosa ovvia e non lo è: in un gioco con un tasto solo e nessun controllo sulla velocità, un inseguitore **non è una meccanica, è un countdown travestito** — non si può correre più forte, quindi non c'è niente con cui interagisca. E non ci starebbe nemmeno fisicamente: il personaggio è a `PLAYER_X = 200`, dietro di lui ci sono 200 px di pista. Diventa una meccanica solo se sono le azioni del giocatore a muoverlo, che è di nuovo l'idea qui sopra.
+
+### Come si vede
+
+Non con una barra: **col colore che muore da sinistra.** La parte sinistra dello schermo perde il neon e si spegne, e il confine avanza. È leggibile in due secondi (pilastro 2), usa la palette che c'è già, e non aggiunge un tasto.
+
+E qui c'è l'incastro con la direzione artistica. La regola che tiene leggibile lo `sketch_3` è *la scenografia è linea, il pericolo è massa*. Se **la corruzione è ciò che trasforma il mondo da linea a massa**, la regola visiva e la meccanica diventano la stessa regola: terreno corrotto pieno e scuro, terreno sano contorno luminoso. Un colpo d'occhio dice insieme dove sei e come stai andando.
+
+**Il rischio da sorvegliare**: la palette converge già con `depth_t` mentre si scende, e `CLAUDE.md` ha la regola "luce e colore devono descrivere un mondo solo". Due sistemi che cambiano il colore di tutto si impastano. La corruzione deve quindi agire su un asse che la convergenza non usa — la **saturazione**, mentre `depth_t` muove la tinta.
+
+---
+
+## Il terreno a piattaforme — appunti, non ancora un piano
+
+Indicazione del committente (3 settembre 2026): prendere dallo sketch 1 (e dal 2) il **terreno a quote diverse, alto e basso**, perché altrimenti la corsa è troppo lineare — e usarlo per **alzare un po' la difficoltà**, mettendo qualcosa nel terreno. Nessun codice finché non si arriva alla fase.
+
+**Perché è una buona idea e non solo estetica.** Oggi il pavimento è un profilo irregolare ma *piatto nella sostanza*: la sua altezza non significa niente, e il gioco lo sa così poco che il personaggio ci sta dentro fino al ginocchio. Una quota che cambia trasforma il terreno da fondale a interlocutore, e lo fa senza aggiungere un verbo — che è la condizione perché sia ammissibile.
+
+**Il vincolo che decide tutto**: il pilastro 5 dice *una domanda sola, tre risposte*. Il terreno non può chiedere di saltare né di abbassarsi: sarebbe una quarta risposta e un secondo gesto. Quindi tutto quello che il terreno fa deve esprimersi dentro le tre fasce che già ci sono.
+
+**Cosa può fare il terreno, allora**
+
+- **Un gradino che sale è un blocco fatto di paesaggio.** Non essere nel Reale quando arriva la parete. È la stessa domanda di un Block, ma posta dal mondo invece che da un oggetto appoggiato sopra — che è molto più forte tematicamente, e completa l'asse pieno/vuoto del design doc: il vuoto è la voragine, il pieno è il blocco, e il **gradino è il pavimento che si alza**.
+- **Un pavimento alto accorcia il viaggio.** Il flip dura sempre `FLIP_DURATION`, quindi su un tratto rialzato copre meno distanza: stessa durata, più velocità apparente. Difficoltà percepita senza toccare una sola costante.
+- **Un pavimento alto stringe la fessura.** Una forma pulsante appesa al soffitto sopra un tratto rialzato lascia un varco più stretto, e il Limine diventa scomodo esattamente lì.
+
+**Facce verticali, mai rampe.** Il paragone col terreno non piatto di un platform regge per la forma, non per il comportamento: lì la terra rialzata si percorre, ci si sale sopra. Qui non si può, perché non c'è un salto. Un tratto rialzato quindi non è un gradino da superare, è **un muro da evitare stando altrove**. Una rampa prometterebbe una salita che non avverrà, e il pilastro 3 dice che l'informazione arriva sempre prima dell'impegno.
+
+**Le quattro conseguenze tecniche da non scoprire dopo** (tutte verificate sul codice, non congetture)
+
+1. **Il profilo va ancorato al *tempo*, non ai pixel.** Oggi `render/terrain.odin:69` lo campiona da `world.scroll_offset`. Finché è decorazione va bene; nel momento in cui è gameplay, cambiare la velocità sposterebbe i gradini rispetto ai pattern — e si perde la proprietà che rende ribilanciabile la velocità senza ridisegnare niente, che è la scelta architetturale migliore del progetto.
+2. **Quindi la conclusione naturale: un gradino è un `PatternEvent`.** Autorato nel tempo come tutto il resto, dentro la stessa pool, visibile a `validate_pattern_pool`. Non un sistema parallelo. Il contratto `entry`/`exit` sopravvive intatto, perché stare nel Reale resta stare nel Reale a qualunque quota.
+3. **Se invece il profilo diventa procedurale, deve uscire dal seed della run.** Oggi è deterministico per il fatto di essere una costante (`TERRAIN_PROFILE`, sei valori scritti a mano). Un terreno generato che non passi dal generatore della run romperebbe la riproducibilità, cioè leaderboard, replay e ghost insieme.
+4. **Il Limine si muove col pavimento, e il Pattugliatore anche.** Il centro è metà viaggio, quindi se il pavimento sale il centro sale. E `get_obstacle_position` spazza il Pattugliatore su `SCREEN_HEIGHT - size.y`, cioè sull'intera colonna: sopra un tratto rialzato finirebbe dentro il terreno. Entrambe sono modifiche alla simulazione, non ritocchi.
+
+**Una domanda ancora aperta, da decidere prima di scrivere codice.** Un flip iniziato prima di un gradino e concluso dopo: punta a dov'è il suolo *adesso* o a dove sarà *all'arrivo*? Ricampionare a ogni step dà un atterraggio sempre corretto ma una traiettoria che si incurva; mirare all'arrivo dà una linea retta ma un bersaglio che il giocatore non vede. Non è una preferenza: decide se la sospensione nel Limine si sposta verticalmente mentre il terreno scorre sotto.
 
 ---
 
@@ -280,7 +357,7 @@ Il gesto c'è: tap e hold sullo stesso tasto, il viaggio si ferma a metà e ripa
 
 **Ricaduta sul salvataggio**: `SAVE_FORMAT_VERSION` 3 → 4 e `GAME_VERSION` → 0.2.0-alpha. Il manifesto registra anche i rilasci del tasto, senza i quali una run col Limine non è riproducibile.
 
-**Squilibrio ancora aperto**: il centro è **sicuro**, tutti gli ostacoli sono attaccati alle pareti. Si chiude in T6.6; fino ad allora il consumo di Lucidity è tarato più duro di quanto dovrà restare.
+**Squilibrio chiuso in questa stessa fase**: il centro era sicuro perché ogni ostacolo era attaccato a una parete, e il Pattugliatore lo ha risolto. Resta però il consumo di Lucidity, tarato più duro di quanto dovrà restare — si ritocca quando la Fase 8 le darà anche un drenaggio passivo, e definitivamente nel bilanciamento della Fase 11.
 
 ---
 
@@ -337,27 +414,32 @@ Perché qui e non nella Fase 10, dove il terreno era programmato: il suolo affon
 | T7.5.2 | `render/stroke.odin`: la primitiva del **tratto al neon**. Polilinea di spessore dato, cappucci e giunti tondi, nucleo chiaro più alone additivo, colore dalla palette. È la base di tutta la grafica delle fasi 10 e 13 | **Opus** |
 | T7.5.3 | Il **Germoglio**: proporzioni nuove sullo scheletro esistente, testa-bulbo, occhio luminoso singolo, germoglio a due ossa con inerzia. Corpo scuro nei tre mondi, cambia solo la luce | **Opus** |
 | T7.5.4 | Le tre pose: corsa, frustata del flip, e la **capriola** raccolta del Limine con l'occhio ad anelli. Solo posa: l'orologio del viaggio non si tocca | Sonnet |
-| T7.5.5 ⚑ | Playtest: il personaggio appoggia davvero, si legge a 1280×720, e i tre stati si distinguono anche a fermo immagine dalla sola posa | — |
+| T7.5.5 | **Il gradino come evento di pattern**: il pavimento a quote diverse, autorato nel tempo, che chiede "non essere quaggiù quando arriva la parete". Vedi [Il terreno a piattaforme](#il-terreno-a-piattaforme--appunti-non-ancora-un-piano) — le quattro conseguenze tecniche sono lì | **Opus** |
+| T7.5.6 ⚑ | Playtest: il personaggio appoggia davvero, si legge a 1280×720, i tre stati si distinguono anche a fermo immagine dalla sola posa, e la corsa non è più piatta | — |
 
-**Attenzione al determinismo**: la T7.5.1 sposta le corsie, quindi cambia l'esito di ogni run già registrata. Va con un bump di `GAME_VERSION`, e i manifesti vecchi smettono di essere riproducibili — da dire prima di farlo, non dopo.
+**Attenzione al determinismo**: la T7.5.1 sposta le corsie, quindi cambia l'esito di ogni run già registrata. Va con un bump di `GAME_VERSION`, e i manifesti vecchi smettono di essere riproducibili — da dire prima di farlo, non dopo. È il secondo bump di fila dopo quello della Fase 7: se a un certo punto i replay devono sopravvivere ai cambi di simulazione, il momento per dirlo è **prima** della T7.5.1.
+
+**Perché la fase è cresciuta.** Nasceva con quattro task; la scelta dello `sketch_3` e il terreno a piattaforme le hanno aggiunto la T7.5.5. Sta qui e non nella Fase 10 per la stessa ragione per cui ci sta la T7.5.1: il terreno viene toccato una volta sola, e farlo due volte costa il doppio.
 
 ---
 
-### Fase 8 — I bonus di luce
+### Fase 8 — L'economia della Lucidity: cosa la consuma e cosa la riempie
 
-**Obiettivo**: profondità decisionale senza un secondo input. Dipende dalla Fase 5 (Lucidity come risorsa). Riferimento: Design Doc sez. 8.
+**Obiettivo**: dare al gioco un motivo per essere coraggiosi. Era "i bonus di luce", cioè solo la metà che *riempie*; la Corruzione è la metà che *consuma*, e sono lo stesso lavoro. Dipende dalla Fase 5. Riferimenti: Design Doc sez. 8 e [La Corruzione](#la-corruzione--la-seconda-metà-della-lucidity).
 
 | Task | Descrizione | Modello |
 |---|---|---|
-| T8.1 | Pickup raccolti **per posizione**, non con un tasto; piazzati nella corsia pericolosa | **Opus** |
-| T8.2 | Linguaggio visivo: gli ostacoli sono sagome scure, i bonus sono **fatti di luce** | Sonnet |
-| T8.3 | Raccogliere luce = guadagnare Lucidity (una sola risorsa, non cinque) | Sonnet |
-| T8.4 | **Timeshift** (Onirico): rallentamento del tempo per N secondi | **Opus** |
-| T8.5 | **Forza della natura** (Reale): immunità per N secondi | Sonnet |
-| T8.6 | Integrazione nei pattern: il generatore piazza i bonus con la stessa logica di aggancio degli ostacoli | **Opus** |
-| T8.7 ⚑ | Playtest: la domanda deve diventare "vale il rischio?", non "dove scappo?" | — |
+| T8.1 | **La Corruzione**: drenaggio passivo della Lucidity, il mondo che si spegne a zero, il recupero con un solo near-miss | **Opus** |
+| T8.2 | La corruzione **si vede**: il colore che muore da sinistra, sull'asse della saturazione perché la tinta è già di `depth_t` | **Opus** |
+| T8.3 | Pickup raccolti **per posizione**, non con un tasto; piazzati nella corsia pericolosa | **Opus** |
+| T8.4 | Linguaggio visivo: gli ostacoli sono sagome scure, i bonus sono **fatti di luce** | Sonnet |
+| T8.5 | Raccogliere luce = guadagnare Lucidity (una sola risorsa, non cinque) | Sonnet |
+| T8.6 | **Timeshift** (Onirico): rallentamento del tempo per N secondi | **Opus** |
+| T8.7 | **Forza della natura** (Reale): immunità per N secondi | Sonnet |
+| T8.8 | Integrazione nei pattern: il generatore piazza i bonus con la stessa logica di aggancio degli ostacoli | **Opus** |
+| T8.9 ⚑ | Playtest: la domanda deve diventare "vale il rischio?", non "dove scappo?" | — |
 
-**Nota**: niente malus da raccogliere — decisione presa nel Design Doc sez. 8. Gli elementi avversi vanno nell'ambiente, dove sono prevedibili.
+**Nota**: niente malus da raccogliere — decisione presa nel Design Doc sez. 8. Gli elementi avversi vanno nell'ambiente, dove sono prevedibili. La Corruzione non fa eccezione: non è un oggetto che si incontra, è una condizione del mondo.
 
 ---
 
@@ -445,14 +527,14 @@ Fasi 0-7 completate. Il conteggio qui sotto è **quel che resta**.
 
 | Fase | Sonnet | Opus |
 |---|---|---|
-| 7.5 — Il suolo e il Germoglio | 1 | 3 |
-| 8 — Bonus di luce | 3 | 3 |
+| 7.5 — Il suolo, il Germoglio, il gradino | 1 | 4 |
+| 8 — Economia della Lucidity | 3 | 5 |
 | 9 — Particelle | 6 | 1 |
 | 10 — Strati e transizione | 2 | 3 |
 | 11 — Game feel | 1 | 2 |
 | 12 — Audio | 2 | 3 |
 | 13 — UI e rifinitura | 3 | 2 |
-| **Totale rimanente** | **18** | **17** |
+| **Totale rimanente** | **18** | **20** |
 
 Il piano è a metà: erano 25 Sonnet e 32 Opus a chiusura della Fase 2.5. Le fasi più pesanti in Opus — il gesto del Limine, le regole di collisione, la convergenza delle palette, la matematica dello shader — sono fatte, ed è per questo che il rapporto si è riequilibrato.
 
@@ -477,6 +559,8 @@ Dove conviene spendere Opus da qui, in ordine: la **7.5** (il terreno dentro la 
 - [x] 12-16 pattern distribuiti su tre tier — sono 19, e il perché sta nella Fase 7
 - [x] Curva di difficoltà a tre manopole, non solo velocità
 - [ ] Bonus di luce raccolti per posizione, piazzati dove costa qualcosa prenderli
+- [ ] **La Corruzione**: la Lucidity cala da sola, il mondo si spegne a zero, e un near-miss lo riaccende
+- [ ] Il terreno ha quote diverse ed è una domanda, non un fondale
 - [ ] **Due strati e la transizione fra loro**, come evento che non ferma il gioco
 - [ ] Audio: due mix sincronizzati + traccia per strato + i SFX principali
 - [x] Avvio a schermo pieno alla risoluzione del monitor, con modalità finestra e impostazioni ricordate fra un avvio e l'altro

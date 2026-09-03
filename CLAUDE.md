@@ -57,10 +57,17 @@ order before touching anything:
 1. **`ROADMAP.md`** — the phase table says exactly what is done (✅) and what is next. Each
    phase lists numbered tasks with a recommended model.
 2. **`docs/design_doc.md`** — binding on *what* to build. v1.3 is current.
-   `docs/sketch/` is binding on what it *looks* like: `sketch_1` governs the game,
-   `sketch_3` the menu, `spirito_foresta` the character. Everything in them is reachable
-   with primitives plus palette plus bloom — the project has no external art assets and
-   is not getting any.
+   `docs/sketch/` is binding on what it *looks* like: **`sketch_3` governs everything**,
+   game and screens alike (chosen 3 September 2026), and `spirito_foresta` the character.
+   `sketch_1` and `sketch_2` are quarries, not references. Everything is reachable with
+   primitives plus palette plus bloom — the project has no external art assets and is not
+   getting any.
+
+   The one way that style can fail is that it is *uniform*: soft, low-contrast, every
+   element the same neon line weight. So the rule that keeps it readable (pillar 2) is
+   **scenery is line, danger is mass**: background elements are hollow lit outlines, and
+   anything that can kill is a filled dark silhouette with a lit rim. Light pickups
+   (phase 8) are the third case — neither, but solid light.
 3. The rest of this file — architecture rules and conventions.
 
 **Where the project stands: phases 0-7 are complete, and phase 7.5 is next** (the ground
@@ -82,6 +89,7 @@ as data, a fixed timestep, and every record storing the manifest that reproduces
 **What is missing, in the order the roadmap tackles it:** the terrain is still
 decoration the simulation cannot see, which is why the player is drawn sunk into the
 ground, and the character is not yet the Sprout (phase 7.5); no light pickups (phase 8);
+nothing drains Lucidity, so nothing yet gives the player a reason to be brave (phase 8);
 no particles (phase 9); no parallax scenery (phase 10); no game feel pass (phase 11); no
 audio at all (phase 12); no Dream Report and still raylib's default bitmap font
 (phase 13).
@@ -325,6 +333,21 @@ is only where those coordinates land.
 - **No hardcoded pixel timings in patterns.** Patterns are time offsets; positions are
   derived at runtime from elapsed time and scroll speed.
 
+### Colour has two systems, and they must not collide
+
+`depth_t` already washes both worlds toward the Limen as a run gets deeper, with palette
+and bloom converging together on it — light and colour describe one world. Corruption
+(phase 8) is a *second* thing that changes the colour of everything, so the two need
+separate axes or the image stops agreeing with itself: **`depth_t` moves hue, corruption
+moves saturation.** Corruption reads spatially — the colour dying inward from the left
+edge — rather than as a bar, because it has to be legible in two seconds.
+
+The art direction leans on the same split. The chosen style (`sketch_3`) is uniform and
+soft by design, so what keeps obstacles from dissolving into the scenery is **scenery is
+line, danger is mass**: hollow lit outlines behind, filled dark silhouettes with a lit rim
+in front. Corruption is what turns line into mass, which makes the visual rule and the
+mechanic the same rule.
+
 ### Save data and determinism
 
 - Save files live in the **OS user data directory**, never in the working directory
@@ -444,6 +467,12 @@ Tracked here so they are not rediscovered. Each is scheduled in `ROADMAP.md`.
   (T13.3)
 - `Lucidity` changed meaning in phase 5: it is a spendable resource in 0..LUCIDITY_MAX, not
   a streak counter. Anything that used to read `lucidity.streak` wants `lucidity.value`.
+- It gains a second meaning in phase 8. **Corruption is not a new system and not a second
+  resource** — the design doc allows exactly one — it is the same number read from the
+  other pole: 100 is lucid, 0 is corrupted, and it will drain on its own rather than only
+  in the Limen. At zero the world goes out (multiplier to 1, the Limen closed, the colour
+  dead) but the run does not: one near-miss brings it back. Deliberately not lethal,
+  because everything else in this game shows you the blow coming before it lands.
 - There are now two glows: the real frame-wide bloom in `fx/bloom.odin`, and the stacked
   additive primitives in `render/glow.odin` that predate it. The second was a stand-in for
   the first and now feeds it — a primitive halo is bright, so the bright pass picks it up
