@@ -49,7 +49,7 @@ Quello che si scopre strada facendo non si butta, si **sposta dove verrà rilett
 
 ## Stato attuale
 
-Verificato sul codice, 2 settembre 2026 — aggiornato a chiusura Fase 6.
+Verificato sul codice, 3 settembre 2026 — aggiornato a chiusura Fase 7.
 
 **Funziona**
 - Loop one-button: corsa automatica, `SPACE` inverte la gravità, due corsie
@@ -66,12 +66,10 @@ Verificato sul codice, 2 settembre 2026 — aggiornato a chiusura Fase 6.
 - **[Fase 3]** Identità visiva avviata: nessun colore scritto a mano fuori da `core/palette.odin`, i due mondi disegnati insieme con l'orizzonte in mezzo, la convergenza che li avvicina col passare della run, il personaggio con un corpo che corre e frusta nel flip, glow additivo da primitive, HUD e menu ricolorati sulla palette
 - **[Fase 4]** Bloom vero: bright-pass + blur gaussiano separabile su shader, intensità e soglia guidate da `world_t` e `depth_t` come la palette. 0.17 ms a frame nel caso peggiore
 - **[Fase 6]** Sei ostacoli con **sei letture**: presenza vs assenza come regole di collisione diverse, voragini ritagliate davvero nel terreno, e i tre archetipi anticipatori (Eco, Finta, Pattugliatore). Il Pattugliatore attraversa il Limine, quindi il centro ha smesso di essere gratis
+- **[Fase 7]** Pattern concatenati su **insiemi di fasce** invece che su corsie singole, con l'inclusione al posto dell'uguaglianza: un pattern può avere più di una risposta e dichiararle tutte. 19 pattern, curva di difficoltà a tre manopole (velocità, aria fra i pattern, peso della pesca per *demand*), e validazione automatica che ha già trovato due difetti da sola
 - **[Fase 5]** **Il Limine è giocabile**: tap e hold sullo stesso tasto, il viaggio si ferma a metà e riparte nella direzione in cui stavi andando, Lucidity che si spende invece di accumularsi soltanto, ritmo di punteggio a 40/s al centro, barra della risorsa nell'HUD
 
 **Non funziona / manca**
-- La curva di difficoltà viene ancora quasi solo dalla velocità (270 → 330 → 400 px/s): le letture ora sono sei, ma la tabella dei tier cambia solo quanto in fretta arrivano (T7.3)
-- Il contratto `entry_lane`/`exit_lane` dei pattern non sa che esiste il Limine: un pattern risolto sospendendosi esce nella corsia opposta a quello risolto con i flip (T7.1)
-- Pochi pattern: 11 in tutto su tre tier, contro i 12-16 previsti (T7.2)
 - **Il giocatore e gli ostacoli sono affondati nel terreno.** `get_lane_y` ancora la corsia Reale al bordo dello schermo (y=675, piedi a 720), ma la superficie del terreno sta a y=690-706: **da 14 a 30px di un personaggio alto 45 stanno sotto il suolo su cui dovrebbe correre**, e lo stesso al soffitto. Viene da quando il terreno ha preso un profilo irregolare e nessuno ha aggiornato le corsie. È la **T7.5.1**, tirata avanti: era programmata nella Fase 10 perché lì il terreno si rigenera comunque, ma è anche il motivo per cui il personaggio non si può ridisegnare finché non è risolta
 - Nessuna particella, nessun parallax, nessun audio
 - Nessun replay o ghost visibile in gioco: il `RunManifest` viene registrato e salvato, ma non ancora rigiocato dall'interfaccia
@@ -302,15 +300,28 @@ Sei tipi, e finalmente sei letture invece di una regola con sei pelli. Le voragi
 
 ---
 
-### Fase 7 — Pattern e curva di difficoltà
+### ✅ Fase 7 — Pattern e curva di difficoltà
 
-| Task | Descrizione | Modello |
-|---|---|---|
-| T7.1 | Punti di aggancio estesi al Limine | **Opus** |
-| T7.2 | 12-16 pattern su tre tier | Sonnet |
-| T7.3 | Curva di velocità e cadenza degli switch ribilanciate: la difficoltà non deve più venire solo dalla velocità | **Opus** |
-| T7.4 | Validazione automatica delle pool estesa ai nuovi vincoli | Sonnet |
-| T7.6 ⚑ | Playtest: una run di 2 minuti non deve ripetere una sensazione già provata nei primi 30 secondi | — |
+19 pattern su tre tier, concatenati su **insiemi di fasce** invece che su corsie singole, con una curva di difficoltà che ha smesso di essere solo la velocità. Tre difetti trovati e chiusi lungo la strada, nessuno dei quali era visibile leggendo il codice: `tight_double_switch` dichiarava l'uscita sbagliata e faceva seguire pattern a ingresso Real a un giocatore rimasto sul soffitto; ogni run apriva violando il proprio contratto, perché il generatore pretendeva `.Dream` mentre il giocatore parte in `.Real`; e la pool è diventata insanabile nel momento in cui l'Eco ha smesso di mentire sulla propria uscita.
+
+**Cosa è stato deciso, e perché non è quello che il task diceva.**
+
+La T7.1 chiedeva di insegnare il Limine al contratto dei pattern. Rigiocare ogni pattern contro la simulazione vera ha detto che la domanda era mal posta: **premere una volta e non lasciare mai sopravvive e finisce sospeso in quasi tutti i pattern della pool.** Tenere premuto non chiede il permesso a nessuno, quindi "il giocatore è nel Limine a questa giuntura" non è una cosa che il contratto possa governare — e un contratto che pretendesse di governarla avrebbe dovuto mettere il Limine in ogni insieme, cioè non essere un contratto.
+
+Il difetto vero non era il terzo stato: era che **il contratto dava per scontato che un pattern abbia una risposta sola.** L'Eco ne ha due, e finiscono su pareti opposte. Quindi `entry`/`exit` diventano insiemi e la catena diventa inclusione; il Limine contribuisce a un'uscita **una seconda parete, non una terza fascia**, perché tenere premuto mette in pausa un viaggio invece di iniziarne un altro.
+
+**Le decisioni che restano vincolanti**
+
+- **Nessun pattern può *pretendere* il Limine.** La Lucidity parte da zero a ogni run, quindi un pattern la cui unica risposta è tenere premuto è irrisolvibile per chi non se lo può permettere. Ogni pattern deve avere una risposta fatta di soli tap, e l'arnese di verifica lo controlla direttamente.
+- **Un pattern con due risposte ha bisogno di un *convergente* dopo di sé**, cioè di qualcosa che accetti entrambe le pareti. È una classe che non esisteva, e la pool era insanabile senza: `pick_next_pattern` sarebbe ripiegata su `pool[0]` dopo ogni Eco per il resto della run. L'ha trovato il validatore al primo avvio dopo il cambio di contratto, che è esattamente il motivo per cui quel controllo esiste.
+- **La velocità non è la curva.** Gli ostacoli sono eventi nel tempo, quindi il tempo di reazione *dentro* un pattern non si muove con la velocità: rigiocando tutto a 270, 330 e 400 px/s l'insieme delle risposte che sopravvivono non cambia. La velocità cambia quanto a lungo *guardi* (1080 px di vista sono 4.0 s a 270 e 2.7 s a 400) e, tirando dalla parte opposta, quanto poco una voragine larga tiene chiusa la corsia. In parte si annulla da sola. Le altre due manopole sono `Tier.gap` (aria vuota fra i pattern, l'unica onestamente monotona) e `Tier.demand_weights` (quali pattern vengono pescati, non quali sono ammessi).
+- **Una pool si entra da una parete, e le due pareti hanno scorte separate.** Prima della fase 7 il tier più profondo pesava su demand 3 senza avere un solo pattern di demand 3 da dare a chi stava sul pavimento: metà run prendeva la curva e metà prendeva quello che restava. `validate_tier_balance` controlla proprio questo.
+
+**Perché 19 pattern e non 12-16.** Il bersaglio era stato scritto quando un pattern aveva un'uscita sola. Con le uscite a insieme servono i convergenti, che sono una classe in più, e serve simmetria fra le due pareti: da Dream c'erano tre pattern difficili e da Real uno, e nessun peso può pescare un pattern che non esiste.
+
+**Come si verifica un contratto sui pattern**: rigiocandoli. L'arnese usa-e-getta ha guidato la simulazione vera con ogni linea di input fino a due pressioni, dalle tre fasce, alle tre velocità di tier, su ogni larghezza di voragine, chiedendo a ciascun pattern *quali risposte sopravvivono e dove ti lasciano*. Ha ribaltato l'assunto centrale della prima versione del contratto e ha riconfermato per conto suo un'affermazione della Fase 6 che nessuno aveva mai misurato — che `echo_guarded` tolga davvero la risposta col Limine. La lezione sta in `CLAUDE.md`; le regole del contratto anche.
+
+**Ricaduta sul salvataggio**: `GAME_VERSION` → 0.3.0-alpha. Il formato non cambia e i salvataggi restano leggibili, ma ogni seed genera un livello diverso, quindi i manifesti 0.2.0 non si rigiocano più.
 
 ---
 
@@ -430,11 +441,10 @@ Qui il determinismo della Fase 2 ripaga: si rigioca la stessa run identica dopo 
 
 ## Riepilogo carico per modello
 
-Fasi 0-6 completate. Il conteggio qui sotto è **quel che resta**.
+Fasi 0-7 completate. Il conteggio qui sotto è **quel che resta**.
 
 | Fase | Sonnet | Opus |
 |---|---|---|
-| 7 — Pattern e difficoltà | 2 | 2 |
 | 7.5 — Il suolo e il Germoglio | 1 | 3 |
 | 8 — Bonus di luce | 3 | 3 |
 | 9 — Particelle | 6 | 1 |
@@ -442,7 +452,7 @@ Fasi 0-6 completate. Il conteggio qui sotto è **quel che resta**.
 | 11 — Game feel | 1 | 2 |
 | 12 — Audio | 2 | 3 |
 | 13 — UI e rifinitura | 3 | 2 |
-| **Totale rimanente** | **20** | **19** |
+| **Totale rimanente** | **18** | **17** |
 
 Il piano è a metà: erano 25 Sonnet e 32 Opus a chiusura della Fase 2.5. Le fasi più pesanti in Opus — il gesto del Limine, le regole di collisione, la convergenza delle palette, la matematica dello shader — sono fatte, ed è per questo che il rapporto si è riequilibrato.
 
@@ -464,7 +474,8 @@ Dove conviene spendere Opus da qui, in ordine: la **7.5** (il terreno dentro la 
 - [~] Sistema visivo a tre palette con blending continuo e bloom attivi insieme; mancano particelle e parallax
 - [x] **La convergenza funziona**: scendendo, i due mondi si somigliano sempre di più — palette *e* bloom convergono insieme — e posizione e movimento reggono da soli
 - [x] Almeno 6 tipi di ostacolo con **letture distinte**, di cui almeno uno che minaccia il Limine e almeno uno anticipatorio (Eco / Finta / Pattugliatore)
-- [ ] 12-16 pattern distribuiti su tre tier
+- [x] 12-16 pattern distribuiti su tre tier — sono 19, e il perché sta nella Fase 7
+- [x] Curva di difficoltà a tre manopole, non solo velocità
 - [ ] Bonus di luce raccolti per posizione, piazzati dove costa qualcosa prenderli
 - [ ] **Due strati e la transizione fra loro**, come evento che non ferma il gioco
 - [ ] Audio: due mix sincronizzati + traccia per strato + i SFX principali

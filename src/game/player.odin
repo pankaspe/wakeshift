@@ -313,3 +313,25 @@ get_whip_progress :: proc(player: Player) -> f32 {
 get_suspension_sway :: proc(player: Player, period: f32) -> f32 {
 	return math.sin(player.suspended_time / period * 2 * math.PI)
 }
+
+// Which band the player counts as being in, for anything that speaks the
+// pattern contract's vocabulary (core/lane.odin).
+//
+// A player mid-journey is reported as the band they are heading for, not
+// the one they left. That is not an approximation: the journey has one
+// direction and it never changes, so a transitioning player is already
+// committed — the only thing still in doubt is whether they will stop in
+// the middle on the way.
+get_player_band :: proc(player: Player) -> core.Band {
+	switch player.state {
+	case .Real:
+		return .Real
+	case .Dream:
+		return .Dream
+	case .Suspended:
+		return .Limen
+	case .Transitioning:
+		return core.band_of_lane(player.target_lane)
+	}
+	return .Real
+}

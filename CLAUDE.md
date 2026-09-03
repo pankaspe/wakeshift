@@ -63,8 +63,8 @@ order before touching anything:
    is not getting any.
 3. The rest of this file — architecture rules and conventions.
 
-**Where the project stands: phases 0-6 are complete, and phase 7 is next**, followed by the newly
-inserted phase 7.5 (the ground and the Sprout).
+**Where the project stands: phases 0-7 are complete, and phase 7.5 is next** (the ground
+and the Sprout).
 
 The game is playable end to end and all three states work. A flip is a journey from wall to
 wall and holding stops it halfway in the Limen, paid for out of Lucidity — one resource
@@ -79,8 +79,7 @@ Underneath: packages with an acyclic dependency graph, saves encrypted in the OS
 directory, and a simulation that is deterministic and verified — seeded generation, input
 as data, a fixed timestep, and every record storing the manifest that reproduces it.
 
-**What is missing, in the order the roadmap tackles it:** difficulty still comes almost
-entirely from scroll speed and there are only 11 patterns (phase 7); the terrain is still
+**What is missing, in the order the roadmap tackles it:** the terrain is still
 decoration the simulation cannot see, which is why the player is drawn sunk into the
 ground, and the character is not yet the Sprout (phase 7.5); no light pickups (phase 8);
 no particles (phase 9); no parallax scenery (phase 10); no game feel pass (phase 11); no
@@ -93,6 +92,17 @@ program that exercises the module directly and run it — that habit has caught 
 type-checking could not (`make_directory_all` returning `.Exist`, the input latch, the
 AEAD size assertions, a window call that silently changed the desktop's resolution, a
 near-miss rule that paid for dodges that never happened).
+
+**When the thing to verify is a rule about play, replay it.** Phase 7's contract was
+written twice: once from reading the patterns, and once from a throwaway that drove the
+real simulation with every scripted input line up to two presses, from all three bands, at
+all three tier speeds, across every chasm width — asking of each pattern *which answers
+survive and where they leave you*. It overturned the first version's central assumption
+(that the contract could govern where the Limen leaves a player) and it confirmed a
+phase-6 claim nobody had measured (that `pattern_echo_guarded` really does take the hold
+answer away: from Dream, Dream is the only wall reachable). Rebuild it rather than trusting
+a declaration — an `entry` set is a claim about play, and claims about play are cheap to
+check and expensive to be wrong about.
 
 **When the thing to verify is pixels, read the pixels back.** `rl.LoadImageFromTexture` on
 the render target turns "does the bloom look right" into arithmetic: draw the frame twice,
@@ -199,6 +209,47 @@ The split follows the design doc's own axis (section 5):
 - **The floor breaks, the ceiling dissolves.** Hard lit edges and a dark pit on one side;
   edges fading out over tens of pixels and a faint glow on the other. Same cut, opposite
   reading.
+
+### The pattern contract
+
+Patterns chain on **sets of bands**, not single lanes, and the chaining rule is
+containment: `prev.exit` must be a subset of `next.entry`. The generator commits to the
+next pattern before the player has finished answering the current one, so it has to pick
+one that accepts every answer.
+
+- **A pattern can have more than one answer, and that is what the single-lane contract got
+  wrong** — not the missing third state. The Echo is solved either by two tight flips or
+  by one hold, and those land on opposite walls.
+- **Exit sets name walls only, and `validate_pattern_pool` enforces it.** Replaying every
+  pattern showed why: for almost all of them, pressing once and never letting go both
+  survives and ends the pattern suspended. Holding needs no permission from the pattern, so
+  "the player is in the Limen at this seam" is not something the contract can control. A
+  contract that claimed to would have had to put the Limen in every set, which is the same
+  as having no contract.
+- **What the Limen contributes to an exit set is a second wall, not a third band.** Holding
+  pauses a journey rather than starting a different one, so releasing lands the player at
+  the wall they were already travelling toward.
+- **No pattern may require the Limen.** Lucidity starts every run at zero, so a pattern
+  whose only answer is a hold is unsolvable for a player who cannot afford it. Every
+  pattern must have an answer made only of taps — the harness below checks this directly.
+- **A pattern with two answers needs a *converger* after it**: something that accepts both
+  walls. Nothing in a pool of single-wall entries can follow an exit of `{Real, Dream}`,
+  and `pick_next_pattern` would silently fall back to `pool[0]`. `pattern_drift`,
+  `pattern_crossing` and `pattern_void_pair` are that class.
+
+**Difficulty is three knobs, and speed is the smallest.** Obstacles are events in time, so
+reaction time *inside* a pattern does not move with scroll speed at all — replaying every
+pattern at 270, 330 and 400 px/s gives the same set of surviving answers. Speed changes how
+long you get to *look* (1080 px of sight is 4.0s at 270 and 2.7s at 400) and, pulling the
+other way, how briefly a wide obstacle blocks a lane. The two other knobs are `Tier.gap`
+(empty air between patterns, the only honestly monotonic one) and `Tier.demand_weights`
+(which patterns get drawn, not merely which are legal). Unlocking a pattern is not the same
+as meeting it.
+
+**A pool is entered from a wall, and the two walls have separate stocks.** Before phase 7
+the deepest tier leaned hardest on demand 3 while having no demand-3 pattern a player
+standing on the floor could be given, so half of every late run got the curve and half got
+what was left. `validate_tier_balance` checks for exactly that now.
 
 ### Presentation
 
@@ -387,12 +438,6 @@ Tracked here so they are not rediscovered. Each is scheduled in `ROADMAP.md`.
   because until the lanes sit where they belong, any work on the character has to be done
   twice. Moving the lanes changes the outcome of every recorded run, so it goes with a
   `GAME_VERSION` bump — say so before doing it.
-- A pattern's `entry_lane`/`exit_lane` contract does not know the Limen exists. A pattern
-  solved by suspending comes out in the opposite lane to the one solved by flipping, so
-  `exit_lane` names the flipping answer and the pattern carries a second of slack
-  afterwards for the other one. Teaching the contract about the third state is T7.1.
-- Difficulty still comes mostly from scroll speed. There are six readings now, but the
-  tier table only changes how fast they arrive. (T7.3)
 - Menus, HUD and the options screen now take their colors from the palette, but still use
   raylib's default bitmap font. Everything drawn from primitives is crisp at native
   resolution and only the text is not — a real font is the remaining half of that job.

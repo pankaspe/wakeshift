@@ -43,5 +43,10 @@ reset_run :: proc(
 
 	delete(obstacles^)
 	obstacles^ = nil
-	generator^ = new_pattern_generator(all_patterns, 2.0, .Dream, seed)
+	// {.Real} because that is where new_player actually puts the player.
+	// It used to say .Dream, which meant the very first pattern of every
+	// run demanded a lane the player was not in — survivable only because
+	// of the two-second lead-in, and a contract violation at the one seam
+	// nobody thinks to check.
+	generator^ = new_pattern_generator(all_patterns, 2.0, {.Real}, seed)
 }

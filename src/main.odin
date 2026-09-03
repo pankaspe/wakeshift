@@ -166,9 +166,9 @@ main :: proc() {
 	// RunManifest instead (roadmap T2.8) and change nothing else.
 	run_seed := rand.uint64()
 
-	// pattern generator: starts 2 safe seconds in, requiring the player
-	// to be in the Dream lane first (matches pattern_steady_real's entry_lane)
-	generator := game.new_pattern_generator(game.all_patterns, 2.0, .Dream, run_seed)
+	// pattern generator: starts 2 safe seconds in, from the band the
+	// player actually starts in (see reset_run)
+	generator := game.new_pattern_generator(game.all_patterns, 2.0, {.Real}, run_seed)
 
 	// records which ticks the player flipped on, so a run that sets a
 	// record can be stored as something replayable rather than a bare
@@ -332,8 +332,10 @@ main :: proc() {
 				// step's elapsed_time — one step of lag here is irrelevant)
 				tier_index := game.get_current_tier_index(world.elapsed_time)
 
-				// keep the generator drawing from the pool unlocked so far
-				generator.pool = game.get_pool_for_tier(tier_index)
+				// point the generator at everything this tier changes:
+				// the unlocked pool, the gap between patterns, and how
+				// the draw is weighted by demand (difficulty.odin)
+				game.set_generator_tier(&generator, tier_index)
 
 				// update the world (scroll, easing toward this tier's target
 				// speed) — must run before update_player, since update_player

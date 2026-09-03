@@ -26,7 +26,14 @@ package core
 // 0.2.0: the Limen — a flip is a longer journey and holding stops it
 //        halfway, so the same input log played against 0.1.0 produces a
 //        different run
-GAME_VERSION :: "0.2.0-alpha"
+// 0.3.0: the level generator changed shape. Patterns chain on sets rather
+//        than single lanes, a run now opens from the band the player is
+//        actually in, tiers put empty air between patterns and weight the
+//        draw by demand, and there are six patterns that did not exist.
+//        None of that touches the save format, but every one of them
+//        changes what a seed generates, so a 0.2.0 manifest replays into
+//        a different level here.
+GAME_VERSION :: "0.3.0-alpha"
 
 RunManifest :: struct {
 	game_version:  string,
