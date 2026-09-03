@@ -159,16 +159,20 @@ Tre cose imparate costruendola, tutte misurate rileggendo i pixel:
 
 **Una domanda architetturale aperta, per la T13.3.** Il grafo dice `ui ← core, game`: `ui` non può importare `render`, quindi oggi il menu **non può** usare il tratto. Quando si arriva alla T13.3 le strade sono due: far importare `render` a `ui` (il grafo resta aciclico), oppure spostare `stroke.odin` e `glow.odin` in un pacchetto di primitive sotto entrambi. La seconda è più pulita e `stroke.odin` è scritto apposta per renderla uno spostamento di file: non importa `game`. Da decidere lì, non adesso.
 
-### Il Germoglio
+### Il Germoglio ✅ (T7.5.3)
 
-La scheda personaggio è già conforme alla regola della silhouette unica senza che glielo si sia chiesto: **corpo scuro, testa che emette**. Il personaggio attuale è già uno scheletro di giunti (`render/player.odin`), quindi diventare il Germoglio è un cambio di proporzioni — testa-bulbo grossa, corpo piccolo — più un osso in più per il germoglio sul capo. Non è una riscrittura.
+La scheda personaggio era già conforme alla regola della silhouette unica senza che glielo si fosse chiesto: **corpo scuro, testa che emette**. Il personaggio era già uno scheletro di giunti, quindi diventare il Germoglio è stato un cambio di numeri più un'appendice — non una riscrittura. Testa-bulbo (due cerchi: la sfera più un lobo che la raccorda alle spalle, così la testa finisce in un corpo invece che su un collo), corpo piccolo, un occhio solo, germoglio a due ossa con due foglie.
 
-Due semplificazioni rispetto alla scheda, decise:
+Le due semplificazioni decise sono state fatte così:
 
-- **Un occhio solo.** La scheda ne mostra ora uno ora due; uno solo è più leggibile a 45px e non ha un asse di simmetria da mantenere quando la figura specchia a metà rotazione.
-- **Il germoglio è un'appendice a due ossa che insegue il corpo con inerzia.** Stelo più due ellissi per le foglie. Il ritardo sul movimento del corpo è movimento gratuito e legge come "vivo", e non tocca la simulazione perché è solo posa.
+- **Un occhio solo**, più leggibile a 45px e senza un asse di simmetria da mantenere quando la figura specchia a metà rotazione. È disegnato col **punto della primitiva della T7.5.2**: alone additivo nell'accento del mondo e nucleo schiarito verso il bianco, che è esattamente "corpo scuro, testa che emette" scritto in primitive.
+- **Il germoglio è un'appendice a due ossa con inerzia**, e l'inerzia è *misurata, non integrata*: tutto ciò che muove la testa (la frustata del flip, il rimbalzo della corsa) è funzione pura dell'orologio, quindi "dov'era un attimo fa" è una valutazione in più invece che uno stato da tenere. Niente stato nel renderer vuol dire niente da riprodurre in un replay. La punta pende più dello stelo, ed è quel singolo numero che fa leggere due ossa come una frusta invece che come un bastone piegato.
 
-E una cosa che la scheda ha trovato e che vale più di un disegno: la posa **"Ipnotizzato"** — corpo raccolto, occhio ad anelli concentrici — **è il Limine**. Vuol dire che il terzo stato diventa riconoscibile *dalla faccia*, non solo dalla posizione nello schermo. È il pilastro "mai il colore da solo" pagato una seconda volta, gratis.
+**La regola verticale, che non è estetica.** La figura *visibile* — silhouette più bordo illuminato — riempie esattamente la scatola da 45px, perché dalla T7.5.1 il fondo di quella scatola è il suolo. Il bordo sporge di `PLAYER_RIM_THICKNESS` oltre la sagoma, quindi il giunto del piede sta a 0.409 e non a 0.5. Sbagliarla è precisamente ciò che si vede come "il personaggio galleggia" o "il personaggio affonda".
+
+**Solo i piedi toccano qualcosa.** Stare appesi al soffitto è mezzo giro più uno specchio, cioè un ribaltamento verticale: al soffitto i piedi stanno in *alto* nella scatola e il germoglio punta in giù, nell'aria libera. Per questo il germoglio può sporgere dalla scatola (lo fa di 4px) e i piedi no.
+
+**Una cosa che il test ha trovato per conto suo**: un giocatore appena creato ha `settle_timer` a zero, cioè è a metà della molla d'atterraggio — ogni run comincia con il personaggio schiacciato al 72% dell'altezza. Non è un difetto introdotto qui e non è stato toccato, ma qualunque misura presa sul frame zero è sbagliata di 9 pixel.
 
 **Un limite da non superare**: la posa cambia, il *moto* no. La lezione della Fase 5 vale ancora — un fronzolo messo sul movimento del giocatore non è decorazione, è attrito. La capriola è una posa che ruota lentamente mentre il giocatore è sospeso; non deve toccare l'orologio del viaggio né aggiungere un istante che il giocatore non ha chiesto.
 
@@ -419,7 +423,7 @@ Perché qui e non nella Fase 10, dove il terreno era programmato: il suolo affon
 |---|---|---|
 | T7.5.1 ✅ | **Il terreno diventa geometria di gioco, non decorazione** (ex T10.0): il profilo si sposta in `core`, `get_lane_y` lo campiona, e il giocatore corre *sopra* il suolo invece che dentro. Tocca la simulazione — gli estremi del viaggio del flip e `world_t` si muovono col terreno — quindi è un task, non una costante da ritoccare | **Opus** |
 | T7.5.2 ✅ | `render/stroke.odin`: la primitiva del **tratto al neon**. Polilinea di spessore dato, cappucci e giunti tondi, nucleo chiaro più alone additivo, colore dalla palette. È la base di tutta la grafica delle fasi 10 e 13 | **Opus** |
-| T7.5.3 | Il **Germoglio**: proporzioni nuove sullo scheletro esistente, testa-bulbo, occhio luminoso singolo, germoglio a due ossa con inerzia. Corpo scuro nei tre mondi, cambia solo la luce | **Opus** |
+| T7.5.3 ✅ | Il **Germoglio**: proporzioni nuove sullo scheletro esistente, testa-bulbo, occhio luminoso singolo, germoglio a due ossa con inerzia. Corpo scuro nei tre mondi, cambia solo la luce | **Opus** |
 | T7.5.4 | Le tre pose: corsa, frustata del flip, e la **capriola** raccolta del Limine con l'occhio ad anelli. Solo posa: l'orologio del viaggio non si tocca | Sonnet |
 | T7.5.5 | **Il gradino come evento di pattern**: il pavimento a quote diverse, autorato nel tempo, che chiede "non essere quaggiù quando arriva la parete". Vedi [Il terreno a piattaforme](#il-terreno-a-piattaforme--appunti-non-ancora-un-piano) — le quattro conseguenze tecniche sono lì | **Opus** |
 | T7.5.6 ⚑ | Playtest: il personaggio appoggia davvero, si legge a 1280×720, i tre stati si distinguono anche a fermo immagine dalla sola posa, e la corsa non è più piatta | — |

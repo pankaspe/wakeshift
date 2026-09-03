@@ -71,7 +71,8 @@ order before touching anything:
 3. The rest of this file — architecture rules and conventions.
 
 **Where the project stands: phases 0-7 are complete, and phase 7.5 is in progress** — the
-ground (T7.5.1) and the neon stroke (T7.5.2) are done, the Sprout and the step are not.
+ground (T7.5.1), the neon stroke (T7.5.2) and the Sprout (T7.5.3) are done; the three poses
+and the step are not.
 
 The game is playable end to end and all three states work. A flip is a journey from wall to
 wall and holding stops it halfway in the Limen, paid for out of Lucidity — one resource
@@ -281,6 +282,35 @@ It is written to know nothing about the game. That matters because of an open qu
 T13.3 wants it. Either `ui` gains that import (the graph stays acyclic) or `stroke.odin`
 and `glow.odin` move into a package of primitives below both. Keep this file free of
 `game` imports so that stays a file move.
+
+### The character stands in its box
+
+The figure is authored as fractions of the player's 45 px box (`render/player.odin`), and
+since T7.5.1 the bottom of that box is the ground. Two rules follow, and both are the
+difference between a character that rests on the floor and one that floats or sinks:
+
+- **The visible figure fills the box, not the joints.** The rim is drawn as a fattened
+  silhouette reaching `PLAYER_RIM_THICKNESS` past the body, so a foot joint sits that much
+  plus half a limb inside the box — 0.409, not 0.5. A shape whose edge falls exactly on the
+  box's bottom lights the pixel row *before* it, which is what contact looks like in a
+  readback.
+- **Only the feet touch anything.** Hanging from the ceiling is half a turn plus a mirror,
+  which is a vertical flip, so the feet are at the *top* of the box there and whatever
+  grows out of the crown points into open air in both worlds. That is why the sprout may
+  overhang the box and the feet may not.
+
+The sprout's inertia is **measured, not integrated**: everything that moves the head is a
+pure function of the world's clock, so "where was it a moment ago" is one more evaluation
+of the same functions rather than state kept in the renderer — state that would have to
+survive the frame and be reproduced by a replay to mean anything. `player_body_offset` is
+its own procedure for exactly that reason.
+
+One trap when writing that arithmetic: the trail against a *turn* has to have the mirror
+undone (`* mirror`), because a turn is measured on screen while the lean is authored in the
+figure's own frame. The trail against the head's *rise* must not be, because backward is a
+direction in the figure's frame. Watching the local number across a flip will show a jump
+of twice the lean at the instant the mirror snaps; that is the mirror, not the sprout, and
+the whole figure already flips with it.
 
 ### The pattern contract
 

@@ -1,10 +1,17 @@
 /*
 * Player Render
-* The character: a dark silhouette with a head, a torso and four limbs,
-* built entirely from thick lines and circles (Design Doc, section 12 —
-* "a body, two poses"). No sprite, no texture; the sense of quality is
-* meant to come from the math of the movement, not from the detail of
-* the shapes.
+* The character: the Sprout, a dark silhouette with a bulb head, a small
+* body, four limbs and a sprout growing out of its crown, built entirely
+* from thick lines and circles (Design Doc, section 12 — "a body, two
+* poses"). No sprite, no texture; the sense of quality is meant to come
+* from the math of the movement, not from the detail of the shapes.
+*
+* The proportions come from docs/sketch/spirito_foresta.jpeg (T7.5.3) and
+* they are what makes it read as a sprout rather than as a small person:
+* the head is a bit under two fifths of the figure, the body is a
+* remainder, and there is no neck to speak of. It was a change of numbers
+* and one extra appendage, not a rewrite, which is the whole reason the
+* skeleton was authored as fractions of a box in the first place.
 *
 * Three things are happening at once here, and they are deliberately
 * kept separate:
@@ -51,19 +58,79 @@ import rl "vendor:raylib/v55"
 // transform of these numbers, which is what keeps the run cycle and the
 // flip from having to know about each other.
 
-PLAYER_HEAD_CENTER :: rl.Vector2{0.09, -0.31}
-PLAYER_HEAD_RADIUS :: 0.150
-PLAYER_NECK :: rl.Vector2{0.06, -0.19}
-PLAYER_SHOULDER :: rl.Vector2{0.03, -0.13}
-PLAYER_HIP :: rl.Vector2{-0.02, 0.08}
+// The vertical layout rule, and it is not cosmetic: the *visible* figure
+// — the silhouette plus the lit rim drawn around it — has to fill the
+// 45 px box exactly, because since T7.5.1 the bottom of that box is the
+// ground the character stands on. The rim reaches PLAYER_RIM_THICKNESS
+// past the silhouette, so the feet joint sits that much plus half a limb
+// inside the box: 0.409 rather than 0.5. Getting it wrong is precisely
+// what "the character floats" and "the character sinks" look like.
+//
+// The feet are the only part that touches anything. Hanging from the
+// ceiling is half a turn plus a mirror, which is a vertical flip, so the
+// feet are at the top of the box there and the sprout points down into
+// open air. That is why the sprout may overhang the box and the feet
+// may not.
 
-PLAYER_THIGH_LENGTH :: 0.21
-PLAYER_SHIN_LENGTH :: 0.21
-PLAYER_UPPER_ARM_LENGTH :: 0.15
-PLAYER_FOREARM_LENGTH :: 0.15
+PLAYER_HEAD_CENTER :: rl.Vector2{0.055, -0.190}
+PLAYER_HEAD_RADIUS :: 0.170
 
-PLAYER_TORSO_THICKNESS :: 0.20
-PLAYER_LIMB_THICKNESS :: 0.085
+// The bulb tapers onto the shoulders instead of sitting on a neck: a
+// second, smaller circle low in the head, which merges with the first
+// into one egg. Two circles are the cheapest shape that stops the head
+// reading as a ball balanced on a stick.
+PLAYER_HEAD_LOBE_CENTER :: rl.Vector2{0.035, -0.075}
+PLAYER_HEAD_LOBE_RADIUS :: 0.110
+
+PLAYER_NECK :: rl.Vector2{0.030, -0.060}
+PLAYER_SHOULDER :: rl.Vector2{0.020, -0.020}
+PLAYER_HIP :: rl.Vector2{-0.015, 0.134}
+
+PLAYER_THIGH_LENGTH :: 0.145
+PLAYER_SHIN_LENGTH :: 0.130
+PLAYER_UPPER_ARM_LENGTH :: 0.105
+PLAYER_FOREARM_LENGTH :: 0.095
+
+PLAYER_TORSO_THICKNESS :: 0.165
+PLAYER_LIMB_THICKNESS :: 0.075
+
+// --- The sprout on the crown ---
+//
+// Two bones and two leaves, and it is the one part of the character that
+// is not doing anything: it only answers to what the rest of the body
+// already did. That is the point of it — a lag is movement for free, and
+// free movement is what reads as alive.
+
+PLAYER_SPROUT_BASE :: rl.Vector2{0.075, -0.335} // on the crown, a little forward
+PLAYER_SPROUT_STEM :: 0.075
+PLAYER_SPROUT_TIP :: 0.045
+PLAYER_SPROUT_THICKNESS :: 0.050
+PLAYER_SPROUT_TIP_THICKNESS :: 0.038
+
+// Radians forward of straight up, at rest. The stem leans a little and
+// the tip leans more, which is the curve the sheet draws.
+PLAYER_SPROUT_CURVE_STEM :: 0.16
+PLAYER_SPROUT_CURVE_TIP :: 0.42
+
+PLAYER_LEAF_LENGTH :: 0.090
+PLAYER_LEAF_THICKNESS :: 0.058
+PLAYER_LEAF_SPREAD :: 1.15 // radians either side of the tip, from the joint
+
+// How far back the sprout is looking, in seconds. Everything that moves
+// the head is a pure function of the world's clock, so "where was it a
+// moment ago" is one more evaluation rather than a piece of state — which
+// matters, because state kept in the renderer would have to survive the
+// frame and be reproduced by a replay to mean anything.
+//
+// Deliberately shorter than the gap between the end of the whip and the
+// end of the journey (0.14 s): the trail has decayed to nothing before
+// the character lands, so a landing has nothing to snap back from.
+PLAYER_SPROUT_LAG :: 0.07
+
+PLAYER_SPROUT_TURN_TRAIL :: 0.20 // lean per radian the body turned
+PLAYER_SPROUT_RISE_TRAIL :: 2.6 // lean per box fraction the head rose
+PLAYER_SPROUT_MAX_LEAN :: 0.75 // radians; a whip is fast enough to need this
+PLAYER_SPROUT_TIP_FOLLOW :: 1.6 // the tip lags more than the stem does
 
 // --- The run cycle ---
 
@@ -121,8 +188,14 @@ PLAYER_GLOW_RADIUS :: 1.35 // multiples of the box size
 PLAYER_GLOW_STRENGTH :: 0.20
 PLAYER_FLIP_GLOW_BOOST :: 0.35 // extra glow at the peak of a flip
 PLAYER_SUSPENDED_GLOW :: 0.28 // extra glow while the body is open at the threshold
-PLAYER_EYE_RADIUS :: 0.035
-PLAYER_EYE_SPACING :: 0.085
+// One eye, not two (art direction, T7.5.3). More readable at 45 px, and
+// it has no axis of symmetry to keep honest when the figure mirrors
+// halfway through a turn. It is the character's own light: the body is
+// the same dark shape in all three worlds, and this is the only part of
+// it allowed to be bright.
+PLAYER_EYE_RADIUS :: 0.052
+PLAYER_EYE_OFFSET :: rl.Vector2{0.085, -0.030} // from the head centre: forward, a little up
+PLAYER_EYE_GLOW :: 0.55
 
 // How the figure's local box lands on screen.
 PlayerPose :: struct {
@@ -142,6 +215,13 @@ PlayerFigure :: struct {
 	feet:     [2]rl.Vector2,
 	elbows:   [2]rl.Vector2,
 	hands:    [2]rl.Vector2,
+
+	// The sprout: the crown it grows from, the joint where the two
+	// leaves sit, and the tip.
+	sprout_base:  rl.Vector2,
+	sprout_joint: rl.Vector2,
+	sprout_tip:   rl.Vector2,
+	leaves:       [2]rl.Vector2,
 }
 
 // Which lane the shape should currently be anchored to, for scaling
@@ -266,11 +346,16 @@ limb_end :: proc(from: rl.Vector2, angle, length: f32) -> rl.Vector2 {
 // animation — it stops running and starts floating the same way the
 // palette stops being blue and starts being violet. opening then lerps
 // the whole body toward the spread, weightless pose of the threshold.
-new_player_figure :: proc(stride, time, world_t, opening: f32) -> PlayerFigure {
+// How far the whole body sits from its rest position, in local units.
+//
+// Its own procedure because the sprout needs it twice — now, and a moment
+// ago — to know how fast the head has been moving. Everything in it is a
+// pure function of the clock and the distance run, so asking about the
+// past costs an evaluation rather than a piece of remembered state.
+player_body_offset :: proc(stride, time, world_t, opening: f32) -> rl.Vector2 {
 	dream := clamp(world_t, 0, 1)
 	grounded := 1 - dream
 	open := clamp(opening, 0, 1)
-
 	sway := math.sin(time / PLAYER_SWAY_PERIOD * 2 * math.PI)
 
 	// The body rises twice per stride while running, breathes slowly while
@@ -278,7 +363,25 @@ new_player_figure :: proc(stride, time, world_t, opening: f32) -> PlayerFigure {
 	bounce := -PLAYER_BOUNCE * abs(math.sin(stride)) * grounded * (1 - open)
 	float := PLAYER_FLOAT_AMOUNT * math.sin(time / PLAYER_FLOAT_PERIOD * 2 * math.PI) * dream
 	float += PLAYER_FLOAT_AMOUNT * sway * open
-	body_offset := rl.Vector2{0, bounce + float}
+	return rl.Vector2{0, bounce + float}
+}
+
+// The far end of a sprout bone, measured from straight *up* and turning
+// toward the front — the direction a sprout grows, rather than the
+// direction a limb hangs. Same helper underneath, half a turn away.
+@(private)
+sprout_end :: proc(from: rl.Vector2, angle, length: f32) -> rl.Vector2 {
+	return limb_end(from, math.PI - angle, length)
+}
+
+new_player_figure :: proc(stride, time, world_t, opening, sprout_lean: f32) -> PlayerFigure {
+	dream := clamp(world_t, 0, 1)
+	grounded := 1 - dream
+	open := clamp(opening, 0, 1)
+
+	sway := math.sin(time / PLAYER_SWAY_PERIOD * 2 * math.PI)
+
+	body_offset := player_body_offset(stride, time, world_t, opening)
 
 	figure := PlayerFigure {
 		head     = PLAYER_HEAD_CENTER + body_offset,
@@ -327,6 +430,24 @@ new_player_figure :: proc(stride, time, world_t, opening: f32) -> PlayerFigure {
 		figure.hands[side] = limb_end(figure.elbows[side], elbow, PLAYER_FOREARM_LENGTH)
 	}
 
+	// The sprout. Two bones and two leaves, leaning by however much the
+	// head has been moving — the lean arrives measured, from the one place
+	// that can see both the turn and the bounce (draw_player).
+	//
+	// The tip leans further than the stem does, and that single number is
+	// what makes two bones read as one whip instead of as a bent stick.
+	stem := PLAYER_SPROUT_CURVE_STEM + sprout_lean
+	tip := PLAYER_SPROUT_CURVE_TIP + sprout_lean * PLAYER_SPROUT_TIP_FOLLOW
+
+	figure.sprout_base = PLAYER_SPROUT_BASE + body_offset
+	figure.sprout_joint = sprout_end(figure.sprout_base, stem, PLAYER_SPROUT_STEM)
+	figure.sprout_tip = sprout_end(figure.sprout_joint, tip, PLAYER_SPROUT_TIP)
+
+	for side in 0 ..< 2 {
+		spread: f32 = side == 0 ? PLAYER_LEAF_SPREAD : -PLAYER_LEAF_SPREAD
+		figure.leaves[side] = sprout_end(figure.sprout_joint, tip + spread, PLAYER_LEAF_LENGTH)
+	}
+
 	return figure
 }
 
@@ -342,7 +463,11 @@ draw_player_bones :: proc(
 ) {
 	limb := PLAYER_LIMB_THICKNESS * pose.unit + extra_thickness
 	torso := PLAYER_TORSO_THICKNESS * pose.unit + extra_thickness
+	stem := PLAYER_SPROUT_THICKNESS * pose.unit + extra_thickness
+	stem_tip := PLAYER_SPROUT_TIP_THICKNESS * pose.unit + extra_thickness
+	leaf := PLAYER_LEAF_THICKNESS * pose.unit + extra_thickness
 	head_radius := PLAYER_HEAD_RADIUS * pose.unit + extra_thickness * 0.5
+	lobe_radius := PLAYER_HEAD_LOBE_RADIUS * pose.unit + extra_thickness * 0.5
 
 	bone :: proc(pose: PlayerPose, a, b: rl.Vector2, thickness: f32, color: rl.Color) {
 		start := pose_point(pose, a)
@@ -363,7 +488,21 @@ draw_player_bones :: proc(
 
 	bone(pose, figure.shoulder, figure.hip, torso, color)
 	bone(pose, figure.neck, figure.shoulder, limb, color)
+
+	// The sprout, drawn with the body and in the body's colour: it is part
+	// of the silhouette, not a decoration laid over it. A leaf is a short
+	// fat bone — a capsule is already a leaf at this size, and it gets the
+	// lit rim for free like everything else.
+	bone(pose, figure.sprout_base, figure.sprout_joint, stem, color)
+	bone(pose, figure.sprout_joint, figure.sprout_tip, stem_tip, color)
+	for leaf_end in figure.leaves {
+		bone(pose, figure.sprout_joint, leaf_end, leaf, color)
+	}
+
+	// The bulb: the big circle plus the lobe that tapers it onto the
+	// shoulders, so the head ends in a body rather than on a neck.
 	rl.DrawCircleV(pose_point(pose, figure.head), head_radius, color)
+	rl.DrawCircleV(pose_point(pose, PLAYER_HEAD_LOBE_CENTER + (figure.head - PLAYER_HEAD_CENTER)), lobe_radius, color)
 }
 
 draw_player :: proc(player: game.Player, world: game.World, palettes: core.PaletteSet) {
@@ -391,7 +530,39 @@ draw_player :: proc(player: game.Player, world: game.World, palettes: core.Palet
 	pose.rotation += PLAYER_SWAY_ROTATION * sway * opening
 
 	stride := world.scroll_offset / PLAYER_STRIDE_LENGTH * 2 * math.PI
-	figure := new_player_figure(stride, world.elapsed_time, palettes.world_t, opening)
+
+	// What the sprout is answering to, and it answers late. Two things
+	// move the head — the whip of a flip and the bounce of the run — so
+	// the lean is how much of each happened over the last PLAYER_SPROUT_LAG
+	// seconds. That is what inertia is: a response to velocity, not to
+	// position, and a velocity is a difference between two evaluations of
+	// something the clock already decides.
+	earlier := player
+	earlier.transition_timer = max(player.transition_timer - PLAYER_SPROUT_LAG, 0)
+	turn := get_player_rotation(player) - get_player_rotation(earlier)
+
+	stride_earlier :=
+		(world.scroll_offset - world.scroll_speed * PLAYER_SPROUT_LAG) /
+		PLAYER_STRIDE_LENGTH *
+		2 *
+		math.PI
+	rise :=
+		player_body_offset(stride, world.elapsed_time, palettes.world_t, opening).y -
+		player_body_offset(
+			stride_earlier,
+			world.elapsed_time - PLAYER_SPROUT_LAG,
+			palettes.world_t,
+			opening,
+		).y
+
+	// The turn is measured on screen, where the mirror does not apply; the
+	// lean is authored in the figure's own frame, where it does — so the
+	// mirror has to be undone on the way in or the sprout trails the wrong
+	// way round in one of the two worlds.
+	lean := -turn * PLAYER_SPROUT_TURN_TRAIL * mirror + rise * PLAYER_SPROUT_RISE_TRAIL
+	lean = clamp(lean, -PLAYER_SPROUT_MAX_LEAN, PLAYER_SPROUT_MAX_LEAN)
+
+	figure := new_player_figure(stride, world.elapsed_time, palettes.world_t, opening, lean)
 
 	// The aura: the world's light gathered around the body, brightest at
 	// the peak of a flip. The body itself never takes a world's color —
@@ -415,21 +586,24 @@ draw_player :: proc(player: game.Player, world: game.World, palettes: core.Palet
 	draw_player_bones(pose, figure, PLAYER_RIM_THICKNESS * 2, palettes.current.light)
 	draw_player_bones(pose, figure, 0, palettes.current.silhouette)
 
-	draw_player_eyes(pose, figure, palettes.current.accent)
+	draw_player_eye(pose, figure, palettes.current.accent)
 }
 
-// Two points of light on the head, set toward the front. They are the
-// only part of the character allowed a bright color, and they carry the
-// facing: authored in local space, they follow the mirror and the
-// rotation without a special case.
+// The one point of light on the head, set toward the front.
+//
+// It is the whole of the character's own light, and it is drawn with the
+// neon stroke's dot (T7.5.2): a halo in the world's accent with a core
+// lifted toward white, which is what "dark body, emitting head" means in
+// primitives. Authored in local space, so it follows the mirror and the
+// rotation with no special case — and being single, it has no symmetry
+// to break when the figure turns over.
 @(private)
-draw_player_eyes :: proc(pose: PlayerPose, figure: PlayerFigure, color: rl.Color) {
-	radius := PLAYER_EYE_RADIUS * pose.unit
-	front := rl.Vector2{figure.head.x + PLAYER_HEAD_RADIUS * 0.45, figure.head.y - 0.02}
+draw_player_eye :: proc(pose: PlayerPose, figure: PlayerFigure, color: rl.Color) {
+	// The eye rides the head rather than the box: the head moves with the
+	// bounce and the float, and an eye that did not would swim inside it.
+	local := figure.head + PLAYER_EYE_OFFSET
 
-	for side in 0 ..< 2 {
-		offset := PLAYER_EYE_SPACING * (f32(side) - 0.5)
-		center := pose_point(pose, rl.Vector2{front.x - offset * 0.35, front.y + offset})
-		rl.DrawCircleV(center, radius, color)
-	}
+	eye := new_stroke(color, PLAYER_EYE_RADIUS * 2 * pose.unit)
+	eye.glow = PLAYER_EYE_GLOW
+	draw_stroke_dot(pose_point(pose, local), eye)
 }
