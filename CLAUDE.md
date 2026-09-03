@@ -70,9 +70,9 @@ order before touching anything:
    (phase 8) are the third case — neither, but solid light.
 3. The rest of this file — architecture rules and conventions.
 
-**Where the project stands: phases 0-7 are complete, and phase 7.5 is in progress** — the
-ground (T7.5.1), the neon stroke (T7.5.2), the Sprout (T7.5.3) and its three poses (T7.5.4)
-are done; the step (T7.5.5) is not.
+**Where the project stands: phases 0-7 are complete, and phase 7.5 is built** — the ground
+(T7.5.1), the neon stroke (T7.5.2), the Sprout (T7.5.3), its three poses (T7.5.4) and the
+step (T7.5.5). Only its playtest (T7.5.6) is outstanding.
 
 The game is playable end to end and all three states work. A flip is a journey from wall to
 wall and holding stops it halfway in the Limen, paid for out of Lucidity — one resource
@@ -202,8 +202,8 @@ constantly, and splitting them would force premature interfaces.
 
 ### Obstacles
 
-Six types, and — since phase 6 — six behaviours rather than one behaviour with six skins.
-The split follows the design doc's own axis (section 5):
+Seven types, and — since phase 6 — seven behaviours rather than one behaviour with seven
+skins. The split follows the design doc's own axis (section 5):
 
 - **Full vs void.** A Block is something that appears; a Chasm is the floor failing to be
   there. That is two *rules*, not two sprites: a presence kills whoever overlaps it, an
@@ -218,6 +218,24 @@ The split follows the design doc's own axis (section 5):
 - **The floor breaks, the ceiling dissolves.** Hard lit edges and a dark pit on one side;
   edges fading out over tens of pixels and a faint glow on the other. Same cut, opposite
   reading.
+- **The floor also rises.** The Step (T7.5.5) is the third case and belongs to neither end
+  of the axis: not a thing standing on the ground and not the ground missing, but the ground
+  itself lifting into the lane. It asks a Block's question in a Chasm's voice — be
+  elsewhere — and since it is the ground doing it, it reaches only whoever is on the ground.
+  The terrain draws it, like the two voids, as a piece of surface at a different height with
+  a vertical face at each end, and the surface line runs continuously up the face and along
+  the top: one mark, one silhouette, which is what makes it read as *the floor rising*
+  rather than as a box standing on it.
+- **A Step does not move the Real lane, and that is deliberate.** It is the choice the Chasm
+  already made: over a hole the lane stays where the floor would be and standing there kills
+  you. A raised stretch is not floor anyone can reach — there is no jump in this game — so a
+  lane anchored on top of it would be a lane the player is told to travel into and then
+  killed for arriving at. It also keeps the Limen still: the midpoint of a journey only
+  stays put because both walls carry the same profile, and lifting the floor alone would
+  jerk a suspended player upward by half a step on the single frame its vertical face went
+  past. The cost is the two speculative bonuses the roadmap hoped for — a high floor
+  shortening the journey and narrowing the gap — and they are not worth a pop on a legal
+  play.
 
 ### The ground is simulation
 
@@ -355,6 +373,14 @@ one that accepts every answer.
 - **No pattern may require the Limen.** Lucidity starts every run at zero, so a pattern
   whose only answer is a hold is unsolvable for a player who cannot afford it. Every
   pattern must have an answer made only of taps — the harness below checks this directly.
+- **The exit set governs the *cheapest* answers, not every surviving one.** A player can
+  always volunteer an extra flip in the empty air after the last threat and end on the other
+  wall, and no pattern can forbid that any more than it can forbid a hold. Measured while
+  authoring the step patterns: held to the stricter reading, `steady_real`, `steady_chasm`
+  and `void_pair` "fail" in exactly the same way the new patterns do. So the check that
+  means something is: for every band in `entry`, replay every script and find the fewest
+  presses that survive; every answer that cheap must leave the player inside
+  `exit` ∪ {Limen}, and at least one of them must be made only of taps.
 - **A pattern with two answers needs a *converger* after it**: something that accepts both
   walls. Nothing in a pool of single-wall entries can follow an exit of `{Real, Dream}`,
   and `pick_next_pattern` would silently fall back to `pool[0]`. `pattern_drift`,

@@ -16,6 +16,13 @@
 *                     *rules*: a Block kills whoever touches it, a Chasm
 *                     kills only whoever is still standing on the floor
 *                     when it passes underneath (see collision.odin).
+*                     The Step (T7.5.5) is the third case and belongs to
+*                     neither end: not a thing standing on the floor and
+*                     not the floor missing, but the floor itself rising
+*                     into the lane. It asks a Block's question — be
+*                     elsewhere — in a Chasm's voice, since it is the
+*                     ground doing it and so only reaches whoever is on
+*                     the ground.
 *   honest vs         The Real world's obstacles are static and mean what
 *   anticipatory      they show. The Feint and the Patroller do not: they
 *                     anticipate the obvious answer rather than react to
@@ -50,6 +57,7 @@ ObstacleType :: enum {
 	DreamHole, // Dream, void: the ceiling dissolves, kills only whoever hangs from it
 	Feint, // either lane: looks like a threat, retracts before it arrives, never lethal
 	Patroller, // either lane: sweeps the whole column on a readable cycle
+	Step, // Real, neither: the floor itself rises into a wall
 }
 
 // Which lane a type belongs to, per the thematic pairing in Design Doc
@@ -60,7 +68,7 @@ ObstacleType :: enum {
 // validate_pattern_pool).
 expected_lane_for_type :: proc(obstacle_type: ObstacleType) -> (lane: core.Lane, bound: bool) {
 	switch obstacle_type {
-	case .Block, .Chasm:
+	case .Block, .Chasm, .Step:
 		return .Real, true
 	case .PulsingShape, .DreamHole:
 		return .Dream, true
@@ -70,13 +78,34 @@ expected_lane_for_type :: proc(obstacle_type: ObstacleType) -> (lane: core.Lane,
 	return .Real, false
 }
 
-// True for the two types that are an *absence* rather than a thing. They
-// are drawn by the terrain, which is the only code that knows where its
-// own surface is (render/terrain.odin), and they collide by state rather
-// than by overlap.
+// True for the two types that are an *absence* rather than a thing.
 is_void_obstacle :: proc(obstacle_type: ObstacleType) -> bool {
 	return obstacle_type == .Chasm || obstacle_type == .DreamHole
 }
+
+// True for everything the *terrain* draws rather than draw_obstacle: the
+// two voids and the Step. They have one thing in common that decides
+// both their drawing and their rule — they are the ground itself doing
+// something, so only the code that knows where the surface is can draw
+// them, and only whoever is standing on that surface is touched by them.
+is_terrain_obstacle :: proc(obstacle_type: ObstacleType) -> bool {
+	return is_void_obstacle(obstacle_type) || obstacle_type == .Step
+}
+
+// --- Step (Real, the floor as a wall) ---
+//
+// How far the floor lifts. Taller than the player is, so that a raised
+// stretch reads as something to be elsewhere for rather than as a bump
+// (the character is PLAYER_SIZE tall standing on the floor).
+STEP_HEIGHT :: 52
+
+// How long a raised stretch runs, in pixels of world. Wider than a
+// chasm on average: a hole is a moment to not be down for, and a step is
+// a stretch. At the opening speed these are 0.32 s, 0.44 s and 0.60 s of
+// floor that is not there to stand on.
+STEP_WIDTH_SHORT :: OBSTACLE_SIZE * 1.6
+STEP_WIDTH_MEDIUM :: OBSTACLE_SIZE * 2.2
+STEP_WIDTH_LONG :: OBSTACLE_SIZE * 3.0
 
 Obstacle :: struct {
 	arrival_time:      f32, // world.elapsed_time value at which this obstacle reaches PLAYER_X
@@ -128,10 +157,27 @@ new_obstacle :: proc(
 		width = PATROLLER_SIZE
 	}
 
+	height: f32 = OBSTACLE_SIZE
+	if obstacle_type == .Step {
+		// Same treatment as a gap's width, and for the same reason: it is
+		// flavour, and it is the one random choice left in an obstacle, so
+		// a pattern still knows exactly what it is asking of the player.
+		roll := rand.float32(rng)
+		switch {
+		case roll < 0.4:
+			width = STEP_WIDTH_SHORT
+		case roll < 0.75:
+			width = STEP_WIDTH_MEDIUM
+		case:
+			width = STEP_WIDTH_LONG
+		}
+		height = STEP_HEIGHT
+	}
+
 	return Obstacle {
 		arrival_time = arrival_time,
 		lane = lane,
-		size = rl.Vector2{width, OBSTACLE_SIZE},
+		size = rl.Vector2{width, height},
 		obstacle_type = obstacle_type,
 		phase_offset = phase_offset,
 	}

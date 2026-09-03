@@ -17,6 +17,11 @@
 *   whether the player is still standing on that floor when the hole
 *   passes underneath — not whether two boxes overlap.
 *
+* The Step (T7.5.5) is the second rule again, read the third way: the
+* floor rising instead of failing. It kills whoever is on the ground for
+* the same reason a Chasm does, and it is answered the same way — by
+* being anywhere else at all.
+*
 * That second rule is what makes the two read differently at speed. A
 * Block is a narrow instant: be elsewhere exactly when it goes by. A
 * Chasm is up to two and a half times as wide and only cares about the
@@ -68,6 +73,14 @@ check_player_obstacle_collision :: proc(player: Player, obstacle: Obstacle, worl
 		// The same rule mirrored: the ceiling has dissolved, and only
 		// what was hanging from it comes away.
 		return player.state == .Dream
+
+	case .Step:
+		// The floor is not missing here, it is in the way. Same rule as
+		// the Chasm and for the same reason — the ground is what is doing
+		// it, so it reaches whoever is standing on the ground and nobody
+		// else. There is no jump in this game, so a raised stretch is not
+		// something to get on top of: it is a wall to be elsewhere for.
+		return player.state == .Real
 
 	case .Feint:
 		// Never lethal, and that is the whole point of it. It is a

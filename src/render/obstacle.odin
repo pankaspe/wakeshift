@@ -60,7 +60,7 @@ draw_obstacle :: proc(obstacle: game.Obstacle, world: game.World, palettes: core
 	case .Patroller:
 		draw_patroller(position, size, palettes)
 
-	case .Chasm, .DreamHole:
+	case .Chasm, .DreamHole, .Step:
 	// drawn by the terrain, which owns where its own surface is
 	}
 }

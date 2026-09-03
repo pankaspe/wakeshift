@@ -446,6 +446,60 @@ pattern_void_pair := Pattern {
 	demand   = 2,
 }
 
+// --- The floor as a wall (T7.5.5) ---
+
+// A single raised stretch: the floor lifts into a wall and stays lifted
+// for as long as it is wide. Same question as a Block and the same answer
+// as a Chasm — be anywhere that is not the ground — but asked by the
+// world instead of by something standing on it.
+//
+// It is in the opening pool on purpose. The step is the one obstacle the
+// player has to be *told* about by seeing it early and slowly, because it
+// is the only one that is made of scenery: everything else in the game
+// announces itself by not being the background.
+pattern_steady_step := Pattern {
+	events   = []PatternEvent{{time_offset = 1.0, lane = .Real, obstacle_type = .Step}},
+	duration = 2.2,
+	entry    = {.Dream},
+	exit     = {.Dream},
+	demand   = 0,
+}
+
+// The same wall, but arriving at a player who might be on either side of
+// the column: a converger, which is the class the pool is always short of
+// (see the note on ambiguous exits above). From the ceiling it asks for
+// nothing; from the floor it asks for one flip, with a second and a bit
+// to make it in.
+//
+// Its width is the run's own choice, so the longest variant holds the
+// floor shut for 0.60 s at the opening speed and 0.41 s at the deepest —
+// which is why the pattern does not ask for the floor back afterwards.
+pattern_rising_wall := Pattern {
+	events   = []PatternEvent{{time_offset = 1.2, lane = .Real, obstacle_type = .Step}},
+	duration = 2.4,
+	entry    = {.Real, .Dream},
+	exit     = {.Dream},
+	demand   = 1,
+}
+
+// The floor rises, and then the ceiling opens. Full then void, and the
+// two belong to opposite worlds, so the answer is a flip up followed by a
+// flip down with the widest step and the widest hole both allowed for.
+//
+// The spacing is set by the slowest tier: a long step holds the floor
+// shut until 1.60 s and a journey takes 0.24 s, so the ceiling cannot be
+// asked for before roughly 1.9 s. It is asked for at 2.4.
+pattern_step_then_hole := Pattern {
+	events   = []PatternEvent {
+		{time_offset = 1.0, lane = .Real, obstacle_type = .Step},
+		{time_offset = 2.4, lane = .Dream, obstacle_type = .DreamHole},
+	},
+	duration = 3.2,
+	entry    = {.Real, .Dream},
+	exit     = {.Real},
+	demand   = 2,
+}
+
 // Pool of hand-authored patterns (Design Doc, section 7).
 // Every exit set must be accepted by at least one pattern's entry set, or
 // the generator can get stuck (see pattern_double_switch_reverse, and the
@@ -461,6 +515,7 @@ all_patterns := []Pattern {
 	pattern_feint_dream,
 	pattern_drift,
 	pattern_crossing,
+	pattern_steady_step,
 }
 
 // Picks a random pattern from the pool that accepts every band the player

@@ -23,6 +23,24 @@
 * drawn one span at a time. Vertices land exactly on the gap edges, so a
 * hole is never snapped to the profile's 50px grid.
 *
+* Since T7.5.5 the floor also *rises*. A Step is the third case of the
+* design doc's full/void axis and belongs to neither end of it: not a
+* thing standing on the ground and not the ground missing, but the ground
+* itself lifting into the lane. It is drawn here for the same reason the
+* voids are, and it is cut the same way — the raised stretch is a piece of
+* surface at a different height, with a vertical face at each end.
+*
+* What a Step does *not* do is move the Real lane, and that is deliberate.
+* It is the choice the Chasm already made: over a hole the lane stays
+* where the floor would be, and standing there kills you. A raised stretch
+* is not floor anyone can reach — there is no jump in this game — so a
+* lane anchored on top of it would be a lane the player is told to travel
+* into and then killed for arriving at. It also keeps the Limen still: the
+* midpoint of a journey only stays put because both walls carry the same
+* profile (core/terrain.odin), and lifting the floor alone would jerk a
+* suspended player upward by half a step on the single frame its vertical
+* face went past.
+*
 * The two sides break differently, which is the whole point of them:
 *
 *   the floor  ends. A hard edge, a lit cross-section down each wall of
@@ -71,26 +89,30 @@ terrain_surface_y :: proc(world: game.World, is_floor: bool, x: f32) -> f32 {
 	return core.terrain_surface_y(game.get_ground(world), lane, x)
 }
 
-// A range of screen x, used for both gaps and the solid spans between them.
+// A range of screen x at one height. lift is how far the floor is raised
+// over it, which is zero everywhere except on a step.
 Span :: struct {
 	start: f32,
 	end:   f32,
+	lift:  f32,
 }
 
-// Every hole in one side of the world, in screen x, sorted and merged.
+// Every stretch of one side of the world occupied by obstacles of one
+// type, in screen x, sorted and merged.
 //
-// Merging matters: two gaps that touch have no ground between them, and
-// drawing the zero-width span that separates them would put a lit rim
-// line in the middle of a hole.
-collect_gaps :: proc(
+// Merging matters for both users. Two gaps that touch have no ground
+// between them, and drawing the zero-width span that separates them would
+// put a lit rim line in the middle of a hole; two steps that touch are one
+// plateau, and the seam between them would be a vertical face of zero
+// height with a mitre joint on it.
+collect_spans :: proc(
 	world: game.World,
 	obstacles: []game.Obstacle,
-	is_floor: bool,
-    allocator := context.temp_allocator,
+	wanted: game.ObstacleType,
+	allocator := context.temp_allocator,
 ) -> [dynamic]Span {
-	gaps := make([dynamic]Span, 0, 8, allocator)
+	found := make([dynamic]Span, 0, 8, allocator)
 
-	wanted: game.ObstacleType = is_floor ? .Chasm : .DreamHole
 	for obstacle in obstacles {
 		if obstacle.obstacle_type != wanted {
 			continue
@@ -99,20 +121,20 @@ collect_gaps :: proc(
 		start := max(rect.x, -TERRAIN_MARGIN)
 		end := min(rect.x + rect.width, core.SCREEN_WIDTH + TERRAIN_MARGIN)
 		if end > start {
-			append(&gaps, Span{start, end})
+			append(&found, Span{start = start, end = end})
 		}
 	}
 
-	slice.sort_by(gaps[:], proc(a, b: Span) -> bool {return a.start < b.start})
+	slice.sort_by(found[:], proc(a, b: Span) -> bool {return a.start < b.start})
 
-	merged := make([dynamic]Span, 0, len(gaps), allocator)
-	for gap in gaps {
-		if len(merged) > 0 && gap.start <= merged[len(merged) - 1].end {
+	merged := make([dynamic]Span, 0, len(found), allocator)
+	for span in found {
+		if len(merged) > 0 && span.start <= merged[len(merged) - 1].end {
 			last := &merged[len(merged) - 1]
-			last.end = max(last.end, gap.end)
+			last.end = max(last.end, span.end)
 			continue
 		}
-		append(&merged, gap)
+		append(&merged, span)
 	}
 	return merged
 }
@@ -124,14 +146,48 @@ solid_spans :: proc(gaps: []Span, allocator := context.temp_allocator) -> [dynam
 	cursor := f32(-TERRAIN_MARGIN)
 	for gap in gaps {
 		if gap.start > cursor {
-			append(&spans, Span{cursor, gap.start})
+			append(&spans, Span{start = cursor, end = gap.start})
 		}
 		cursor = max(cursor, gap.end)
 	}
 	if cursor < core.SCREEN_WIDTH + TERRAIN_MARGIN {
-		append(&spans, Span{cursor, core.SCREEN_WIDTH + TERRAIN_MARGIN})
+		append(&spans, Span{start = cursor, end = core.SCREEN_WIDTH + TERRAIN_MARGIN})
 	}
 	return spans
+}
+
+// Cuts one unbroken stretch of floor at the vertical face of every step
+// crossing it, and tags each piece with how high it stands.
+//
+// The pieces stay in one list rather than being drawn separately, because
+// what makes a step read as *the floor rising* instead of as a box on the
+// floor is that the surface line runs continuously up the face and along
+// the top: one mark, one silhouette, no seam to give it away.
+@(private)
+split_by_steps :: proc(
+	span: Span,
+	steps: []Span,
+	allocator := context.temp_allocator,
+) -> [dynamic]Span {
+	parts := make([dynamic]Span, 0, len(steps) * 2 + 1, allocator)
+
+	cursor := span.start
+	for step in steps {
+		low := max(step.start, span.start)
+		high := min(step.end, span.end)
+		if high <= low {
+			continue
+		}
+		if low > cursor {
+			append(&parts, Span{start = cursor, end = low})
+		}
+		append(&parts, Span{start = low, end = high, lift = game.STEP_HEIGHT})
+		cursor = high
+	}
+	if cursor < span.end || len(parts) == 0 {
+		append(&parts, Span{start = cursor, end = span.end})
+	}
+	return parts
 }
 
 // The x positions to sample a span at: both ends, plus every profile
@@ -168,25 +224,36 @@ span_samples :: proc(
 
 // Fills one unbroken stretch of ground, from its surface to the screen
 // edge, and runs the world's light along the surface.
+//
+// The stretch arrives already cut into pieces at different heights. The
+// outline is built across all of them in one list, and that is the whole
+// trick of the step: consecutive pieces share an x, so the two points
+// there differ only in height and the vertical face falls out of the
+// polyline for free — for the fill and for the lit edge alike.
 @(private)
-draw_terrain_span :: proc(
+draw_terrain_stretch :: proc(
 	world: game.World,
-	span: Span,
+	parts: []Span,
 	palette: core.Palette,
 	alive: f32,
 	is_floor: bool,
 ) {
-	samples := span_samples(world, span)
-	if len(samples) < 2 {
+	outline := make([dynamic]rl.Vector2, 0, 64, context.temp_allocator)
+	for part in parts {
+		for x in span_samples(world, part) {
+			append(&outline, rl.Vector2{x, terrain_surface_y(world, is_floor, x) - part.lift})
+		}
+	}
+	if len(outline) < 2 {
 		return
 	}
 
 	edge_y: f32 = is_floor ? core.SCREEN_HEIGHT : 0
 
-	strip := make([dynamic]rl.Vector2, 0, len(samples) * 2, context.temp_allocator)
-	for x in samples {
-		append(&strip, rl.Vector2{x, terrain_surface_y(world, is_floor, x)})
-		append(&strip, rl.Vector2{x, edge_y})
+	strip := make([dynamic]rl.Vector2, 0, len(outline) * 2, context.temp_allocator)
+	for point in outline {
+		append(&strip, point)
+		append(&strip, rl.Vector2{point.x, edge_y})
 	}
 	rl.DrawTriangleStrip(raw_data(strip[:]), i32(len(strip)), palette.silhouette)
 
@@ -202,11 +269,6 @@ draw_terrain_span :: proc(
 	// would cost readability (pillar 2) to buy mood.
 	rim_alpha := TERRAIN_RIM_DORMANT + (TERRAIN_RIM_ALIVE - TERRAIN_RIM_DORMANT) * alive
 
-	surface := make([dynamic]rl.Vector2, 0, len(samples), context.temp_allocator)
-	for x in samples {
-		append(&surface, rl.Vector2{x, terrain_surface_y(world, is_floor, x)})
-	}
-
 	rim := new_stroke(core.with_alpha(palette.light, rim_alpha), core.LIGHT_RIM_THICKNESS)
 	rim.glow = TERRAIN_GLOW_STRENGTH * alive
 	rim.spread = TERRAIN_GLOW_SPREAD
@@ -216,7 +278,7 @@ draw_terrain_span :: proc(
 	// the bloom would pick it up twice over. One number to turn up if the
 	// terrain should join the rest of the style later.
 	rim.core_light = 0
-	draw_stroke(surface[:], rim)
+	draw_stroke(outline[:], rim)
 }
 
 // A break in the floor: the ground stops, and you can see down into it.
@@ -300,7 +362,12 @@ draw_terrain_side :: proc(
 	palette := is_floor ? palettes.real : palettes.dream
 	alive := is_floor ? palettes.real_alive : palettes.dream_alive
 
-	gaps := collect_gaps(world, obstacles, is_floor)
+	gaps := collect_spans(world, obstacles, is_floor ? .Chasm : .DreamHole)
+
+	// Only the floor rises. The asymmetry is the whole reason the Limen
+	// stays where it is (see the file header), and this is the one line
+	// that states it.
+	steps := is_floor ? collect_spans(world, obstacles, .Step) : nil
 
 	for gap in gaps {
 		if is_floor {
@@ -311,7 +378,7 @@ draw_terrain_side :: proc(
 	}
 
 	for span in solid_spans(gaps[:]) {
-		draw_terrain_span(world, span, palette, alive, is_floor)
+		draw_terrain_stretch(world, split_by_steps(span, steps[:])[:], palette, alive, is_floor)
 	}
 }
 

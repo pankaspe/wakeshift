@@ -38,7 +38,11 @@ package core
 //        the endpoints of every flip, the height of every obstacle and
 //        the Patroller's sweep all moved. The same input log survives a
 //        different set of collisions here than it did on 0.3.0.
-GAME_VERSION :: "0.4.0-alpha"
+// 0.5.0: the floor rises. A seventh obstacle type — the Step, the ground
+//        itself lifting into a wall — with three patterns built on it, so
+//        the same seed draws a different sequence and meets something
+//        0.4.0 had no name for.
+GAME_VERSION :: "0.5.0-alpha"
 
 RunManifest :: struct {
 	game_version:  string,

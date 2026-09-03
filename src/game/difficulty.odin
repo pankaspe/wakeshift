@@ -73,6 +73,7 @@ tiers := []Tier {
 			pattern_feint_patrol,
 			pattern_void_pair,
 			pattern_patrol_high,
+			pattern_rising_wall,
 		},
 	},
 	// The air is gone and the draw is inverted: a breather is now roughly
@@ -87,6 +88,7 @@ tiers := []Tier {
 			pattern_triple_switch,
 			pattern_triple_switch_reverse,
 			pattern_echo_guarded,
+			pattern_step_then_hole,
 		},
 	},
 }

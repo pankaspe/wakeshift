@@ -13,7 +13,7 @@
 - [Il sistema a tre mondi](#il-sistema-a-tre-mondi--riferimento-grafico-trasversale)
 - [La direzione artistica: gli sketch](#la-direzione-artistica--gli-sketch)
 - [La Corruzione](#la-corruzione--la-seconda-metà-della-lucidity)
-- [Il terreno a piattaforme](#il-terreno-a-piattaforme--appunti-non-ancora-un-piano)
+- [Il terreno a piattaforme](#il-terreno-a-piattaforme--t755)
 - [Il salvataggio: cosa resta da sapere](#il-salvataggio-cosa-resta-da-sapere)
 - [Struttura del progetto](#struttura-del-progetto)
 - [Le fasi](#le-fasi)
@@ -68,7 +68,6 @@ Verificato sul codice, 3 settembre 2026 — aggiornato a chiusura Fase 7.
 **Non funziona / manca**
 
 - **Niente costringe a essere coraggiosi.** La Lucidity si guadagna col rischio ma non cala mai da sola, quindi giocare pulito non costa niente. È il buco che chiude la Fase 8 con la Corruzione
-- **Il terreno è ancora piatto nella sostanza.** La simulazione adesso lo vede — ci si appoggia sopra — ma la sua quota non chiede niente a nessuno: è un'ondulazione, non un interlocutore. È la T7.5.5
 - Nessuna particella, nessun parallax, nessun audio
 - Nessun replay o ghost in gioco: il `RunManifest` si registra e si salva, ma l'interfaccia non lo rigioca
 - Menu e opzioni prendono i colori dalla palette ma usano ancora il font bitmap di raylib (T13.3)
@@ -228,30 +227,27 @@ E qui c'è l'incastro con la direzione artistica. La regola che tiene leggibile 
 
 ---
 
-## Il terreno a piattaforme — appunti, non ancora un piano
+## Il terreno a piattaforme ✅ (T7.5.5)
 
-Indicazione del committente (3 settembre 2026): prendere dallo sketch 1 (e dal 2) il **terreno a quote diverse, alto e basso**, perché altrimenti la corsa è troppo lineare — e usarlo per **alzare un po' la difficoltà**, mettendo qualcosa nel terreno. Nessun codice finché non si arriva alla fase.
+Indicazione del committente (3 settembre 2026): prendere dallo sketch 1 il **terreno a quote diverse**, perché altrimenti la corsa è troppo lineare, e usarlo per alzare un po' la difficoltà. Fatto: il **gradino** è un settimo tipo di ostacolo, autorato nel tempo come tutto il resto, con tre pattern costruiti sopra.
 
-**Perché è una buona idea e non solo estetica.** Oggi il pavimento è un profilo irregolare ma *piatto nella sostanza*: la sua altezza non significa niente (fino alla T7.5.1 il gioco lo sapeva così poco che il personaggio ci stava dentro fino al ginocchio). Una quota che cambia trasforma il terreno da fondale a interlocutore, e lo fa senza aggiungere un verbo — che è la condizione perché sia ammissibile.
+**Cos'è, esattamente.** Il terzo caso dell'asse pieno/vuoto del design doc, e non sta a nessuno dei due capi: non è una cosa appoggiata sul suolo e non è il suolo che manca, è **il suolo stesso che si alza** dentro la corsia. Pone la domanda di un Block con la voce di una voragine — *sta' altrove* — e siccome è il terreno a farlo, tocca solo chi è per terra. Lo disegna il terreno, come i due vuoti, e la linea di superficie corre continua su per la faccia verticale e lungo il piano rialzato: **un tratto solo, una silhouette sola**, ed è quello che lo fa leggere come il pavimento che sale invece che come una scatola appoggiata sopra.
 
-**Il vincolo che decide tutto**: il pilastro 5 dice *una domanda sola, tre risposte*. Il terreno non può chiedere di saltare né di abbassarsi: sarebbe una quarta risposta e un secondo gesto. Quindi tutto quello che il terreno fa deve esprimersi dentro le tre fasce che già ci sono.
+**La decisione che non era nell'appunto: il gradino non sposta la corsia Reale.** L'appunto si aspettava il contrario ("se il pavimento sale il centro sale"), ma è la scelta che la voragine aveva già fatto — sopra un buco la corsia resta dov'è il pavimento, e starci ti ammazza. Un tratto rialzato non è pavimento raggiungibile (non c'è salto), quindi una corsia ancorata sopra sarebbe una corsia in cui il giocatore viene mandato e poi ucciso per esserci arrivato. E tiene fermo il Limine: il punto di mezzo sta fermo solo perché le due pareti portano lo stesso profilo, e alzare il solo pavimento farebbe scattare in su un giocatore sospeso di mezzo gradino nel singolo fotogramma in cui passa la faccia verticale. Il prezzo sono i due bonus ipotizzati nell'appunto — il viaggio più corto e la fessura più stretta — e non valgono uno scatto su una giocata legale.
 
-**Cosa può fare il terreno, allora**
+**Le quattro conseguenze tecniche, tutte chiuse:** il profilo ancorato al tempo (T7.5.1), il gradino come `PatternEvent` nella stessa pool, la larghezza pescata dal generatore della run come per le voragini, e il Pattugliatore che spazza fra le pareti (T7.5.1).
 
-- **Un gradino che sale è un blocco fatto di paesaggio.** Non essere nel Reale quando arriva la parete. È la stessa domanda di un Block, ma posta dal mondo invece che da un oggetto appoggiato sopra — che è molto più forte tematicamente, e completa l'asse pieno/vuoto del design doc: il vuoto è la voragine, il pieno è il blocco, e il **gradino è il pavimento che si alza**.
-- **Un pavimento alto accorcia il viaggio.** Il flip dura sempre `FLIP_DURATION`, quindi su un tratto rialzato copre meno distanza: stessa durata, più velocità apparente. Difficoltà percepita senza toccare una sola costante.
-- **Un pavimento alto stringe la fessura.** Una forma pulsante appesa al soffitto sopra un tratto rialzato lascia un varco più stretto, e il Limine diventa scomodo esattamente lì.
+**I tre pattern**: `steady_step` (domanda 0, pool d'apertura — il gradino è l'unico ostacolo fatto di scenografia, quindi va visto presto e piano), `rising_wall` (domanda 1, un convergente, dal tier *Drifting*) e `step_then_hole` (domanda 2, il pavimento che sale e subito dopo il soffitto che si apre, dal tier *Deep Dream*). Pool: 22 pattern.
 
-**Facce verticali, mai rampe.** Il paragone col terreno non piatto di un platform regge per la forma, non per il comportamento: lì la terra rialzata si percorre, ci si sale sopra. Qui non si può, perché non c'è un salto. Un tratto rialzato quindi non è un gradino da superare, è **un muro da evitare stando altrove**. Una rampa prometterebbe una salita che non avverrà, e il pilastro 3 dice che l'informazione arriva sempre prima dell'impegno.
+**Come si è verificato, e cosa ha insegnato.** Rigiocandoli, come da Fase 7: ogni script d'input fino a due pressioni, dalle fasce che il pattern dichiara, alle tre velocità, su tutte e tre le larghezze. Il primo metro diceva "ogni risposta che sopravvive deve finire dentro l'uscita" — e **hanno fallito anche `steady_real`, `steady_chasm` e `void_pair`**, allo stesso identico modo. Quindi era il metro a essere sbagliato: un flip *volontario* nell'aria vuota dopo l'ultima minaccia porta ovunque, e nessun pattern può vietarlo più di quanto possa vietare un hold. Il metro giusto guarda le risposte **più economiche** — il numero minimo di pressioni che sopravvive — e chiede che quelle finiscano dentro `exit` ∪ {Limine} e che almeno una sia fatta di soli tap. Con quel metro passano tutti, vecchi e nuovi. La regola sta in `CLAUDE.md`.
 
-**Le quattro conseguenze tecniche da non scoprire dopo** (tutte verificate sul codice, non congetture)
+**Ricaduta sul salvataggio**: `GAME_VERSION` → 0.5.0-alpha. Formato invariato, salvataggi leggibili, ma un seme 0.4.0 non rigioca più lo stesso livello.
 
-1. ✅ **Fatto nella T7.5.1: il profilo è ancorato al tempo.** Vive in `core/terrain.odin`, una voce del profilo dura `TERRAIN_SEGMENT_TIME` secondi, e lo schermo x diventa tempo con la stessa formula che usano gli ostacoli. Conseguenza visiva da tenere d'occhio in playtest: l'ondulazione si allarga con la velocità — una gobba larga 50 px a 270 px/s ne diventa 74 a 400 — quindi il terreno si addolcisce man mano che la run accelera.
-2. **Quindi la conclusione naturale: un gradino è un `PatternEvent`.** Autorato nel tempo come tutto il resto, dentro la stessa pool, visibile a `validate_pattern_pool`. Non un sistema parallelo. Il contratto `entry`/`exit` sopravvive intatto, perché stare nel Reale resta stare nel Reale a qualunque quota.
-3. **Se invece il profilo diventa procedurale, deve uscire dal seed della run.** Oggi è deterministico per il fatto di essere una costante (`TERRAIN_PROFILE`, sei valori scritti a mano). Un terreno generato che non passi dal generatore della run romperebbe la riproducibilità, cioè leaderboard, replay e ghost insieme.
-4. ✅ **Fatto nella T7.5.1 per il Pattugliatore**, che adesso spazza fra le due *pareti* invece che fra i due bordi dello schermo, quindi non entra più nel terreno a nessuna quota. Il Limine invece si è scoperto immobile finché il profilo è condiviso: vedi la domanda decisa qui sopra.
+**Aperta, rimandata (playtest del 4 settembre 2026): il dislivello percorribile.** Al primo playtest il committente ha osservato che un tratto rialzato *sembra* terreno, quindi morirci sopra si legge male — e che avrebbe più senso camminarci. Ha ragione su una cosa in particolare: la regola "facce verticali, mai rampe" discendeva dal fatto che il gradino fosse letale, e se la salita avviene davvero l'obiezione ("una rampa promette una salita che non avverrà") sparisce con la premessa. Un gradino letale, per giunta, pone la stessa domanda di un Block con un vestito diverso, mentre un dislivello percorribile restituirebbe i due bonus sacrificati — il viaggio più corto e la fessura più stretta — e renderebbe vero alla lettera il "la corsa non è più piatta" della T7.5.6.
 
-**La domanda aperta è stata decisa nella T7.5.1: si ricampiona a ogni step.** Un flip punta a dov'è il suolo *adesso*, non a dove sarà all'arrivo, quindi l'atterraggio è sempre corretto e la traiettoria si incurva un po' mentre il terreno scorre sotto. Il timore che la accompagnava — che il Limine si mettesse a salire e scendere — non si è avverato e non può avverarsi: pavimento e soffitto portano lo stesso profilo, quindi la sporgenza che abbassa uno alza l'altro di altrettanto e si semplifica nella media. Il punto di mezzo del viaggio resta `(SCREEN_HEIGHT - size) / 2` su qualunque terreno, cioè esattamente l'orizzonte che il fondale disegna. Vale finché le due pareti condividono il profilo: **un gradino su un solo lato romperebbe la proprietà**, ed è la cosa da verificare per prima nella T7.5.5.
+Cosa costerebbe, se un giorno si fa: la corsia deve muoversi col suolo (quindi i dislivelli attivi entrano nel `World` e `get_ground` se li porta dietro, l'architettura scartata nella T7.5.1); la salita dev'essere una **rampa ancorata al tempo** (~0.2 s), perché un salto istantaneo teletrasporterebbe il giocatore in su di un gradino in un fotogramma; il gradino smette di uccidere, quindi i tre pattern vanno riautorati per *combinarlo* con qualcosa invece che porre una domanda da solo; e va verificato per replay l'invariante nuovo — **sopra un tratto rialzato deve restare un varco più alto del personaggio**, o il corridoio si chiude e diventa una morte senza risposta.
+
+Deciso per ora: si tiene il gradino letale.
 
 ---
 
@@ -435,7 +431,7 @@ Perché qui e non nella Fase 10, dove il terreno era programmato: il suolo affon
 | T7.5.2 ✅ | `render/stroke.odin`: la primitiva del **tratto al neon**. Polilinea di spessore dato, cappucci e giunti tondi, nucleo chiaro più alone additivo, colore dalla palette. È la base di tutta la grafica delle fasi 10 e 13 | **Opus** |
 | T7.5.3 ✅ | Il **Germoglio**: proporzioni nuove sullo scheletro esistente, testa-bulbo, occhio luminoso singolo, germoglio a due ossa con inerzia. Corpo scuro nei tre mondi, cambia solo la luce | **Opus** |
 | T7.5.4 ✅ | Le tre pose: corsa, frustata del flip, e la **capriola** raccolta del Limine con l'occhio ad anelli. Solo posa: l'orologio del viaggio non si tocca | Sonnet |
-| T7.5.5 | **Il gradino come evento di pattern**: il pavimento a quote diverse, autorato nel tempo, che chiede "non essere quaggiù quando arriva la parete". Vedi [Il terreno a piattaforme](#il-terreno-a-piattaforme--appunti-non-ancora-un-piano) — le quattro conseguenze tecniche sono lì | **Opus** |
+| T7.5.5 ✅ | **Il gradino come evento di pattern**: il pavimento a quote diverse, autorato nel tempo, che chiede "non essere quaggiù quando arriva la parete". Vedi [Il terreno a piattaforme](#il-terreno-a-piattaforme--t755) | **Opus** |
 | T7.5.6 ⚑ | Playtest: il personaggio appoggia davvero, si legge a 1280×720, i tre stati si distinguono anche a fermo immagine dalla sola posa, e la corsa non è più piatta | — |
 
 **Ricaduta sul salvataggio (T7.5.1, fatta)**: `GAME_VERSION` → 0.4.0-alpha. Le corsie si sono spostate, quindi lo stesso log di input incontra collisioni diverse e i manifesti 0.3.0 non si rigiocano più. Il formato non cambia e i salvataggi restano leggibili. È il secondo bump di fila dopo quello della Fase 7: se a un certo punto i replay devono sopravvivere ai cambi di simulazione, va detto **prima** della prossima modifica alla simulazione, che è la T7.5.5.
