@@ -65,12 +65,11 @@ order before touching anything:
    external art assets and is not getting any.
 3. The rest of this file — architecture rules and conventions.
 
-**Where the project stands.** The design was rewritten on 4 September 2026 (v1.3 → v2.0) and
-**phase R1 is done**: the code is now two lanes, one gesture, and two obstacle types (Cube and
-Gap). The third state, the Lucidity, four obstacle types and the whole band-chaining contract
-are gone. What is *not* built yet is everything the rewrite is actually for — the cube still
-kills instead of blocking, there is no Corruption front, the track is still a flat pair of
-lanes, and there are no fragments. That is R2 onward.
+**Where the project stands.** The design was rewritten on 4 September 2026 (v1.3 → v2.0), and
+**R1 and R2 are done**: two lanes, one gesture, a cube that *blocks* rather than kills, and a
+Corruption front advancing from the left that eats the ground a mistake costs you. The heart of
+the design is in the code. Still missing: the track that curves (R3), the Sentinel and the cube
+variants (R4), the real pattern pool (R5), fragments and the Gate (R6).
 
 Why it was rewritten, measured rather than guessed: 200 simulated runs that never touched the
 key, **161 survived the whole first tier**, median death at 35 s; **86% of the time** nothing on
@@ -210,23 +209,35 @@ between, so their shape is simulation and it lives in `core` where everything ca
 
 ### The player's screen x is game state
 
-New in v2.0 and the most invasive thing in it. `PLAYER_X` is no longer a constant: it is a
-*resting position* the character chases while running free, and it drops when a cube pins them
-against its face, because the face scrolls with the world and they cannot keep pace.
+The most invasive change in v2.0, done in R2.1. The old `PLAYER_X` was doing two jobs and has
+been split into two constants that happen to hold the same number:
 
-- **The distance between the character and the Corruption front is the health bar.** That is
-  why there is almost no HUD: the game already draws its own state at full size.
-- Everything that converts screen x into world time (the track sampler, obstacle positions) now
-  reads a variable rather than a constant. That conversion is the delicate part of the whole
-  rewrite — get it wrong and the level slides against itself whenever the player loses ground.
-- Losing ground runs at the world's scroll speed; recovering runs at about two thirds of it. A
-  short mistake is repaid in a second; three close together are a real problem.
+- **`core.WORLD_ANCHOR_X`** — the screen x that world time lands on. Constant, and the *only*
+  thing any space↔time conversion may read: the terrain sampler and obstacle positions both do.
+  A ground that followed the player would slide against the patterns every time they lost or won
+  back a stride. Verified by moving the player to x=40 and confirming no obstacle moves.
+- **`core.PLAYER_HOME_X`** — where a free-running character settles. They lose x when a cube
+  pins them, because the face scrolls away with the world, and win it back at
+  `PLAYER_RECOVERY_RATIO` of the scroll speed.
+
+Three things follow, and all three are load-bearing:
+
+- **The distance between the character and the Corruption front is the health bar.** That is why
+  there is almost no HUD: the game already draws its own state at full size.
+- **Move first, resolve second** (`advance_ground`). Pinning against a face *places* the body
+  exactly at it, which is not an overlap — so a resolve-then-move ordering finds nothing on the
+  next step, creeps forward, and re-pins on the one after. Measured: `is_blocked` flickered
+  every other step while the character was plainly stuck. Moving first makes the contact real,
+  and the dragging falls out for free.
+- **Depth is `(scroll_speed + player.velocity_x) * dt`**, not the scroll alone. Pinned, the two
+  cancel exactly and depth stops; recovering, the character outruns the world and repays the
+  loss in score as well as in room. Blocking costs depth with no line of code that says so.
 
 ### The three dangers, three verbs
 
 | | says | kills? | built? |
 |---|---|---|---|
-| **Cube** | *do not be here, or you pay* | no — it **blocks** | exists, but still kills (R2.3) |
+| **Cube** | *do not be here, or you pay* | no — it **blocks** | ✅ |
 | **Gap** | *do not be here* | yes | ✅ |
 | **Sentinel** | *do not move right now* | yes | R4.4 |
 
@@ -523,14 +534,9 @@ raise it with the user before writing code.
 
 Tracked here so they are not rediscovered. Each is scheduled in `ROADMAP.md`.
 
-- **The cube still kills.** R1 removed the old game but did not yet build the new one: today a
-  Cube is a lethal rectangle, which is the v1.x rule wearing the new name. R2.3 is what makes it
-  block instead, and until then pillar 7 is a claim in the design doc rather than something the
-  code does.
-- **`core.PLAYER_X` is still a constant**, and R2.1 promotes it to game state. Everything that
-  converts a screen x into world time reads it (`core.ground_time_at_x`,
-  `game.get_obstacle_position`), so that promotion is the most invasive single change on the
-  roadmap — get it wrong and the level slides against itself whenever the player loses ground.
+- **No pattern uses a mirrored cube pair yet**, even though R2.3 made it legal — it is the
+  design's centrepiece and it is authored in R4.1. Until then the game has the *rule* that lets
+  both lanes be threatened at once and never exercises it.
 - **The pool is a placeholder.** Eleven patterns over two obstacle types, authored only so that
   R1 could be verified. The real pool is R5.2, after the cube blocks and the Sentinel exists.
   Measured today: at least one lane is lethal 19.9% of the time, against a Definition of Done

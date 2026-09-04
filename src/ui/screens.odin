@@ -42,20 +42,17 @@ draw_main_menu :: proc(menu: Menu, high_score: f32, palettes: core.PaletteSet) {
 	draw_centered_text(best_text, 520, 20, core.with_alpha(palettes.current.light, TEXT_MUTED))
 }
 
-// In-game readout. Depth and the difficulty tier, and that is the whole
-// HUD (Design Doc, section 11).
+// In-game readout: the depth, and nothing else (Design Doc, section 11).
 //
-// There used to be a Lucidity bar here. There is no bar now and there is
-// not meant to be one: from roadmap R2 the distance between the character
-// and the Corruption front is the only meter the run has, drawn at full
-// size in the world itself. A player watching for obstacles has no
-// attention left for the bottom of the screen.
-draw_hud :: proc(score: game.Score, tier_name: string, palettes: core.PaletteSet) {
+// There used to be a Lucidity bar here, and a tier name under it. Neither
+// is coming back. The game already draws its own state at full size —
+// the distance between the character and the Corruption front *is* the
+// health bar, and how deep you are is the one number a player has any
+// attention left to read. A tier name told them something they could
+// already feel.
+draw_hud :: proc(score: game.Score, palettes: core.PaletteSet) {
 	score_text := fmt.ctprintf("Depth: %.0f", score.value)
 	rl.DrawText(score_text, 20, 20, 24, core.with_alpha(palettes.current.light, TEXT_PRIMARY))
-
-	tier_text := fmt.ctprintf("Tier: %s", tier_name)
-	rl.DrawText(tier_text, 20, 50, 18, core.with_alpha(palettes.current.light, TEXT_SECONDARY))
 }
 
 // Pushes the frozen gameplay frame back behind an overlay. Uses the

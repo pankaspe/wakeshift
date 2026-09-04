@@ -53,10 +53,13 @@ get_depth_t :: proc(world: game.World) -> f32 {
 // the two worlds, and the elapsed time converges them toward the neutral
 // palette.
 //
-// The third argument, corruption, is 0 until roadmap R2.4 gives it a
-// front to read from. It stays in the signature because the axis it
-// drives is already built and tested (core/palette.odin) — what is
-// missing is the game state to feed it, not the colour maths.
+// Corruption stays 0 here, and that is not an omission. The front is a
+// *place*, not a level: the colour dies to the left of it and lives to
+// the right, so it cannot be a number applied to a palette that the whole
+// screen shares. It is applied to the finished frame instead
+// (fx/corruption.odin), which is the only place that knows what x a pixel
+// is at. What the scalar axis in core/palette.odin buys is the colour
+// maths itself, verified once and reused by the shader.
 new_scene_palette :: proc(player: game.Player, world: game.World) -> core.PaletteSet {
 	return core.new_palette_set(get_world_t(player, world), get_depth_t(world), 0)
 }

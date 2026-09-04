@@ -66,9 +66,13 @@ Ground :: struct {
 // The world time of the ground currently under screen x.
 //
 // The same mapping get_obstacle_position uses in reverse: an obstacle at
-// x arrives at PLAYER_X in (x - PLAYER_X) / speed seconds.
+// x reaches the anchor in (x - WORLD_ANCHOR_X) / speed seconds.
+//
+// Anchored, never read off the player. The player's x moves (R2.1), and
+// a ground that followed it would slide the terrain against the patterns
+// every time they lost or won back a stride.
 ground_time_at_x :: proc(ground: Ground, x: f32) -> f32 {
-	return ground.time + (x - PLAYER_X) / max(ground.speed, 1)
+	return ground.time + (x - WORLD_ANCHOR_X) / max(ground.speed, 1)
 }
 
 // How far the surface protrudes from its screen edge at a world time.

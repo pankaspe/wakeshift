@@ -17,6 +17,19 @@
 * tap had ended. Without that constraint the flip can be what it should
 * have been all along: fast enough to be a reflex.
 *
+* Since R2.1 the character also moves **horizontally**, and that axis is
+* the whole of the rewrite. A cube does not kill: it stops you against its
+* face, the face scrolls away with the world, and you are dragged
+* backwards toward the Corruption. Running free you claw the ground back,
+* at two thirds of the speed you lose it. How far the character sits from
+* the front is the only health bar the game has.
+*
+* The two axes are independent and resolved in one place, in this order:
+* the press, then the journey, then the ground, then where the body
+* actually is. The order matters exactly once — a tap frees you from a
+* cube on the same step it is pressed, because the journey has already
+* started by the time the ground is resolved.
+*
 * A press that arrives mid-journey is **buffered**, not dropped and not
 * blended into the journey in progress: it takes off the instant that
 * journey lands, carrying the overshoot with it so the rhythm stays
@@ -64,6 +77,19 @@ PlayerState :: enum {
 // one thing this game asks of them.
 FLIP_DURATION :: 0.16
 
+// How fast the character claws back ground once nothing is blocking them,
+// as a fraction of the world's scroll speed.
+//
+// A fraction rather than a number of pixels, so that buying Slancio
+// (roadmap R6.3) makes a mistake cost more *and* take proportionally as
+// long to repay — the trade stays honest at every speed.
+//
+// Deliberately under 1: ground is lost at the full scroll speed and won
+// back at two thirds of it, so a brief mistake is repaid in about half
+// again the time it took to make, and three close together are a real
+// problem. This is the first number the playtest should argue with.
+PLAYER_RECOVERY_RATIO :: 0.66
+
 // Duration of the invulnerability grace period, in seconds.
 //
 // Deliberately shorter than the journey. It exists to forgive the flip
@@ -89,6 +115,21 @@ Player :: struct {
 	// next one, so a burst of taps keeps its rhythm instead of being
 	// quantised to whenever the code happened to notice.
 	flip_queued:           bool,
+
+	// True on any step a cube is holding the character back. Presentation
+	// reads it, and so does anything that wants to know why the ground is
+	// going the wrong way.
+	is_blocked:            bool,
+
+	// How fast the character is moving across the screen, px/s. Derived
+	// rather than integrated: the pin sets a position directly, so the
+	// velocity is measured after the fact from where the body ended up.
+	//
+	// It is what turns scroll into *distance travelled*: pinned, it is
+	// exactly minus the scroll speed, and the two cancel to zero (see
+	// score.odin). Blocking costs depth without a single line that says
+	// so.
+	velocity_x:            f32,
 }
 
 // Creates a player anchored to the floor, in the Real lane.
@@ -101,8 +142,8 @@ new_player :: proc() -> Player {
 
 	return Player {
 		position = rl.Vector2 {
-			core.PLAYER_X,
-			core.get_lane_y(ground, .Real, core.PLAYER_X, player_size),
+			core.PLAYER_HOME_X,
+			core.get_lane_y(ground, .Real, core.PLAYER_HOME_X, player_size),
 		},
 		size     = player_size,
 		lane     = .Real,
@@ -171,7 +212,15 @@ flip_progress :: proc(t: f32) -> f32 {
 // produce the same run, which is what makes a run recordable and
 // replayable (see core/input.odin).
 //
-update_player :: proc(player: ^Player, world: World, input: core.Input, delta_time: f32) {
+update_player :: proc(
+	player: ^Player,
+	world: World,
+	obstacles: []Obstacle,
+	input: core.Input,
+	delta_time: f32,
+) {
+	was_at := player.position.x
+
 	// A press either starts a journey or is remembered until the current
 	// one lands. Only one is remembered at a time — see the file header
 	// for why a deeper buffer is worse rather than better.
@@ -201,9 +250,61 @@ update_player :: proc(player: ^Player, world: World, input: core.Input, delta_ti
 
 	player.settle_timer += delta_time
 
+	// Horizontal, after the journey: a tap frees the character from a cube
+	// on the same step it is pressed, because by now they are already
+	// travelling and nothing on a lane can hold them.
+	advance_ground(player, world, obstacles, delta_time)
+	player.velocity_x = (player.position.x - was_at) / delta_time
+
 	// One place decides where the body is, for every state: the walls
-	// moved under it this step even if the player did nothing.
+	// moved under it this step even if the player did nothing, and the
+	// ground under them changes with x as well as with time.
 	player.position.y = get_player_y(player^, world)
+}
+
+// Runs the character back toward where they belong, then pushes them out
+// of anything solid they ran into. **Move first, resolve second** — the
+// order is not cosmetic.
+//
+// The obvious arrangement is the other way round: look for a cube, and if
+// there is one, pin against its face. It self-destructs. Pinning places
+// the character exactly at the face, which is *not* an overlap, so the
+// next step finds nothing blocking, lets them creep forward, and the step
+// after that pins them again. Measured, is_blocked flickered every other
+// step while the character was plainly stuck — a lie to anything that
+// reads it, and a wrong answer to the one question the whole design turns
+// on.
+//
+// Moving first makes the contact real: they try to advance, they overlap,
+// they are pushed back, and is_blocked means what it says. It also gets
+// the dragging for free — the face is scrolling left, so being pushed
+// behind it every step *is* losing ground at exactly the world's speed,
+// with nobody having to say the word.
+@(private)
+advance_ground :: proc(
+	player: ^Player,
+	world: World,
+	obstacles: []Obstacle,
+	delta_time: f32,
+) {
+	recovery := world.scroll_speed * PLAYER_RECOVERY_RATIO * delta_time
+	player.position.x = min(player.position.x + recovery, core.PLAYER_HOME_X)
+
+	player.is_blocked = false
+	for obstacle in obstacles {
+		if !blocks_player(player^, obstacle, world) {
+			continue
+		}
+		player.is_blocked = true
+		player.position.x = min(player.position.x, get_obstacle_rect(obstacle, world).x - player.size.x)
+	}
+}
+
+// How much ground the character has left, in pixels: the distance from
+// the Corruption front to their trailing edge. This is the health bar,
+// and there is no other.
+get_player_runway :: proc(player: Player, front_x: f32) -> f32 {
+	return player.position.x - front_x
 }
 
 @(private)

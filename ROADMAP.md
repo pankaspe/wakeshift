@@ -58,10 +58,10 @@ non muoversi era la risposta giusta quasi sempre.
 
 ## Stato attuale
 
-**Fatta la R1**: il codice è due corsie, un gesto, due tipi di ostacolo. Il gioco vecchio è
-stato tolto; quello nuovo non è ancora stato costruito — il cubo uccide ancora invece di
-bloccare, non c'è nessun fronte di Corruzione, il tracciato è ancora una coppia di corsie
-dritte e i Frammenti non esistono. È tutto da R2 in avanti.
+**Fatte R1 e R2.** Il gioco adesso *è* quello del documento nel suo cuore: due corsie, un
+gesto, il cubo che blocca invece di uccidere, e la Corruzione che avanza da sinistra mangiando
+il terreno che perdi. Mancano il tracciato che curva (R3), la Sentinella e le varianti del cubo
+(R4), il pool vero (R5) e l'economia (R6).
 
 **Cosa sopravvive intatto e non va toccato**: tutto `platform/` (finestra, display,
 salvataggio, cifratura, percorsi); `fx/bloom`; `render/stroke` e `render/glow`; i menu e le
@@ -129,24 +129,73 @@ segnata nel gioco a tre stati era segnata in un altro gioco.
 
 ---
 
-### Fase R2 — Il tira e molla
+### ✅ Fase R2 — Il tira e molla (manca solo il playtest R2.6 ⚑)
 
-**Obiettivo**: la scommessa centrale del documento, costruita prima di tutto il resto. Il cubo
-non uccide, blocca; mentre sei bloccato la Corruzione ti mangia terreno; la distanza fra te e
-il fronte è tutta la salute che hai.
+La scommessa centrale del documento, costruita. **Il cubo non uccide più: blocca.** Mentre sei
+fermo contro la sua faccia il mondo continua a scorrere, tu vieni trascinato indietro, e la
+distanza fra te e il fronte della Corruzione è tutta la salute che hai. La barra della vita è
+lo schermo.
 
-**Va per prima perché è l'unica affermazione del design doc che non si può verificare
-leggendola.** O quel tira e molla è divertente, e allora ha senso costruirci sopra un
-tracciato e un'economia, o non lo è, e allora è molto meglio scoprirlo adesso.
+**Le quattro decisioni che restano vincolanti**
 
-| Task | Descrizione | Modello |
-|---|---|---|
-| R2.1 | **La x del personaggio diventa variabile di gioco**. `core.PLAYER_X` da costante a posizione di riposo; il personaggio la insegue quando corre libero. Tocca tutto ciò che converte x in tempo di mondo (`ground_time_at_x`, `get_obstacle_position`), che è il punto delicato dell'intera fase | **Opus** |
-| R2.2 | **Il fronte della Corruzione**: una posizione sullo schermo che avanza con la profondità fino a un margine minimo, e che uccide al contatto. `game/corruption.odin` | **Opus** |
-| R2.3 | **Il blocco**: il cubo ferma il personaggio contro la sua faccia, che scorre col mondo, quindi si perde terreno alla velocità di scorrimento. Il tap libera. Recupero a ~2/3 della perdita | **Opus** |
-| R2.4 | La Corruzione **si vede**: il colore che muore da sinistra, sull'asse saturazione già costruito nella T8.1, ora spaziale invece che globale | **Opus** |
-| R2.5 | L'HUD sparisce: resta la Profondità e basta. La barra della vita è la distanza sullo schermo | Sonnet |
-| R2.6 ⚑ | **Playtest, il più importante del progetto**: il tira e molla è divertente? Il blocco si legge? Il fronte fa paura senza essere ingiusto? Da qui escono i numeri di perdita/recupero e la posizione di riposo | — |
+1. **`PLAYER_X` si è spaccato in due, ed era il punto delicato di tutta la fase.** Adesso c'è
+   `core.WORLD_ANCHOR_X` — la x su cui il tempo di mondo atterra, costante — e
+   `core.PLAYER_HOME_X` — dove il personaggio si riposa, variabile. Tutte le conversioni fra
+   spazio e tempo (il terreno, la posizione degli ostacoli) leggono **solo l'ancora**: un
+   terreno che seguisse il giocatore slitterebbe contro i pattern ogni volta che perde o
+   riguadagna terreno. Verificato: spostare il giocatore a x=40 non muove un ostacolo di un
+   pixel. Le due costanti valgono lo stesso numero (360) perché a riposo il timing di un
+   pattern significhi letteralmente quello che dice, ma non devono.
+2. **Muovi prima, risolvi dopo.** La disposizione ovvia — cerca un cubo, e se c'è incollati
+   alla sua faccia — si autodistrugge: incollarsi mette il personaggio *esattamente* sulla
+   faccia, che non è una sovrapposizione, quindi lo step dopo non trova niente, lo lascia
+   avanzare, e quello dopo ancora lo riblocca. Misurato, `is_blocked` lampeggiava a step
+   alterni mentre il personaggio era palesemente fermo. Muovendo prima il contatto è vero:
+   prova ad avanzare, si sovrappone, viene respinto. E il trascinamento viene gratis — la
+   faccia scorre a sinistra, quindi essere respinti dietro di essa *è* perdere terreno alla
+   velocità del mondo, senza che nessuno debba dirlo.
+3. **La profondità è la distanza percorsa dal *personaggio*, non dal mondo.** Una riga:
+   `(scroll_speed + player.velocity_x) * dt`. Bloccato, la x del personaggio cala esattamente
+   alla velocità di scorrimento, i due si annullano, e la profondità si ferma. **Bloccarsi
+   costa punteggio senza che una singola riga glielo dica.** In recupero copre più strada del
+   mondo, quindi il terreno perso si ripaga anche in punti.
+4. **La regola di equità parla di *letale*, non di *ostacolo*.** Ora che il cubo costa e non
+   uccide, `is_lethal` è vero solo per la voragine — e **un cubo su entrambe le corsie è
+   diventato legale**, che è il pezzo centrale del design: nessuna via d'uscita, solo la
+   scelta di quale prezzo pagare. Non ci sono ancora pattern che lo usano (è la R4.1).
+
+**Come si vede.** Due metà. Il colore che muore è un post-process sul frame finito
+(`fx/corruption.odin`), perché la Corruzione non è un livello ma un **posto**: l'unico stadio
+che sa a che x sta un pixel è quello che ha i pixel. Gira **dopo il bloom**, così l'alone di un
+bordo illuminato ingrigisce insieme al bordo che l'ha emesso. Il **confine** invece è disegnato
+nel mondo con le primitive (`render/corruption.odin`), e non è un vezzo: se lo shader non
+compilasse resterebbe un killer invisibile, che sarebbe l'unica cosa nel gioco a uccidere senza
+far vedere il colpo arrivare (pilastro 3).
+
+**Misurato** (arnese usa-e-getta, poi cancellato — simulazione vera più rilettura dei pixel):
+
+| | |
+|---|---|
+| 0.5 s bloccato | −135.0 px, cioè **esattamente** lo scorrimento; `is_blocked` fermo 30 step su 30 |
+| profondità guadagnata da bloccato | **0.000** |
+| il tap che libera | libera sullo **stesso step** in cui è premuto |
+| 0.5 s liberi | +89.1 px, il **66%** dello scorrimento, come da `PLAYER_RECOVERY_RATIO` |
+| pista disponibile | 360 px (1.33 s bloccato) all'inizio → 150 px (0.56 s) da 14 000 px in poi |
+| run senza input, 200 seed | 0/200 sopravvive; **121 prese dalla Corruzione**, 79 in una voragine; morte mediana 4.9 s |
+| lettura dei pixel | croma 215 → **0** a sinistra del fronte, 215 intatto a destra, rampa a metà a 0.55; nessun capovolgimento |
+
+Il giallo `(255,220,40)` diventa grigio **214**, che è esattamente la sua luma Rec. 709: lo
+shader e `core.desaturate_color` fanno la stessa aritmetica, e devono continuare a farla.
+
+**Da tarare al playtest, in quest'ordine**: `PLAYER_RECOVERY_RATIO` (0.66 — è il numero che
+decide se il gioco perdona), `PLAYER_HOME_X` (360 — pista contro visibilità: a 360 si vedono
+920 px avanti, cioè 2.9 s a 320 px/s), `CORRUPTION_MIN_RUNWAY` (150) e la campana
+2500 → 14 000 px su cui il fronte avanza.
+
+**Un rischio che segnalo e non ho risolto da solo**: il design doc dice che la Corruzione agisce
+*solo* sulla saturazione — «forma e luminosità restano». L'ho rispettato alla lettera. Se sullo
+schermo la zona morta risulta poco leggibile, la correzione giusta è cambiare quella riga del
+documento (aggiungendo un filo di scurimento), non aggiungerlo di nascosto nello shader.
 
 ---
 

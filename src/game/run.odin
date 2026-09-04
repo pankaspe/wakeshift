@@ -33,11 +33,13 @@ reset_run :: proc(
 	score: ^Score,
 	obstacles: ^[dynamic]Obstacle,
 	generator: ^PatternGenerator,
+	corruption: ^Corruption,
 	seed: u64,
 ) {
 	player^ = new_player()
 	world^ = new_world()
 	score^ = new_score()
+	corruption^ = new_corruption()
 
 	delete(obstacles^)
 	obstacles^ = nil

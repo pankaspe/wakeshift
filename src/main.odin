@@ -40,6 +40,7 @@ draw_gameplay :: proc(
 	world: game.World,
 	obstacles: []game.Obstacle,
 	player: game.Player,
+	corruption: game.Corruption,
 	palettes: core.PaletteSet,
 ) {
 	render.draw_terrain(world, obstacles, palettes)
@@ -47,6 +48,11 @@ draw_gameplay :: proc(
 		render.draw_obstacle(obstacle, world, palettes)
 	}
 	render.draw_player(player, world, palettes)
+
+	// Last, over everything: the front is in front of the world it is
+	// eating. The colour behind it dies in a post-process on the finished
+	// frame (fx/corruption.odin) — this is only the edge.
+	render.draw_corruption(corruption, player, palettes)
 }
 
 // Returns a copy of the world advanced by the leftover fraction of a
@@ -102,6 +108,13 @@ main :: proc() {
 	// frame's size changes, so nothing here has to tell it about resizes.
 	bloom := fx.new_bloom()
 	defer fx.destroy_bloom(bloom)
+
+	// The colour dying from the left, applied to the finished frame after
+	// the bloom (fx/corruption.odin). The *edge* of the front is drawn in
+	// the world instead, so the player can still see it if this shader
+	// fails to compile.
+	corruption_fx := fx.new_corruption()
+	defer fx.destroy_corruption(corruption_fx)
 
 	// build the cumulative per-tier pattern pools, then catch any
 	// pattern-authoring mistakes immediately at startup — for every tier,
@@ -178,6 +191,10 @@ main :: proc() {
 
 	// run score, Dream Depth: the distance travelled, and the only score
 	score := game.new_score()
+
+	// the dream going out behind the player: a front advancing from the
+	// left, and the distance to it is the whole health bar (section 5)
+	corruption := game.new_corruption()
 
 	// --- Fixed timestep bookkeeping (core/time.odin) ---
 
@@ -256,7 +273,7 @@ main :: proc() {
 				switch main_menu.selected {
 				case 0:
 					run_seed = rand.uint64()
-					game.reset_run(&player, &world, &score, &obstacles, &generator, run_seed)
+					game.reset_run(&player, &world, &score, &obstacles, &generator, &corruption, run_seed)
 					accumulator = 0
 					pending_input = core.Input{}
 					core.destroy_run_recorder(&recorder)
@@ -320,17 +337,47 @@ main :: proc() {
 					game.tiers[tier_index].scroll_speed,
 				)
 
-				// update the player: the press, and the journey it starts
-				game.update_player(&player, world, step_input, core.FIXED_TIMESTEP)
+				// update the player: the press, the journey it starts, and
+				// the ground held or lost against the cubes already on
+				// screen — which is why the obstacle list goes in
+				game.update_player(
+					&player,
+					world,
+					obstacles[:],
+					step_input,
+					core.FIXED_TIMESTEP,
+				)
 
-				// depth is the distance the world scrolled this step
-				game.update_score(&score, world, core.FIXED_TIMESTEP)
+				// the front advances with distance, not with time
+				game.update_corruption(&corruption, world)
+
+				// depth is how far the *character* travelled, so a step
+				// spent pinned against a cube scores nothing
+				game.update_score(&score, world, player, core.FIXED_TIMESTEP)
 
 				// keep generating obstacles ahead of the player
 				game.generate_ahead(&generator, &obstacles, world.elapsed_time)
 
+				// out of room: the front caught up. Checked before the
+				// obstacles because it is the ending the whole design is
+				// built around, and it should not be masked by a gap the
+				// player fell into on the same step.
+				if game.corruption_has_reached(corruption, player) {
+					game_state = .GameOver
+					if score.value > high_score {
+						high_score = score.value
+						platform.save_best_run(
+							high_score,
+							core.build_manifest(recorder, world.tick, score.value),
+						)
+					}
+				}
+
 				// check collision against every obstacle
 				for obstacle in obstacles {
+					if game_state != .Playing {
+						break
+					}
 					if game.check_player_obstacle_collision(player, obstacle, world) {
 						game_state = .GameOver
 
@@ -405,7 +452,7 @@ main :: proc() {
 		case .GameOver:
 			if input.confirm {
 				run_seed = rand.uint64()
-				game.reset_run(&player, &world, &score, &obstacles, &generator, run_seed)
+				game.reset_run(&player, &world, &score, &obstacles, &generator, &corruption, run_seed)
 				accumulator = 0
 				pending_input = core.Input{}
 				core.destroy_run_recorder(&recorder)
@@ -458,25 +505,23 @@ main :: proc() {
 			// guess. It does mean the picture leads the collision state by
 			// up to one step (~17ms) — the forgiving direction: something
 			// can look like it grazed you a frame before the game agrees.
-			draw_gameplay(interpolated_world(world, accumulator), obstacles[:], player, palettes)
-			ui.draw_hud(
-				score,
-				game.tiers[game.get_current_tier_index(world.elapsed_time)].name,
+			draw_gameplay(
+				interpolated_world(world, accumulator),
+				obstacles[:],
+				player,
+				corruption,
 				palettes,
 			)
+			ui.draw_hud(score, palettes)
 
 		case .Paused:
 			// draw the frozen gameplay frame underneath, then the overlay on top
-			draw_gameplay(world, obstacles[:], player, palettes)
-			ui.draw_hud(
-				score,
-				game.tiers[game.get_current_tier_index(world.elapsed_time)].name,
-				palettes,
-			)
+			draw_gameplay(world, obstacles[:], player, corruption, palettes)
+			ui.draw_hud(score, palettes)
 			ui.draw_pause_overlay(pause_menu, palettes)
 
 		case .GameOver:
-			draw_gameplay(world, obstacles[:], player, palettes)
+			draw_gameplay(world, obstacles[:], player, corruption, palettes)
 			ui.draw_game_over(score, high_score, palettes)
 
 		case .Options:
@@ -484,7 +529,7 @@ main :: proc() {
 			// it — the same overlay relationship the pause screen has, so
 			// changing a setting mid-run does not look like leaving it.
 			if options_return == .Paused {
-				draw_gameplay(world, obstacles[:], player, palettes)
+				draw_gameplay(world, obstacles[:], player, corruption, palettes)
 			}
 			ui.draw_options_screen(options_screen, palettes)
 		}
@@ -495,6 +540,18 @@ main :: proc() {
 		// It reads the same two variables the palette does, so the bloom
 		// and the colors describe one world rather than two.
 		fx.apply_bloom(&bloom, disp.render_target, fx.bloom_for_world(palettes.world_t, palettes.depth_t))
+
+		// After the bloom, so a lit edge's halo greys along with the edge
+		// that threw it. The front is given as a fraction of the frame,
+		// which is what keeps fx from needing to know the canvas is
+		// 1280 wide or that a game is what filled it.
+		if showing_run {
+			fx.apply_corruption(
+				&corruption_fx,
+				disp.render_target,
+				corruption.front_x / core.SCREEN_WIDTH,
+			)
+		}
 
 		platform.present_display(disp)
 	}

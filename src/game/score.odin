@@ -30,11 +30,17 @@ new_score :: proc() -> Score {
 	return Score{value = 0}
 }
 
-// Depth is derived from the distance the world has scrolled this step.
-// Deliberately not read off world.scroll_offset directly: once the
-// player's own screen x becomes game state (roadmap R2.1), distance
-// travelled and world scroll stop being the same number, and this is the
-// procedure that will have to know the difference.
-update_score :: proc(score: ^Score, world: World, delta_time: f32) {
-	score.value += world.scroll_speed * delta_time / PIXELS_PER_DEPTH
+// Depth is how far the *character* travelled this step, which is not the
+// same as how far the world scrolled.
+//
+// The world comes at them at scroll_speed; their own screen x moves too.
+// Add the two and the arithmetic says the right thing at every moment
+// without a single branch: pinned against a cube the character's x falls
+// at exactly the scroll speed, the two cancel, and depth stops. Running
+// back to their resting position they cover more ground per second than
+// the world does, and the run they lost is repaid in score as well as in
+// room. **Blocking costs depth, and nothing here had to be told that.**
+update_score :: proc(score: ^Score, world: World, player: Player, delta_time: f32) {
+	travelled := (world.scroll_speed + player.velocity_x) * delta_time
+	score.value += max(travelled, 0) / PIXELS_PER_DEPTH
 }

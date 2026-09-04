@@ -11,6 +11,11 @@
 *
 *     At every instant at least one lane must be non-lethal.
 *
+* Note the word. Since R2.3 a cube does not kill, it blocks — so a cube
+* on both lanes at once is **legal**, and it is the design's centrepiece:
+* no escape, only a choice about which price to pay. Only the Gap counts
+* here today, and the Sentinel will when it arrives (roadmap R4.4).
+*
 * validate_pattern_pool enforces it directly, by arithmetic rather than
 * by authorial care: for every pattern, and for every ordered pair of
 * patterns across the seam between them, it works out the window of time
@@ -321,12 +326,18 @@ generate_ahead :: proc(
 // --- Validation ---
 
 // The window of time, relative to the pattern's start, during which an
-// event makes its lane lethal at the player's x.
+// event makes its lane lethal at the character.
 //
 // An obstacle of width w arriving at time a spans screen x from
-// PLAYER_X + (a - t) * v to that plus w, and the player's box spans
-// PLAYER_X to PLAYER_X + PLAYER_SIZE. Solving for overlap gives
-// [a - PLAYER_SIZE/v, a + w/v].
+// WORLD_ANCHOR_X + (a - t) * v to that plus w, and a character at rest
+// spans WORLD_ANCHOR_X to WORLD_ANCHOR_X + PLAYER_SIZE. Solving for
+// overlap gives [a - PLAYER_SIZE/v, a + w/v].
+//
+// A character who has lost ground sits to the *left* of the anchor and
+// meets everything later — but by the same amount on both lanes, so
+// every window shifts together and their overlaps do not change. The
+// rule therefore holds wherever the player happens to be, which is why
+// this can go on being checked once, statically, against the anchor.
 //
 // Deliberately measured at the *slowest* speed a run ever uses and with
 // the *widest* width a type can roll: both make the window longer, so a
@@ -397,8 +408,11 @@ validate_pattern_pool :: proc(pool: []Pattern) {
 report_conflicts :: proc(first: Pattern, first_index: int, second: Pattern, second_index: int, shift: f32) {
 	for a in first.events {
 		a_start, a_end := event_window(a)
+		if !is_lethal(a.obstacle_type) {
+			continue
+		}
 		for b in second.events {
-			if a.lane == b.lane {
+			if a.lane == b.lane || !is_lethal(b.obstacle_type) {
 				continue
 			}
 			b_start, b_end := event_window(b)

@@ -55,8 +55,16 @@ is_gap :: proc(obstacle_type: ObstacleType) -> bool {
 	return obstacle_type == .Gap
 }
 
+// True for the types that end a run outright, as opposed to the ones that
+// cost ground. It is what the fairness rule is written in terms of
+// (pattern.odin): two *lethal* lanes at once is unanswerable, while two
+// blocked lanes is a choice about which price to pay.
+is_lethal :: proc(obstacle_type: ObstacleType) -> bool {
+	return obstacle_type == .Gap
+}
+
 Obstacle :: struct {
-	arrival_time:  f32, // world.elapsed_time value at which this obstacle reaches PLAYER_X
+	arrival_time:  f32, // world.elapsed_time at which this obstacle reaches WORLD_ANCHOR_X
 	lane:          core.Lane,
 	size:          rl.Vector2,
 	obstacle_type: ObstacleType,
@@ -77,8 +85,8 @@ get_max_width :: proc(obstacle_type: ObstacleType) -> f32 {
 	return obstacle_type == .Gap ? GAP_WIDTH_LONG : OBSTACLE_SIZE
 }
 
-// Creates an obstacle that will arrive at the player's x position at the
-// given time.
+// Creates an obstacle that will reach the world anchor at the given time.
+// Which is where the player is, as long as they have not lost ground.
 //
 // Takes the caller's random generator rather than reaching for the global
 // one: every random choice a run makes has to come from the run's own
@@ -131,7 +139,7 @@ get_obstacle_size :: proc(obstacle: Obstacle, world: World) -> rl.Vector2 {
 // uneven that surface is.
 get_obstacle_position :: proc(obstacle: Obstacle, world: World) -> rl.Vector2 {
 	time_until_arrival := obstacle.arrival_time - world.elapsed_time
-	x := core.PLAYER_X + time_until_arrival * world.scroll_speed
+	x := core.WORLD_ANCHOR_X + time_until_arrival * world.scroll_speed
 	size := get_obstacle_size(obstacle, world)
 	return rl.Vector2{x, core.get_lane_y(get_ground(world), obstacle.lane, x, size)}
 }
