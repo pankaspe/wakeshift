@@ -89,21 +89,21 @@ systems" complication below rather than working around it. Four decisions are al
 bind the phase: **the background changes, never the stroke**; the blend **lags** `world_t` by
 half a second or so, because a flip is 0.16 s and three in a row would strobe; the background
 never competes with the line for attention; and the line's **glow grows toward Dream**, which is
-the second channel that says where you are going (pillar 6). All four are built. The world also
-**draws itself on
-the right** as the Corruption eats it on the left — two mirrored fronts — and the draw front may
-never move far enough left to steal warning time (pillar 3).
+the second channel that says where you are going (pillar 6). All four are built, and so is the
+right-hand front: the world **draws itself on the right** as the Corruption eats it on the left.
+The draw front may never move far enough left to steal warning time (pillar 3), which is why its
+inset is a constant and costs 0.18 s.
 
 **Where the project stands.** The design was rewritten on 4 September 2026 (v1.3 → v2.0, then
 v2.1 for the art direction), and **R1 through R4 are built and playtested**: two lanes, one
 gesture, a cube that *blocks* rather than kills in six forms, a Corruption front advancing from
 the left that eats the ground a mistake costs you, a track whose corridor undulates and pinches,
 and the Sentinel — so all three dangers and all three verbs are on screen. **Phase RL is in
-progress**: RL.1 through RL.4 are done, so **nothing on screen is filled but the background** — a
+progress**: RL.1 through RL.5 are done, so **nothing on screen is filled but the background** — a
 field whose colour is the world, two unfilled strokes that are the floor and the ceiling with the
-cubes welded into them, a character made of the same mark but heavier and whiter, and a dormant
-lane that thins and dims behind the one you are in. Still missing: the real pattern pool (R5),
-fragments and the Gate (R6).
+cubes welded into them, a character made of the same mark but heavier and whiter, a dormant lane
+that thins and dims behind the one you are in, and a pen near the right edge that the world is
+being written by. Still missing: the real pattern pool (R5), fragments and the Gate (R6).
 
 Why it was rewritten, measured rather than guessed: 200 simulated runs that never touched the
 key, **161 survived the whole first tier**, median death at 35 s; **86% of the time** nothing on
@@ -504,6 +504,33 @@ gameplay, layout or render code knows what monitor it is on.
   carries that convention through the chain unchanged. A second flip anywhere in the middle
   silently mirrors the light away from whatever emitted it.
 - Drawing rate is a setting; the simulation rate is not.
+
+### The world is written, and that is a clip
+
+`render/draw_front.odin`. The world is not already there and scrolling past: it is drawn at a
+fixed x near the right edge and scrolls toward the player from under the pen (Design Doc, section
+10, decision 5). Four rules, and the first is the reason RL.5 shared a phase with RL.2:
+
+- **It is a clip, never an animation.** Once every obstacle lives inside the floor's own polyline
+  (RL.2), "the line writes the world" is one x beyond which nothing is drawn: terrain spans are
+  cut at it exactly the way they are cut at a hole, a shape straddling it truncates itself, and
+  nothing anywhere needs a per-object reveal or a state remembering how far along it is. Anything
+  new that draws itself must truncate the same way rather than fading in.
+- **The front is not a difficulty knob and may never become one.** Every pixel it moves left is
+  warning time taken from the player, and pillar 3 promises every danger a visible arrival phase.
+  `DRAW_FRONT_INSET` is a constant, 48 px, 0.18 s at the opening speed, and it is spent on making
+  the nib visible rather than on tension. Nothing may make it a function of tier, depth or score.
+- **There is no wall on the right, and copying the Corruption's mark would be the worst possible
+  mirroring.** A lit vertical bar at the right edge reads as something approaching, and this is
+  the one boundary in the game that threatens nothing. The two fronts are mirrored in what they
+  *mean*, deliberately not in how they are drawn: the draw front is marked by absence — the lines
+  stop — plus a nib on each of them. When the pen is over a hole there is no nib, because what is
+  being drawn is an absence.
+- **A shape that can be half-written has to be built from the pen outward.** The Sentinel's
+  outline used to run from its left edge rightward, so clipping left both loose ends on the left:
+  a half-written beam would have been capped at the pen and open at the end it had already
+  finished. The path now starts at the pen, runs away from it and comes back, so the loose ends
+  are where the ink stops.
 
 ### The glow is a third channel, and it is the one that survives depth
 

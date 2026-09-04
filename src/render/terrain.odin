@@ -225,6 +225,11 @@ collect_gap_spans :: proc(
 }
 
 // What is left of one side once the gaps are taken out of it.
+//
+// `right` is the draw front since RL.5, not the edge of the world, so a
+// gap that has not been reached yet has to be clamped rather than
+// subtracted: cutting at a hole the pen has not drawn would put the
+// hole's own end-of-line mark where the pen is.
 solid_spans :: proc(
 	gaps: []Span,
 	left, right: f32,
@@ -234,10 +239,16 @@ solid_spans :: proc(
 
 	cursor := left
 	for gap in gaps {
+		if gap.start >= right {
+			break
+		}
 		if gap.start > cursor {
-			append(&spans, Span{start = cursor, end = gap.start})
+			append(&spans, Span{start = cursor, end = min(gap.start, right)})
 		}
 		cursor = max(cursor, gap.end)
+		if cursor >= right {
+			return spans
+		}
 	}
 	if cursor < right {
 		append(&spans, Span{start = cursor, end = right})
@@ -548,7 +559,10 @@ draw_terrain_side :: proc(
 		return
 	}
 	left := outline[0].x
-	right := outline[len(outline) - 1].x
+	// The world stops at the pen, not at the edge of the screen (RL.5).
+	// One line, and it is the whole of "the line writes the world" — see
+	// render/draw_front.odin.
+	right := min(outline[len(outline) - 1].x, DRAW_FRONT_X)
 
 	gaps := collect_gap_spans(world, obstacles, lane)
 
@@ -559,16 +573,31 @@ draw_terrain_side :: proc(
 		}
 	}
 
+	// Where this lane's line currently ends under the pen, if it ends
+	// there at all: a hole straddling the front means there is nothing to
+	// put a nib on, because what is being drawn right now is an absence.
+	pen: rl.Vector2
+	drawing := false
+
 	for span in solid_spans(gaps[:], left, right) {
 		piece := clip_outline(outline[:], span.start, span.end)
+		broken_end := span.end < right - TERRAIN_EPSILON
+		if !broken_end && len(piece) >= 2 {
+			pen = piece[len(piece) - 1]
+			drawing = true
+		}
 		draw_terrain_piece(
 			world,
 			&piece,
 			light,
 			is_floor,
 			span.start > left + TERRAIN_EPSILON,
-			span.end < right - TERRAIN_EPSILON,
+			broken_end,
 		)
+	}
+
+	if drawing {
+		draw_nib(pen, palettes)
 	}
 }
 

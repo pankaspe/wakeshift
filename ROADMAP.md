@@ -68,10 +68,11 @@ pool vero (R5) e l'economia (R6).
 **La Linea** di Cavandoli. La fase che la porta a schermo è la **RL**, ed è in corso: va prima
 della R5 perché cambia cos'*è* un pattern.
 
-**Prossima**: la RL.5 — il mondo si disegna a destra. Con la RL.1÷RL.4 fatte **non c'è più niente
-di pieno a schermo tranne il fondo**, e la gerarchia dei pesi del documento è in piedi per tre
-gradini su quattro: personaggio, corsia viva, corsia dormiente. Manca la parallasse, che è la
-RL.8.
+**Prossima**: la RL.6 — la Corruzione diventa un segno. Con la RL.1÷RL.5 fatte **non c'è più
+niente di pieno a schermo tranne il fondo**, la gerarchia dei pesi regge per tre gradini su
+quattro (manca la parallasse, RL.8), e **i due fronti sono a schermo**: a destra il mondo si
+disegna, a sinistra la Corruzione lo mangia — ma il fronte sinistro è ancora un filtro sul frame,
+ed è quello che la RL.6 trasforma in linea che si sfilaccia.
 
 **Cosa sopravvive intatto e non va toccato**: tutto `platform/` (finestra, display,
 salvataggio, cifratura, percorsi); `fx/bloom`; `render/stroke` e `render/glow`; i menu e le
@@ -439,7 +440,7 @@ livello applicato allo schermo, è un posto dove la linea ha smesso di esserci.
 | RL.2 ✅ | **Il tratto è il mondo**: `render/terrain.odin` ridisegna le due corsie come polilinee continue senza riempimento, e gli ostacoli entrano **dentro** la stessa polilinea invece di essere disegnati sopra. `render/obstacle.odin` si svuota | **Opus** |
 | RL.3 ✅ | **Il personaggio è una continuazione della linea**: contorno aperto al posto della sagoma piena, con il tratto più pesante e il nucleo più bianco del mondo attorno. Il sistema di pose resta intero — cambia solo l'ultimo passaggio | **Opus** |
 | RL.4 ✅ | **Il glow cresce verso l'Onirico**, e la corsia dormiente si assottiglia. Qui si decide anche se le due linee stanno bene entrambe piene: La Linea ne ha una, noi ne abbiamo due, e due tratti paralleli identici leggono come un tubo invece che come un orizzonte | Sonnet |
-| RL.5 | **Il mondo si disegna a destra**: un fronte di disegno speculare a quello della Corruzione, con il pennino che lo marca. Una volta fatta la RL.2 è **un ritaglio, non un'animazione per ostacolo** — ed è il motivo per cui le due idee stanno nella stessa fase | **Opus** |
+| RL.5 ✅ | **Il mondo si disegna a destra**: un fronte di disegno speculare a quello della Corruzione, con il pennino che lo marca. Una volta fatta la RL.2 è **un ritaglio, non un'animazione per ostacolo** — ed è il motivo per cui le due idee stanno nella stessa fase | **Opus** |
 | RL.6 | **La Corruzione diventa un segno**: `fx/particles.odin` anticipato dalla R7, pool fisso pre-allocato, e la linea che si sfilaccia dietro. Poi si decide la sorte di `fx/corruption.odin`: la mia proposta è provare prima con le sole particelle e tenere lo shader spento ma non cancellato, perché la scelta di andare a nero è venuta da un playtest e va disfatta con un altro playtest, non a tavolino | **Opus** |
 | RL.7 | **Le curve**: adottare `core:math/ease` della libreria standard (tutto il set Penner) e cancellare `core/ease.odin`. `ease.ease` è una funzione pura e può stare ovunque; il tween `flux` alloca e va a orologio, quindi **solo presentazione** o salta il determinismo — replay e validazione del punteggio | Sonnet |
 | RL.8 | **Parallasse**: linee più sottili, più fioche e più lente dietro. Anticipata dalla R7, e con questa direzione costa un decimo | Sonnet |
@@ -739,6 +740,75 @@ smesso. Misurato a `depth_t = 1`: **8 righe contro 26** fra Reale e Onirico.
 **Cosa tocca a te giudicare**: se le due corsie hanno smesso di leggersi come un tubo; se la
 dormiente è troppo fioca o non abbastanza; se il glow verso l'Onirico si *sente* come "sto
 andando di là" o se la campana del bloom se lo mangia; e se l'Onirico satura troppo.
+
+---
+
+#### RL.5 ✅ — Il mondo si disegna a destra (4 settembre 2026)
+
+**È un ritaglio, e la promessa della fase era esatta.** Una volta che ogni ostacolo sta dentro la
+polilinea del pavimento (RL.2), "la linea scrive il mondo" è **una x oltre la quale non si
+disegna niente**: gli span del terreno si tagliano lì esattamente come si tagliano su un buco,
+un ostacolo a cavallo si tronca da solo, e da nessuna parte serve un'animazione di comparsa o uno
+stato che ricordi a che punto è arrivata una forma. Gli ostacoli non compaiono: la linea li
+raggiunge. Il file nuovo è `render/draw_front.odin` e sono novanta righe di cui la metà è il
+commento che spiega perché non ci va un muro.
+
+**Perché a destra non c'è un muro.** La Corruzione è marcata con un bordo verticale illuminato su
+tutta l'altezza dello schermo, perché è letale e il pilastro 2 vuole una linea che nessuno possa
+mancare. Copiare quel segno qui sarebbe il peggior modo possibile di fare i "due fronti
+speculari": una barra luminosa al bordo destro legge come *qualcosa che arriva*, e questo è
+l'unico confine del gioco che non minaccia niente. Quindi il fronte di disegno è marcato al
+contrario — **per assenza**, perché le linee semplicemente finiscono, più **un pennino** su
+ciascuna delle due, dove la penna tocca il foglio. I due fronti sono speculari in *cosa
+significano*, e di proposito non in come sono disegnati.
+
+**Il fronte non è una manopola di difficoltà e non deve diventarlo.** `DRAW_FRONT_INSET` è 48 px,
+cioè **0.18 s** di preavviso al ritmo di apertura, ed è una costante: niente lo può rendere
+funzione del tier, della profondità o del punteggio. Quei 48 px sono spesi per far stare il
+pennino a schermo, non per fare tensione.
+
+**Un dettaglio che era facile sbagliare in silenzio.** Il contorno della Sentinella si costruiva
+*dal bordo sinistro verso destra*, quindi con il ritaglio i due capi liberi finivano a sinistra:
+un raggio scritto a metà sarebbe stato **chiuso sul pennino e aperto sul capo che aveva già
+finito**, cioè l'esatto contrario. Adesso il percorso parte dal pennino, va a sinistra lungo il
+bordo alto, gira il capo sinistro e torna: i due capi liberi stanno dove sta l'inchiostro.
+
+**Misurato** (armatura usa e getta, cancellata; ogni numero è **inchiostro**, cioè la differenza
+contro un frame con il solo fondo — il campo non è piatto, la vignettatura lo rende funzione di
+dove guardi, e una soglia assoluta risponde alla domanda sbagliata):
+
+- Inchiostro per colonna attraversando il pennino (x=1232): `-40:187 -30:188 -20:188 -10:194
+  +0:209 +10:7 +20:0 +30:0 +40:0`. Il mondo si ferma di netto; l'alone sborda **7 livelli a 10 px**
+  e **zero** oltre i 20. Al bordo dello schermo: 0.
+- Il pennino: **209** di inchiostro contro i **183** della stessa linea 120 px più indietro — è la
+  cosa più luminosa a quell'estremità. Uno per corsia, entrambi presenti.
+- Una Sentinella che copre 1138..1326 con il pennino a 1232: **192** di inchiostro 40 px prima del
+  pennino, **0** 40 px dopo. Il capo sinistro, che la penna ha finito da un pezzo, è chiuso (192).
+- Un cubo fluttuante su 1205..1259: **197** sul tratto alto disegnato, **0** oltre il pennino.
+  Percorso di codice diverso dalla Sentinella, quindi vale la pena averlo misurato a parte.
+- Un buco su 1162..1264 **sotto** il pennino: il labbro che la penna ha già scritto gira verso il
+  basso (**187** a 14 px sotto la superficie) e **non c'è nessun pennino** (0). Giusto: quello che
+  la penna sta scrivendo in quell'istante è un'assenza.
+
+**Ricadute e cose da guardare**:
+
+- `solid_spans` prende adesso il fronte come `right`, quindi un buco non ancora raggiunto va
+  **limitato** e non sottratto: tagliare su un buco che la penna non ha disegnato metterebbe il
+  segno di fine-linea del buco dove sta la penna.
+- `draw_obstacle_outline` prende un `closed`, e `drawn_extent` è la funzioncina che risponde
+  "fin dove è arrivata la penna su questa forma".
+- **Il pennino sparisce quando sotto c'è un buco.** È corretto per costruzione ma a schermo
+  potrebbe leggersi come la penna che si spegne. Da guardare al playtest; se dà fastidio,
+  l'alternativa è tenere il pennino sulla quota della superficie anche sul vuoto.
+- `game.get_track_at_anchor` **non è servita**: la nota della RL.1 diceva che la RL.5 l'avrebbe
+  voluta, e non è andata così — il pennino prende il punto vero in cui finisce la polilinea, che
+  è più onesto di ricampionare il tracciato. Resta senza chiamanti, e adesso senza nemmeno un
+  motivo futuro dichiarato.
+
+**Cosa tocca a te giudicare**: se il mondo che si scrive si *vede* (il fronte è vicino al bordo,
+ed è di proposito: era la scelta fra vederlo bene e rubare preavviso, e ho scelto il preavviso);
+se il pennino a due punti legge come una penna o come due; e se 48 px bastano o se il pennino
+vuole più aria — sapendo che ogni pixel in più è preavviso in meno.
 
 ---
 
