@@ -549,7 +549,17 @@ main :: proc() {
 		// frame, and it is advanced from the frame clock — the same wall
 		// time display_time is made of, never a simulation step.
 		background_t = render.chase_background_t(background_t, palettes.world_t, frame_time)
-		render.draw_background(background, palettes, background_t, display_time)
+		// The parallax rides however far the world has travelled — the
+		// run's own scroll behind a run, and the wall clock at the opening
+		// speed behind a menu, so the first screen anyone sees already has
+		// a horizon moving on it (render/parallax.odin).
+		render.draw_background(
+			background,
+			palettes,
+			background_t,
+			display_time,
+			showing_run ? world.scroll_offset : display_time * game.INITIAL_SCROLL_SPEED,
+		)
 
 		// The world's line coming apart behind the front. Advanced from
 		// the frame clock, like background_t above and for the same

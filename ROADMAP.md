@@ -68,7 +68,9 @@ pool vero (R5) e l'economia (R6).
 **La Linea** di Cavandoli. La fase che la porta a schermo è la **RL**, ed è in corso: va prima
 della R5 perché cambia cos'*è* un pattern.
 
-**Prossima**: la RL.8 — la parallasse. Con la RL.1÷RL.7 fatte **non c'è più niente di pieno a schermo tranne il fondo** e i due fronti
+**Prossima**: la RL.9, il playtest della fase — più **il rifacimento del personaggio**, deciso
+guardando lo screenshot: a 45 px la figura a stecchi legge come un groviglio e non come qualcuno.
+Diventa **una figura con la veste**, un contorno solo. Con la RL.1÷RL.8 fatte **non c'è più niente di pieno a schermo tranne il fondo** e i due fronti
 sono entrambi ritagli: a destra la penna scrive, a sinistra la linea si sfilaccia in polvere.
 Restano due task di rifinitura (RL.7 curve, RL.8 parallasse) e poi il playtest della fase, la
 RL.9 — che adesso ha una domanda in più da rispondere: **lo shader della Corruzione va cancellato
@@ -443,7 +445,7 @@ livello applicato allo schermo, è un posto dove la linea ha smesso di esserci.
 | RL.5 ✅ | **Il mondo si disegna a destra**: un fronte di disegno speculare a quello della Corruzione, con il pennino che lo marca. Una volta fatta la RL.2 è **un ritaglio, non un'animazione per ostacolo** — ed è il motivo per cui le due idee stanno nella stessa fase | **Opus** |
 | RL.6 ✅ | **La Corruzione diventa un segno**: `fx/particles.odin` anticipato dalla R7, pool fisso pre-allocato, e la linea che si sfilaccia dietro. Poi si decide la sorte di `fx/corruption.odin`: la mia proposta è provare prima con le sole particelle e tenere lo shader spento ma non cancellato, perché la scelta di andare a nero è venuta da un playtest e va disfatta con un altro playtest, non a tavolino | **Opus** |
 | RL.7 ✅ | **Le curve**: adottare `core:math/ease` della libreria standard (tutto il set Penner) e cancellare `core/ease.odin`. `ease.ease` è una funzione pura e può stare ovunque; il tween `flux` alloca e va a orologio, quindi **solo presentazione** o salta il determinismo — replay e validazione del punteggio | Sonnet |
-| RL.8 | **Parallasse**: linee più sottili, più fioche e più lente dietro. Anticipata dalla R7, e con questa direzione costa un decimo | Sonnet |
+| RL.8 ✅ | **Parallasse**: linee più sottili, più fioche e più lente dietro. Anticipata dalla R7, e con questa direzione costa un decimo | Sonnet |
 | RL.9 ⚑ | Playtest: il mondo si legge in due secondi, il fondo non dà fastidio, il flip si sente come un evento, e il personaggio a 45 px si vede | — |
 
 #### RL.1 ✅ — Il fondo è il mondo (4 settembre 2026)
@@ -937,7 +939,57 @@ quindi possono stare ovunque, simulazione compresa. **Il tween `flux` no**: allo
 array dinamico) e gira su un orologio a muro, quindi è solo presentazione — usarlo dentro un passo
 di simulazione romperebbe replay e validazione del punteggio.
 
-Nessuno usa ancora `core:math/ease`: il primo chiamante vero sarà la RL.8.
+Nessuno usa ancora `core:math/ease`. Pensavo lo avrebbe usato la RL.8; non è andata così — la
+parallasse è fatta di sinusoidi. Il primo chiamante è ancora davanti.
+
+---
+
+#### RL.8 ✅ — La parallasse (4 settembre 2026)
+
+L'ultimo gradino della gerarchia dei pesi: `render/parallax.odin`, tre orizzonti lontani per
+banda, disegnati come curve lunghe e basse che scorrono a una frazione della velocità del mondo.
+Anticipata dalla R7, e con questa direzione costa davvero un decimo — non c'è nessuna sagoma da
+riempire e nessuna texture da autorare, solo lo stesso tratto a un peso che non usa nient'altro.
+
+**Tre regole, e tutte e tre riguardano il non dare fastidio** (decisione 3):
+
+1. **Non entra mai nel corridoio.** Il tracciato tiene `TRACK_SKY_MARGIN` fuori da entrambe le
+   corsie a ogni spina e a ogni apertura legali, quindi le bande sopra y=70 e sotto y=650 sono
+   gli unici due posti dello schermo che il mondo non può raggiungere. Ogni strato ci sta dentro,
+   ampiezza compresa — e non è una cosa creduta a occhio: è verificata spazzando *tutte* le
+   coppie spina/apertura legali attraverso `track_clamp`.
+2. **È disegnata sotto la vignettatura**, non sopra. Un segno in cima allo schermo che ignorasse
+   l'obiettivo tirerebbe l'occhio esattamente dove l'obiettivo cerca di non farlo andare, quindi
+   la passata di fondo è: campo, parallasse, vignettatura sopra a tutti e due.
+3. **Non prende il guadagno di glow.** Tutto il resto brucia di più verso l'Onirico (RL.4); il
+   fondo è la sola cosa che non deve, o competerebbe di più proprio dove tutto il resto è già più
+   luminoso.
+
+**E curva, perché il pericolo fa angolo.** Due sinusoidi di lunghezza d'onda diversa invece di
+una, così legge come un paesaggio e non come un segnale — ma mai un tratto dritto e mai un angolo
+retto, perché un angolo retto è l'unica cosa in questo quadro che vuol dire "questo ti costa".
+
+È una **funzione pura** dello scorrimento che le viene passato: niente stato, niente da azzerare,
+e un menu la guida con l'orologio a muro alla velocità di apertura — quindi la prima schermata
+che si vede ha già un orizzonte che si muove.
+
+**Misurato** (armatura usa e getta, cancellata):
+
+- Il corridoio può arrivare a **y=70.0** in alto e **y=650.0** in basso (spazzate tutte le coppie
+  legali). Gli strati arrivano a y=60.8 / 43.8 / 24.9 in alto e 659.2 / 676.2 / 695.1 in basso:
+  **9.2 px di franco** da entrambe le parti, sul più vicino.
+- Gerarchia: corsia viva 2.80 px, dormiente 1.96 px, parallasse **1.18 / 0.95 / 0.78 px** ad alpha
+  **0.30 / 0.22 / 0.15** contro lo 0.55 della dormiente. Ogni strato più indietro è più sottile,
+  più fioco *e* più lento del precedente — verificato come catena, non a occhio.
+- Visibilità: nella banda alta, sotto la vignettatura e dopo il bloom, il dislivello massimo lungo
+  una colonna è **29 livelli**. Quieto ma c'è.
+- Dopo 600 px di scorrimento del mondo la banda cambia fino a **21 livelli** — si muove — e nel
+  corridoio i due fotogrammi differiscono di **0 livelli**, cioè non ci entra nemmeno con l'alone.
+
+**Nota onesta**: avevo scritto nella RL.7 che il primo chiamante vero di `core:math/ease` sarebbe
+stata la RL.8. Non è così — la parallasse è fatta di sinusoidi e non le serve una curva di
+easing. Il primo chiamante è ancora davanti (R7: menu, HUD, game feel), e non ho inventato un uso
+per far tornare la nota.
 
 ---
 

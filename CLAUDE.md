@@ -99,7 +99,7 @@ v2.1 for the art direction), and **R1 through R4 are built and playtested**: two
 gesture, a cube that *blocks* rather than kills in six forms, a Corruption front advancing from
 the left that eats the ground a mistake costs you, a track whose corridor undulates and pinches,
 and the Sentinel — so all three dangers and all three verbs are on screen. **Phase RL is in
-progress**: RL.1 through RL.7 are done, so **nothing on screen is filled but the background** — a
+progress**: RL.1 through RL.8 are done, so **nothing on screen is filled but the background** — a
 field whose colour is the world, two unfilled strokes that are the floor and the ceiling with the
 cubes welded into them, a character made of the same mark but heavier and whiter, a dormant lane
 that thins and dims behind the one you are in, and two fronts that are both clips: a pen near the
@@ -736,7 +736,16 @@ three curves turned out to be the library's to within 1e-7 and to have no caller
   section 10). `TERRAIN_STROKE_THICKNESS` is the rung everything else is expressed against:
   `render/player.odin`'s weights are multiples of it and `TERRAIN_DORMANT_WEIGHT` is a fraction
   of it, so tuning the world cannot silently invert the order. Do the same for anything new that
-  joins the ladder — RL.8's parallax is the last rung.
+  joins the ladder. All four rungs exist since RL.8: character 4.34 px, live lane 2.80, dormant
+  lane 1.96, parallax 1.18 / 0.95 / 0.78 at alphas 0.30 / 0.22 / 0.15.
+- **The parallax may never enter the corridor**, and `core.TRACK_SKY_MARGIN` is what makes that
+  checkable rather than believed: the track clamps every keyframe so both surfaces stay inside the
+  screen with that much to spare, so the bands above y=70 and below y=650 are the only two places
+  the world can never reach, and every parallax layer lives inside them, amplitude and all —
+  verified by sweeping every legal spine/span pair through `track_clamp` rather than by looking.
+  It is drawn **under** the vignette, because the thinnest mark on screen must not be the one
+  thing the lens cannot reach; and it does **not** take the glow gain, because the background is
+  the one thing that must not compete harder exactly where everything else is already brightest.
 - **An obstacle never thins with its lane.** The world may recede on the side the player is not
   on; a danger may not, because pillar 3 promises it a visible arrival phase and the arrival
   happens while that lane is still the dormant one. The cube welded into the terrain's own line

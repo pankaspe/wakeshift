@@ -1,8 +1,15 @@
 /*
 * Background
-* The one filled surface in the whole game (Design Doc, section 10 — "il
-* quadro"): a field of colour with a vignette, and nothing else. Every
-* other mark on screen is a stroke drawn on top of it.
+* The field: the one filled surface in the whole game (Design Doc,
+* section 10 — "il quadro"). Every other mark on screen is a stroke drawn
+* on top of it.
+*
+* Three passes, and the order is the argument. The field, then the
+* parallax (render/parallax.odin), then the vignette over both — so the
+* lens dims the distant horizons along with everything else. Drawn the
+* other way round, the thinnest mark on screen would be the one thing the
+* vignette could not reach, and it would pull the eye exactly where the
+* vignette is trying to stop it going.
 *
 * THE FIELD IS THE WORLD
 *
@@ -158,11 +165,14 @@ chase_background_t :: proc(current: f32, target: f32, dt: f32) -> f32 {
 //
 // background_t is the *chased* position, not the player's own — see the
 // file header. time is wall time and drives nothing but the breathing.
+// scroll is how far the world has travelled, for the parallax alone:
+// the run's own scroll_offset in a game, the wall clock behind a menu.
 draw_background :: proc(
 	background: Background,
 	palettes: core.PaletteSet,
 	background_t: f32,
 	time: f32,
+	scroll: f32,
 ) {
 	// The same two-segment blend the palette itself uses, so the field
 	// passes through the neutral world instead of averaging past it.
@@ -172,6 +182,11 @@ draw_background :: proc(
 	strength := 1 - BACKGROUND_BREATH_RANGE + BACKGROUND_BREATH_RANGE * breath
 
 	rl.DrawRectangle(0, 0, core.SCREEN_WIDTH, core.SCREEN_HEIGHT, field.near)
+
+	// Under the vignette, and out of the same lagged palette the field
+	// itself is drawn from: the horizons belong to the background, not to
+	// the world standing in front of it.
+	draw_parallax(field, scroll)
 
 	edge := core.dim_color(field.deep, VIGNETTE_DEPTH)
 	rl.DrawTexturePro(
