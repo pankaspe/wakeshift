@@ -136,14 +136,13 @@ Player :: struct {
 new_player :: proc() -> Player {
 	player_size := rl.Vector2{PLAYER_SIZE, PLAYER_SIZE}
 
-	// The opening ground: the run has not started, so it is the profile at
-	// time zero, at the speed a run opens at.
-	ground := core.Ground{time = 0, speed = INITIAL_SCROLL_SPEED}
+	// The opening world: flat, at the speed a run opens at.
+	opening := new_world()
 
 	return Player {
 		position = rl.Vector2 {
 			core.PLAYER_HOME_X,
-			core.get_lane_y(ground, .Real, core.PLAYER_HOME_X, player_size),
+			get_lane_y(opening, .Real, core.PLAYER_HOME_X, player_size),
 		},
 		size     = player_size,
 		lane     = .Real,
@@ -168,17 +167,19 @@ new_player :: proc() -> Player {
 // character rides the same interpolated ground the terrain is drawn on
 // instead of stepping down it at the tick rate.
 get_player_y :: proc(player: Player, world: World) -> f32 {
-	ground := get_ground(world)
-
 	switch player.state {
 	case .Real, .Dream:
-		return core.get_lane_y(ground, player.lane, player.position.x, player.size)
+		return get_lane_y(world, player.lane, player.position.x, player.size)
 
 	case .Transitioning:
-		// player.lane is still the wall we left; target_lane is the one we
-		// are going to.
-		from := core.get_lane_y(ground, player.lane, player.position.x, player.size)
-		to := core.get_lane_y(ground, player.target_lane, player.position.x, player.size)
+		// player.lane is still the lane we left; target_lane is the one we
+		// are going to. Both endpoints are resampled every step, so a
+		// journey that starts before a change in the corridor and ends
+		// after it lands on the ground that is actually there — and a
+		// corridor that narrows mid-flip simply shortens the path rather
+		// than moving the target out from under the arithmetic.
+		from := get_lane_y(world, player.lane, player.position.x, player.size)
+		to := get_lane_y(world, player.target_lane, player.position.x, player.size)
 		return from + (to - from) * flip_progress(player.transition_timer / FLIP_DURATION)
 	}
 	return player.position.y

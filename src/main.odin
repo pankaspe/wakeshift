@@ -356,7 +356,7 @@ main :: proc() {
 				game.update_score(&score, world, player, core.FIXED_TIMESTEP)
 
 				// keep generating obstacles ahead of the player
-				game.generate_ahead(&generator, &obstacles, world.elapsed_time)
+				game.generate_ahead(&generator, &obstacles, &world.track, world.elapsed_time)
 
 				// out of room: the front caught up. Checked before the
 				// obstacles because it is the ending the whole design is
@@ -488,7 +488,20 @@ main :: proc() {
 			: render.new_menu_palette(display_time)
 
 		rl.ClearBackground(palettes.neutral.deep)
-		render.draw_background(palettes, showing_run ? world.elapsed_time : display_time)
+
+		// The sky rides the corridor, so it is one picture with the world
+		// rather than a backdrop the world slides across. A menu has no
+		// track, so it sits at the middle of the screen.
+		background_spine := f32(core.TRACK_SPINE_DEFAULT)
+		if showing_run {
+			spine, _ := game.get_track_at_anchor(world)
+			background_spine = spine
+		}
+		render.draw_background(
+			palettes,
+			showing_run ? world.elapsed_time : display_time,
+			background_spine,
+		)
 
 		switch game_state {
 		case .MainMenu:

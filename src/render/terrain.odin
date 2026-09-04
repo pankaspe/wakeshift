@@ -75,8 +75,7 @@ DREAM_HOLE_GLOW :: 0.30
 // its edge, and asking for the surface as a function of x is what makes
 // that possible.
 terrain_surface_y :: proc(world: game.World, is_floor: bool, x: f32) -> f32 {
-	lane: core.Lane = is_floor ? .Real : .Dream
-	return core.terrain_surface_y(game.get_ground(world), lane, x)
+	return game.get_surface_y(world, is_floor ? core.Lane.Real : core.Lane.Dream, x)
 }
 
 // A range of screen x at one height. lift is how far the floor is raised
@@ -147,9 +146,9 @@ solid_spans :: proc(gaps: []Span, allocator := context.temp_allocator) -> [dynam
 // vertex inside it, so the drawn edge follows the same line the profile
 // describes.
 //
-// The vertices are spaced in time, not in pixels, so how far apart they
-// land on screen is the scroll speed — the undulation stretches as a run
-// gets faster (core/terrain.odin).
+// The vertices are the track's own keyframes, spaced in time rather than
+// in pixels, so how far apart they land on screen is the scroll speed —
+// the undulation stretches as a run gets faster (core/track.odin).
 @(private)
 span_samples :: proc(
 	world: game.World,
@@ -163,9 +162,15 @@ span_samples :: proc(
 	start_time := core.ground_time_at_x(ground, span.start)
 	end_time := core.ground_time_at_x(ground, span.end)
 
-	first := math.ceil(start_time / core.TERRAIN_SEGMENT_TIME) * core.TERRAIN_SEGMENT_TIME
-	for boundary := first; boundary < end_time; boundary += core.TERRAIN_SEGMENT_TIME {
-		x := span.start + (boundary - start_time) * max(ground.speed, 1)
+	for i in 0 ..< world.track.count {
+		point := world.track.points[i]
+		if point.time <= start_time {
+			continue
+		}
+		if point.time >= end_time {
+			break
+		}
+		x := span.start + (point.time - start_time) * max(ground.speed, 1)
 		if x > span.start && x < span.end {
 			append(&samples, x)
 		}

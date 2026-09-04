@@ -74,6 +74,13 @@ tiers := []Tier {
 			pattern_gap_then_cube_reverse,
 			pattern_stagger,
 			pattern_stagger_reverse,
+
+			// The two that are about the world rather than about what is
+			// standing on it. They arrive here rather than in the opening
+			// tier so that a run starts on a near-flat world and learns
+			// the ground can move once it already knows the controls.
+			pattern_narrows,
+			pattern_swell,
 		},
 	},
 	// The air is nearly gone and the draw is inverted: a breather is now

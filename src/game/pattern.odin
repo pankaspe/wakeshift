@@ -62,6 +62,23 @@ PatternEvent :: struct {
 
 Pattern :: struct {
 	events:   []PatternEvent,
+
+	// Where the world itself goes for the length of this pattern
+	// (core/track.odin), keyframed in time relative to its start. A
+	// pattern is a piece of world, not a list of things suspended over a
+	// neutral backdrop: the corridor sagging, lifting, pinching or opening
+	// *is* content, and authoring it anywhere else would mean the ground
+	// and the obstacles could disagree about what the moment is for.
+	//
+	// Every pattern starts and ends at the neutral corridor — enforced by
+	// validate_pattern_pool — which is what lets patterns be strung
+	// together in any order with a continuous world and no seam check.
+	// The rhythm that falls out of it is a happy accident worth knowing:
+	// the track is flat for the whole gap between patterns, so as the
+	// tiers squeeze that gap the world undulates more and more
+	// continuously, without a line of code that intends it.
+	track:    []core.TrackPoint,
+
 	duration: f32, // total length of the pattern, in seconds
 
 	// How much this pattern asks of the player, 0..DEMAND_LEVELS-1. Not a
@@ -90,12 +107,22 @@ DEMAND_LEVELS :: 4
 // One cube, one lane, plenty of time. The floor of the pool.
 pattern_cube_real := Pattern {
 	events   = []PatternEvent{{time_offset = 0.9, lane = .Real, obstacle_type = .Cube}},
+	track    = []core.TrackPoint{
+		{time = 0, spine = 360, span = 340},
+		{time = 0.9, spine = 392, span = 340},
+		{time = 1.9, spine = 360, span = 340},
+	},
 	duration = 1.9,
 	demand   = 0,
 }
 
 pattern_cube_dream := Pattern {
 	events   = []PatternEvent{{time_offset = 0.9, lane = .Dream, obstacle_type = .Cube}},
+	track    = []core.TrackPoint{
+		{time = 0, spine = 360, span = 340},
+		{time = 0.9, spine = 328, span = 340},
+		{time = 1.9, spine = 360, span = 340},
+	},
 	duration = 1.9,
 	demand   = 0,
 }
@@ -104,12 +131,22 @@ pattern_cube_dream := Pattern {
 // now" but "do not be down here for this stretch".
 pattern_gap_real := Pattern {
 	events   = []PatternEvent{{time_offset = 0.9, lane = .Real, obstacle_type = .Gap}},
+	track    = []core.TrackPoint{
+		{time = 0, spine = 360, span = 340},
+		{time = 0.9, spine = 384, span = 376},
+		{time = 1.9, spine = 360, span = 340},
+	},
 	duration = 1.9,
 	demand   = 0,
 }
 
 pattern_gap_dream := Pattern {
 	events   = []PatternEvent{{time_offset = 0.9, lane = .Dream, obstacle_type = .Gap}},
+	track    = []core.TrackPoint{
+		{time = 0, spine = 360, span = 340},
+		{time = 0.9, spine = 336, span = 376},
+		{time = 1.9, spine = 360, span = 340},
+	},
 	duration = 1.9,
 	demand   = 0,
 }
@@ -121,6 +158,12 @@ pattern_alternate := Pattern {
 		{time_offset = 0.8, lane = .Real, obstacle_type = .Cube},
 		{time_offset = 1.7, lane = .Dream, obstacle_type = .Cube},
 	},
+	track    = []core.TrackPoint{
+		{time = 0, spine = 360, span = 340},
+		{time = 0.8, spine = 360, span = 286},
+		{time = 1.7, spine = 360, span = 286},
+		{time = 2.6, spine = 360, span = 340},
+	},
 	duration = 2.6,
 	demand   = 1,
 }
@@ -129,6 +172,12 @@ pattern_alternate_reverse := Pattern {
 	events   = []PatternEvent {
 		{time_offset = 0.8, lane = .Dream, obstacle_type = .Cube},
 		{time_offset = 1.7, lane = .Real, obstacle_type = .Cube},
+	},
+	track    = []core.TrackPoint{
+		{time = 0, spine = 360, span = 340},
+		{time = 0.8, spine = 330, span = 286},
+		{time = 1.7, spine = 330, span = 286},
+		{time = 2.6, spine = 360, span = 340},
 	},
 	duration = 2.6,
 	demand   = 1,
@@ -141,6 +190,12 @@ pattern_gap_then_cube := Pattern {
 		{time_offset = 0.9, lane = .Real, obstacle_type = .Gap},
 		{time_offset = 2.0, lane = .Dream, obstacle_type = .Cube},
 	},
+	track    = []core.TrackPoint{
+		{time = 0, spine = 360, span = 340},
+		{time = 0.9, spine = 392, span = 382},
+		{time = 2.0, spine = 336, span = 318},
+		{time = 2.9, spine = 360, span = 340},
+	},
 	duration = 2.9,
 	demand   = 1,
 }
@@ -149,6 +204,12 @@ pattern_gap_then_cube_reverse := Pattern {
 	events   = []PatternEvent {
 		{time_offset = 0.9, lane = .Dream, obstacle_type = .Gap},
 		{time_offset = 2.0, lane = .Real, obstacle_type = .Cube},
+	},
+	track    = []core.TrackPoint{
+		{time = 0, spine = 360, span = 340},
+		{time = 0.9, spine = 328, span = 382},
+		{time = 2.0, spine = 384, span = 318},
+		{time = 2.9, spine = 360, span = 340},
 	},
 	duration = 2.9,
 	demand   = 1,
@@ -162,6 +223,13 @@ pattern_stagger := Pattern {
 		{time_offset = 1.5, lane = .Dream, obstacle_type = .Cube},
 		{time_offset = 2.2, lane = .Real, obstacle_type = .Cube},
 	},
+	track    = []core.TrackPoint{
+		{time = 0, spine = 360, span = 340},
+		{time = 0.8, spine = 392, span = 320},
+		{time = 1.5, spine = 328, span = 320},
+		{time = 2.2, spine = 392, span = 320},
+		{time = 3.0, spine = 360, span = 340},
+	},
 	duration = 3.0,
 	demand   = 2,
 }
@@ -171,6 +239,13 @@ pattern_stagger_reverse := Pattern {
 		{time_offset = 0.8, lane = .Dream, obstacle_type = .Cube},
 		{time_offset = 1.5, lane = .Real, obstacle_type = .Cube},
 		{time_offset = 2.2, lane = .Dream, obstacle_type = .Cube},
+	},
+	track    = []core.TrackPoint{
+		{time = 0, spine = 360, span = 340},
+		{time = 0.8, spine = 328, span = 320},
+		{time = 1.5, spine = 392, span = 320},
+		{time = 2.2, spine = 328, span = 320},
+		{time = 3.0, spine = 360, span = 340},
 	},
 	duration = 3.0,
 	demand   = 2,
@@ -182,6 +257,12 @@ pattern_gap_pair := Pattern {
 	events   = []PatternEvent {
 		{time_offset = 0.9, lane = .Real, obstacle_type = .Gap},
 		{time_offset = 2.2, lane = .Dream, obstacle_type = .Gap},
+	},
+	track    = []core.TrackPoint{
+		{time = 0, spine = 360, span = 340},
+		{time = 0.9, spine = 360, span = 412},
+		{time = 2.2, spine = 360, span = 412},
+		{time = 3.1, spine = 360, span = 340},
 	},
 	duration = 3.1,
 	demand   = 2,
@@ -195,8 +276,47 @@ pattern_burst := Pattern {
 		{time_offset = 2.0, lane = .Real, obstacle_type = .Cube},
 		{time_offset = 2.6, lane = .Dream, obstacle_type = .Cube},
 	},
+	track    = []core.TrackPoint{
+		{time = 0, spine = 360, span = 340},
+		{time = 0.7, spine = 360, span = 264},
+		{time = 2.7, spine = 360, span = 264},
+		{time = 3.4, spine = 360, span = 340},
+	},
 	duration = 3.4,
 	demand   = 3,
+}
+
+// The corridor pinches to nearly its narrowest with one cube inside it.
+// The cube is the same cube; what makes this hard is that there is less
+// world to be elsewhere in.
+pattern_narrows := Pattern {
+	events   = []PatternEvent{{time_offset = 1.4, lane = .Real, obstacle_type = .Cube}},
+	track    = []core.TrackPoint {
+		{time = 0, spine = 360, span = 340},
+		{time = 1.0, spine = 360, span = 254},
+		{time = 1.8, spine = 360, span = 254},
+		{time = 2.6, spine = 360, span = 340},
+	},
+	duration = 2.6,
+	demand   = 1,
+}
+
+// The world itself rises and falls, a long way, while two holes ask which
+// lane to be on. The only pattern where the answer is mostly about
+// reading the ground rather than the things standing on it.
+pattern_swell := Pattern {
+	events   = []PatternEvent {
+		{time_offset = 1.4, lane = .Dream, obstacle_type = .Gap},
+		{time_offset = 2.6, lane = .Real, obstacle_type = .Gap},
+	},
+	track    = []core.TrackPoint {
+		{time = 0, spine = 360, span = 340},
+		{time = 1.1, spine = 286, span = 300},
+		{time = 2.2, spine = 434, span = 300},
+		{time = 3.2, spine = 360, span = 340},
+	},
+	duration = 3.2,
+	demand   = 2,
 }
 
 all_patterns := []Pattern {
@@ -300,12 +420,26 @@ generator_rng :: proc(generator: ^PatternGenerator) -> rand.Generator {
 generate_ahead :: proc(
 	generator: ^PatternGenerator,
 	obstacles: ^[dynamic]Obstacle,
+	track: ^core.Track,
 	current_time: f32,
 ) {
 	rng := generator_rng(generator)
 
 	for generator.generated_until < current_time + GENERATION_LOOKAHEAD {
 		pattern := pick_next_pattern(generator.pool, generator.weights, rng)
+
+		// The world's own shape, laid down the same way and on the same
+		// clock as the things standing on it.
+		for point in pattern.track {
+			core.track_append(
+				track,
+				core.TrackPoint {
+					time = generator.generated_until + point.time,
+					spine = point.spine,
+					span = point.span,
+				},
+			)
+		}
 
 		for event in pattern.events {
 			append(
@@ -375,6 +509,7 @@ validate_pattern_pool :: proc(pool: []Pattern) {
 		if len(pattern.events) == 0 {
 			fmt.printf("WARNING: pattern %d has no events\n", index)
 		}
+		report_track_faults(pattern, index)
 		for event in pattern.events {
 			if event.time_offset < 0 || event.time_offset > pattern.duration {
 				fmt.printf(
@@ -396,6 +531,85 @@ validate_pattern_pool :: proc(pool: []Pattern) {
 				second,
 				second_index,
 				first.duration + smallest_gap,
+			)
+		}
+	}
+}
+
+// Checks a pattern's authored track.
+//
+// The endpoint rule is what replaces a seam check. If every pattern both
+// begins and ends at the neutral corridor, then whatever order the
+// generator strings them in, the world is continuous and the segment
+// across a gap is flat — so there is nothing to verify at a seam, and no
+// pair of patterns can be illegal together that is legal apart.
+//
+// The rate limits are enforced on the authored numbers rather than
+// clamped at runtime, because the fix for a track that lurches is to
+// author it differently. A sampler that quietly disagreed with what was
+// written would also stop being linear, which is what track_support_y's
+// exactness rests on (core/track.odin).
+@(private)
+report_track_faults :: proc(pattern: Pattern, index: int) {
+	if len(pattern.track) < 2 {
+		fmt.printf("WARNING: pattern %d has no track — it must at least declare its two ends\n", index)
+		return
+	}
+
+	first := pattern.track[0]
+	last := pattern.track[len(pattern.track) - 1]
+	if first.time != 0 || first.spine != core.TRACK_SPINE_DEFAULT || first.span != core.TRACK_SPAN_DEFAULT {
+		fmt.printf(
+			"WARNING: pattern %d opens its track at t=%.2f spine %.0f span %.0f, but every pattern must open neutral (0, %v, %v)\n",
+			index, first.time, first.spine, first.span,
+			core.TRACK_SPINE_DEFAULT, core.TRACK_SPAN_DEFAULT,
+		)
+	}
+	if last.time != pattern.duration ||
+	   last.spine != core.TRACK_SPINE_DEFAULT ||
+	   last.span != core.TRACK_SPAN_DEFAULT {
+		fmt.printf(
+			"WARNING: pattern %d closes its track at t=%.2f spine %.0f span %.0f, but every pattern must close neutral (%.2f, %v, %v)\n",
+			index, last.time, last.spine, last.span,
+			pattern.duration, core.TRACK_SPINE_DEFAULT, core.TRACK_SPAN_DEFAULT,
+		)
+	}
+
+	for i in 1 ..< len(pattern.track) {
+		previous := pattern.track[i - 1]
+		point := pattern.track[i]
+		width := point.time - previous.time
+		if width <= 0 {
+			fmt.printf(
+				"WARNING: pattern %d has track keyframes out of order at t=%.2f\n",
+				index, point.time,
+			)
+			continue
+		}
+
+		spine_rate := abs(point.spine - previous.spine) / width
+		if spine_rate > core.TRACK_MAX_SPINE_RATE {
+			fmt.printf(
+				"WARNING: pattern %d moves its spine at %.0f px/s between t=%.2f and t=%.2f, over the %v limit\n",
+				index, spine_rate, previous.time, point.time, core.TRACK_MAX_SPINE_RATE,
+			)
+		}
+		span_rate := abs(point.span - previous.span) / width
+		if span_rate > core.TRACK_MAX_SPAN_RATE {
+			fmt.printf(
+				"WARNING: pattern %d changes its span at %.0f px/s between t=%.2f and t=%.2f, over the %v limit\n",
+				index, span_rate, previous.time, point.time, core.TRACK_MAX_SPAN_RATE,
+			)
+		}
+
+		// Clamping happens on append, so an authored point outside the
+		// legal envelope is silently corrected at runtime — which means
+		// the pattern on screen is not the pattern that was written.
+		if core.track_clamp(point) != point {
+			corrected := core.track_clamp(point)
+			fmt.printf(
+				"WARNING: pattern %d authors an illegal corridor at t=%.2f (spine %.0f span %.0f), clamped to spine %.0f span %.0f\n",
+				index, point.time, point.spine, point.span, corrected.spine, corrected.span,
 			)
 		}
 	}

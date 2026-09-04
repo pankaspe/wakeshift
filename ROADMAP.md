@@ -58,10 +58,10 @@ non muoversi era la risposta giusta quasi sempre.
 
 ## Stato attuale
 
-**Fatte R1 e R2.** Il gioco adesso *è* quello del documento nel suo cuore: due corsie, un
-gesto, il cubo che blocca invece di uccidere, e la Corruzione che avanza da sinistra mangiando
-il terreno che perdi. Mancano il tracciato che curva (R3), la Sentinella e le varianti del cubo
-(R4), il pool vero (R5) e l'economia (R6).
+**Fatte R1, R2 e R3.** Il gioco adesso *è* quello del documento nel suo cuore: due corsie, un
+gesto, il cubo che blocca invece di uccidere, la Corruzione che avanza da sinistra mangiando il
+terreno che perdi, e un corridoio che ondeggia e si strozza. Mancano la Sentinella e le varianti
+del cubo (R4), il pool vero (R5) e l'economia (R6).
 
 **Cosa sopravvive intatto e non va toccato**: tutto `platform/` (finestra, display,
 salvataggio, cifratura, percorsi); `fx/bloom`; `render/stroke` e `render/glow`; i menu e le
@@ -270,22 +270,59 @@ cui "tocca" può arrivare prima di quanto l'occhio si aspetti.
 
 ---
 
-### Fase R3 — Il tracciato
+### ✅ Fase R3 — Il tracciato (manca solo il playtest R3.4 ⚑)
 
-**Obiettivo**: il mondo smette di essere una striscia dritta. Due corsie descritte da **spina**
-(dov'è il centro del corridoio) e **spessore** (quanto è alto), autorate nel tempo come tutto
-il resto.
+Il mondo ha smesso di essere una striscia dritta. `core/terrain.odin` è diventato
+`core/track.odin`, e il tracciato è **due numeri messi a fotogrammi chiave nel tempo**: la
+**spina** (dove sta il centro del corridoio) e lo **spessore** (quanto è alto). Pavimento =
+`spina + spessore/2`, soffitto = `spina − spessore/2` — la coerenza fra le due corsie è una
+proprietà della rappresentazione, non una regola da ricordarsi.
 
-| Task | Descrizione | Modello |
-|---|---|---|
-| R3.1 | `core/terrain.odin` → `core/track.odin`: spina e spessore, campionati nel tempo. Le due corsie derivano da loro, quindi la coerenza è per costruzione | **Opus** |
-| R3.2 | `render/terrain.odin` segue: le due linee disegnate col tratto al neon, i buchi ritagliati dentro | Sonnet |
-| R3.3 | Il tracciato diventa **parte del pattern**: un pattern dice dove passa il mondo per tutta la sua durata, non solo cosa ci sta sopra | **Opus** |
-| R3.4 ⚑ | Playtest: la corsa non è più piatta, e il corridoio che si stringe si sente nei comandi senza confonderli | — |
+**Le decisioni che restano vincolanti**
 
-**Vincoli da rispettare**: spessore fra ~240 e ~460 px; la spina resta abbastanza dentro lo
-schermo da lasciare aria per lo sfondo; il flip dura sempre ~0.16 s **qualunque sia lo
-spessore** — costante nel tempo, non nello spazio.
+1. **Lineare fra i fotogrammi, e il clamp sta sull'*append*, mai sul campionamento.** La
+   linearità serve due volte: è quello che rende `track_support_y` esatto invece che campionato
+   (un estremo su un intervallo può stare solo a un capo o su un fotogramma interno), ed è il
+   motivo per cui la legalità va imposta quando un punto entra. Ritagliare un fotogramma lascia
+   la funzione lineare; ritagliare il campionatore la spezza.
+2. **Ogni pattern apre e chiude sul corridoio neutro**, imposto da `validate_pattern_pool`. È
+   quello che sostituisce un controllo sulle giunture: in qualunque ordine il generatore li
+   incolli, il mondo è continuo e il tratto sopra il gap è piatto, quindi nessuna coppia può
+   essere illegale insieme se è legale separata. E **ne cade fuori un ritmo gratis**: il
+   tracciato è piatto per tutta l'aria fra due pattern, quindi man mano che i tier stringono
+   quell'aria il mondo ondeggia sempre più di continuo, senza una riga che lo voglia.
+3. **Un `Track` è un valore semplice** — un array fisso dentro `World`, non un array dinamico
+   accanto. Così `interpolated_world` copia il mondo avanti di una frazione di step e legge un
+   tracciato che non è di nessuno. Misurato: una run lunga arriva a 20 slot su 64.
+4. **Il flip dura sempre uguale, qualunque sia lo spessore.** Il corridoio cambia larghezza, il
+   gesto no — altrimenti smette di essere un riflesso.
+5. **Il cielo cavalca la spina.** Un cielo inchiodato allo schermo mentre il mondo gli scorre
+   sotto si legge come due immagini, con l'orizzonte che taglia la corsia Reale sui tratti alti.
+
+**Misurato** (arnese usa-e-getta sulla simulazione vera, 180 s di generazione, poi cancellato):
+
+| | |
+|---|---|
+| escursione della spina | **148 px** (il terreno della v1.x si muoveva di 16) |
+| escursione dello spessore | **158 px**, fra 254 e 412 |
+| cielo residuo | 136 px sotto il pavimento più basso e sopra il soffitto più alto (minimo 70) |
+| movimento più rapido della spina | 135 px/s contro un limite autorato di 190 → **nessun salto alle giunture** |
+| fotogrammi vivi insieme | picco 20 su 64 → **niente scartato in silenzio** |
+| il corpo su una cresta | i piedi atterrano **sulla cresta**, non nel pendio |
+| durata del flip | 0.167 s con spessore 250, 340 e 430 (205, 295 e 385 px attraversati) |
+
+**Due pattern nuovi che parlano del mondo invece che di quello che ci sta sopra**: `narrows` (il
+corridoio si strozza quasi al minimo con un cubo dentro) e `swell` (il mondo intero sale e
+scende di 148 px mentre due voragini chiedono su quale corsia stare). Stanno nel tier
+*Drifting* e non in quello d'apertura, così una run comincia su un mondo quasi piatto e scopre
+che il suolo si muove **dopo** aver imparato i comandi.
+
+**Una scelta grafica che ho preso contro lo sketch, e il perché.** Nello sketch 3 le piattaforme
+sono rettangoli **cavi**. Il terreno qui resta **massa piena scura con il bordo illuminato**,
+perché lo sketch non ha voragini letali e noi sì: un buco in una massa scura si legge come un
+pozzo in cui si cade, un buco in un contorno cavo è solo una linea che manca. La leggibilità
+batte la fedeltà (pilastro 2). Se a schermo dà fastidio si può rivalutare, ma è una decisione,
+non una svista.
 
 ---
 

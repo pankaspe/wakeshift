@@ -66,10 +66,10 @@ order before touching anything:
 3. The rest of this file — architecture rules and conventions.
 
 **Where the project stands.** The design was rewritten on 4 September 2026 (v1.3 → v2.0), and
-**R1 and R2 are done**: two lanes, one gesture, a cube that *blocks* rather than kills, and a
-Corruption front advancing from the left that eats the ground a mistake costs you. The heart of
-the design is in the code. Still missing: the track that curves (R3), the Sentinel and the cube
-variants (R4), the real pattern pool (R5), fragments and the Gate (R6).
+**R1 through R3 are done**: two lanes, one gesture, a cube that *blocks* rather than kills, a
+Corruption front advancing from the left that eats the ground a mistake costs you, and a track
+whose corridor undulates and pinches. The heart of the design is in the code. Still missing: the
+Sentinel and the cube variants (R4), the real pattern pool (R5), fragments and the Gate (R6).
 
 Why it was rewritten, measured rather than guessed: 200 simulated runs that never touched the
 key, **161 survived the whole first tier**, median death at 35 s; **86% of the time** nothing on
@@ -177,35 +177,53 @@ splitting them would force premature interfaces.
 
 ### The track is simulation
 
-The floor and the ceiling are not decoration: they are the two lanes the player travels
-between, so their shape is simulation and it lives in `core` where everything can see it.
+`core/track.odin` owns the shape of the world, because the player and the obstacles stand on it.
+It is **two numbers keyframed in world time**:
 
-- **The track is two numbers**: a **spine** (where the corridor's centre sits) and a **span**
-  (how tall the corridor is). Floor is `spine + span/2`, ceiling is `spine - span/2`, so
-  coherence between the two lanes is by construction rather than by a rule someone has to
-  remember. Moving the spine makes the world undulate; moving the span is a difficulty knob the
-  game never had.
-- **The profile is a function of time, not of scrolled pixels.** Screen x becomes world time
-  with exactly the mapping obstacles use in reverse. Anchoring it to pixels would slide the
-  track against the patterns the moment scroll speed changed, which is the one property the
-  whole "obstacles are events in time" architecture exists to protect — and in v2.0 speed
-  changes because the *player buys it*. The visible price is that the undulation stretches as a
-  run speeds up.
-- **A body rests on the highest ground under its whole width**, not on the ground under one
-  chosen point. Exact rather than sampled: the profile is linear between its entries, so an
-  extreme can only sit at an end or at a boundary inside.
-- **A flip resamples both of its endpoints every step**, rather than capturing where the ground
-  was when it began. A journey that starts before a change in the ground and ends after it
-  therefore always lands on the ground that is actually there, at the cost of a path that curves
-  a little while the track slides underneath.
-- **The lane-position query is a pure function of a player and a world**, which is why render
-  can call it with the world nudged forward by the leftover fraction of a step and get a body
-  riding the same interpolated ground the track is drawn on. Without that the character walks
-  down a slope at the tick rate while the slope slides smoothly, and the higher the frame rate
-  the more visible it is.
-- **The flip's duration is constant in time (~0.16 s), never in space.** The corridor changes
-  width; the gesture must not. A flip the player has to recalibrate at every curve stops being a
-  reflex.
+- **spine** — where the corridor's centre sits vertically. Moving it makes the world undulate.
+- **span** — how tall the corridor is. Moving it tightens or opens the crossing, and it is a
+  difficulty knob the game never had before R3.
+
+Floor is `spine + span/2`, ceiling is `spine - span/2`, so the two lanes cannot disagree —
+coherence is a property of the representation rather than a rule someone has to remember.
+
+- **Keyframes in time, not a function of scrolled pixels.** An obstacle is an event in time, and
+  a track anchored to pixels would slide against the patterns the moment scroll speed changed —
+  which in v2.0 it does, because the player buys it. The visible price is that the undulation
+  stretches as a run speeds up.
+- **Linear between keyframes, and that is load-bearing twice.** It is what makes
+  `track_support_y` exact rather than sampled (an extreme over a range can only sit at an end or
+  at a keyframe inside it), and it is why the legality clamp runs **on append, never on sample**:
+  clamp a keyframe and the function stays linear; clamp the sampler and it stops being.
+- **A `Track` is a plain value** — a fixed `[TRACK_CAPACITY]TrackPoint` inside `World`, not a
+  dynamic array beside it. So `interpolated_world` can copy the World forward by a fraction of a
+  step and read a track nobody owns. Measured: a long run peaks at 20 of the 64 slots.
+- **A body rests on the highest ground under its whole width**, not under one chosen point.
+  Verified against a crest straddled by the player's box: the feet land on the crest, not in the
+  slope on either side of it.
+- **The flip's duration is constant in time whatever the span is.** The corridor changes width;
+  the gesture must not, or it stops being a reflex. Measured at 0.167 s across spans of 250, 340
+  and 430, crossing 205, 295 and 385 px respectively.
+- **The sky rides the spine** (`render/background.odin`). A sky nailed to the screen while the
+  world slides underneath it reads as two pictures, with the horizon cutting across the Real lane
+  on a high stretch.
+
+**Patterns author the track** (`Pattern.track`), on the same clock and in the same file as the
+obstacles: the corridor sagging or pinching *is* content, and authoring it elsewhere would let
+the ground and the obstacles disagree about what a moment is for.
+
+The rule that makes that composable is **every pattern opens and closes at the neutral corridor**
+(`TRACK_SPINE_DEFAULT`, `TRACK_SPAN_DEFAULT`), enforced by `validate_pattern_pool`. It is what
+replaces a seam check: whatever order the generator strings patterns in, the world is continuous
+and the stretch across a gap is flat, so no pair can be illegal together that is legal apart.
+A rhythm falls out of it for free — the track is flat for the whole gap between patterns, so as
+the tiers squeeze that gap the world undulates more and more continuously, with no line of code
+intending it.
+
+The validator also enforces `TRACK_MAX_SPINE_RATE` / `TRACK_MAX_SPAN_RATE` on the authored
+numbers rather than clamping at runtime. The fix for a track that lurches is to author it
+differently; a sampler quietly disagreeing with what was written would also break the linearity
+above.
 
 ### The player's screen x is game state
 
@@ -213,7 +231,7 @@ The most invasive change in v2.0, done in R2.1. The old `PLAYER_X` was doing two
 been split into two constants that happen to hold the same number:
 
 - **`core.WORLD_ANCHOR_X`** — the screen x that world time lands on. Constant, and the *only*
-  thing any space↔time conversion may read: the terrain sampler and obstacle positions both do.
+  thing any space↔time conversion may read: the track sampler and obstacle positions both do.
   A ground that followed the player would slide against the patterns every time they lost or won
   back a stride. Verified by moving the player to x=40 and confirming no obstacle moves.
 - **`core.PLAYER_HOME_X`** — where a free-running character settles. They lose x when a cube
@@ -544,6 +562,9 @@ raise it with the user before writing code.
 
 Tracked here so they are not rediscovered. Each is scheduled in `ROADMAP.md`.
 
+- **The obstacle set is still one cube shape.** Stacks, pyramids, the floating cube and the
+  mirrored pair are R4.1-R4.2, and the mirrored pair in particular has been *legal* since R2.3
+  without anything authoring it.
 - **No pattern uses a mirrored cube pair yet**, even though R2.3 made it legal — it is the
   design's centrepiece and it is authored in R4.1. Until then the game has the *rule* that lets
   both lanes be threatened at once and never exercises it.

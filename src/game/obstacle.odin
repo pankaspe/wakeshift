@@ -135,13 +135,13 @@ get_obstacle_size :: proc(obstacle: Obstacle, world: World) -> rl.Vector2 {
 // much time remains until (or has passed since) its arrival_time.
 //
 // The world scrolls; obstacles do not move through it. y comes from the
-// terrain, so an obstacle sits on the surface of its own lane however
-// uneven that surface is.
+// track, so an obstacle sits on the surface of its own lane however the
+// corridor is bending underneath it.
 get_obstacle_position :: proc(obstacle: Obstacle, world: World) -> rl.Vector2 {
 	time_until_arrival := obstacle.arrival_time - world.elapsed_time
 	x := core.WORLD_ANCHOR_X + time_until_arrival * world.scroll_speed
 	size := get_obstacle_size(obstacle, world)
-	return rl.Vector2{x, core.get_lane_y(get_ground(world), obstacle.lane, x, size)}
+	return rl.Vector2{x, get_lane_y(world, obstacle.lane, x, size)}
 }
 
 get_obstacle_rect :: proc(obstacle: Obstacle, world: World) -> rl.Rectangle {
