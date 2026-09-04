@@ -380,9 +380,16 @@ agreeing with itself: **depth moves the hue, Corruption moves the saturation.**
 
 - **Depth** washes both worlds toward the neutral palette as a run gets deeper, with palette and
   bloom converging together on it — light and colour describe one world.
-- **Corruption** drains what is left of the colour without touching how bright it is, and it
-  reads **spatially**: the colour dying inward from the left edge, behind an advancing front. Not
-  a bar — it has to be legible in two seconds, and it is also literally the health bar.
+- **Corruption** reads **spatially**: everything behind an advancing front from the left edge.
+  Not a bar — it has to be legible in two seconds, and it is also literally the health bar.
+
+  **Decided at the R2.6 playtest, not yet built: the front goes to black, not to grey.** The
+  shipped shader still mixes toward the pixel's own luma, which was the design's first answer
+  and proved too faint to read. It becomes a mix toward `vec3(0.0)` — the Corruption eats the
+  world rather than draining it. Do not "fix" it back to grey; the note is in ROADMAP.md under
+  "Note dal playtest R2.6" and the design doc's section 5 has been rewritten. It does not break
+  the two-axis rule, because depth is global and this is spatial: they never contend for the
+  same pixel.
 
 Three implementation rules, all load-bearing:
 

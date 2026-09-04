@@ -199,6 +199,71 @@ documento (aggiungendo un filo di scurimento), non aggiungerlo di nascosto nello
 
 ---
 
+## Note dal playtest R2.6 (4 settembre 2026)
+
+Verdetto del committente: **il tira e molla funziona**, si va avanti. Tre cose da portarsi
+dietro, in ordine di quanto sono già capite.
+
+### 1. La Corruzione diventa nera, non grigia — **decisa**
+
+Oggi il fronte scolora verso il grigio (la luma del pixel). Deve invece **mangiare tutto, fino
+al nero**: non è un mondo sbiadito, è un vuoto che avanza.
+
+Questo **ribalta una riga del design doc** — sez. 5 diceva «forma e luminosità restano, la tinta
+se ne va» — ed è la risposta al rischio segnalato a fine R2: la zona morta era troppo poco
+leggibile proprio perché le si era vietato di toccare la luminosità. Il documento è stato
+aggiornato di conseguenza.
+
+**Perché non rompe la regola dei due assi.** La regola esiste perché due sistemi che cambiano il
+colore di tutto si impastano. La convergenza con la profondità è **globale** e muove la tinta; la
+Corruzione è **spaziale** e adesso muove saturazione *e* luminosità insieme, ma solo dietro un
+confine. Non si sommano mai sullo stesso pixel in modo ambiguo: a destra del fronte comanda la
+profondità, a sinistra non c'è più niente da comandare.
+
+**In più rafforza la regola grafica.** *La scenografia è linea, il pericolo è massa*: un fronte
+che porta al nero pieno è letteralmente la linea che diventa massa, che è l'incastro fra
+meccanica e grafica che cercavamo.
+
+**Cosa cambia in pratica**: una riga di `fx/corruption.odin` (si mescola verso `vec3(0.0)`
+invece che verso la luma), più la nota in `CLAUDE.md`. Il bordo disegnato in
+`render/corruption.odin` diventa più importante, non meno: su nero pieno è l'unica cosa che dice
+*dov'è* il confine.
+
+### 2. Il banding nei gradienti — **diagnosticato, non ancora risolto**
+
+Le sfumature dello sfondo mostrano bande orizzontali visibili. Non è un caso e non si risolve
+ritoccando i colori — **è una conseguenza diretta del vincolo sul bloom**.
+
+Misurato sui valori attuali:
+
+| gradiente | altezza | salti disponibili | larghezza di una banda |
+|---|---|---|---|
+| Reale, bordo → fondo | 216 px | 13 livelli | **16.6 px** |
+| Onirico, bordo → fondo | 216 px | 14 livelli | **15.4 px** |
+| verso l'orizzonte | 144 px | 22 livelli | 6.5 px |
+
+La palette tiene i fondi **sotto la soglia più bassa del bright pass** (0.30) apposta, per non
+mandare il cielo dentro il bloom. Il prezzo è che un gradiente di fondo ha solo 13-14 livelli a
+8 bit da spendere su 216 px, cioè una banda ogni 16 px — e a schermo intero (2560×1440) diventa
+una banda ogni **33 px**. Alzare il contrasto dei fondi risolverebbe il banding e romperebbe il
+margine sul bloom: sono la stessa decisione vista da due lati.
+
+**La soluzione è il dithering**, non il colore: un rumore ordinato di ±1 livello applicato ai
+gradienti rompe le bande senza toccare i valori medi di una virgola, quindi senza spostare un
+solo pixel rispetto alla soglia del bright pass. Sta nella **R7**, insieme al resto della resa,
+a meno che a schermo dia più fastidio di quanto dia adesso.
+
+### 3. Le collisioni col cubo e con le trappole — **da rivedere**
+
+Segnalata la sensazione che il contatto col cubo e con gli altri pericoli vada guardato meglio.
+Non è ancora un difetto identificato, e ha senso riguardarlo **dopo la R4**, quando il cubo avrà
+le sue varianti (pila, piramide, fluttuante, a specchio) e la Sentinella esisterà: rifinire adesso
+il contatto con l'unica forma che esiste vorrebbe dire rifarlo fra due fasi. Da tenere d'occhio
+nel frattempo: il cubo è un rettangolo pieno e la sagoma del personaggio no, quindi il momento in
+cui "tocca" può arrivare prima di quanto l'occhio si aspetti.
+
+---
+
 ### Fase R3 — Il tracciato
 
 **Obiettivo**: il mondo smette di essere una striscia dritta. Due corsie descritte da **spina**
