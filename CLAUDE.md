@@ -547,5 +547,10 @@ Tracked here so they are not rediscovered. Each is scheduled in `ROADMAP.md`.
 - Bloom is LDR: the frame is an RGBA8 texture, so "bright" means "near white", and the thresholds
   in `fx/bloom.odin` are tuned against **what reaches the frame**, not against the palette. A rim
   drawn at 0.7 alpha over a dark background lands near 0.66, not at the 0.91 its colour names.
+  The same trap in reverse governs the palette: **a background value must clear the lowest
+  threshold it can ever meet, not its own world's.** Bloom settings interpolate on `world_t`, so
+  a player halfway through a flip is lit by the neutral threshold (0.30) while the floor is still
+  drawn in the Real palette — which is how `real.near` at 0.369 came to bloom at 20% on every
+  crossing while sitting comfortably under Real's own 0.50.
 - Recorded run manifests are saved but never played back — there is no replay or ghost in the
   game yet, only the data needed for one.

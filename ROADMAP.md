@@ -253,6 +253,48 @@ E l'incastro che tiene insieme grafica e meccanica: **la Corruzione è ciò che 
 mondo da linea a massa.** Scenografia corrotta piena e scura, scenografia sana contorno
 luminoso — così la regola visiva e la regola di gioco sono la stessa regola.
 
+### La palette ✅ (4 settembre 2026)
+
+Presa **dallo sketch 3 campionando i pixel**, non a memoria. Prima era una cosa diversa: fondi
+quasi neri, luce Onirica **arancione** e accento rosa caldo — un mondo caldo contro uno freddo,
+che era un'idea ragionevole e non è quello che dice la direzione artistica. Nello sketch la
+metà di sopra è lavanda e rosa su viola, e l'arancione era la cosa più rumorosa sullo schermo
+che gli sketch non hanno mai contenuto.
+
+| ruolo | Reale (sotto) | Neutra (l'orizzonte) | Onirico (sopra) |
+|---|---|---|---|
+| `deep` | `#16323F` | `#232B3E` | `#2C1F42` |
+| `near` | `#1A3E4C` | `#333D54` | `#3A2450` |
+| `silhouette` | `#050C11` | `#070810` | `#0A0614` |
+| `light` | `#5FE0F0` ciano | `#E4FAFF` bianco-ciano | `#B79BF7` lavanda |
+| `accent` | `#8CF5B8` verde | `#F2FDFF` | `#FF9FE2` rosa |
+
+**Sono più scuri dello sketch di proposito, e solo in valore.** Tinta e saturazione sono le sue;
+la luminosità no. Lo sketch è un'illustrazione piatta in cui il bagliore è dipinto dentro,
+mentre questo frame passa dopo per un bloom vero che prende `max(r,g,b)` contro una soglia fra
+0.30 e 0.50 (`fx/bloom.odin`). Il cielo dello sketch sta a **0.68**: adottarlo alla lettera
+manderebbe tutto il fondo dentro il bright pass e lo schermo diventerebbe foschia. La
+luminosità che lo sketch ha nel cielo qui viene spesa dove serve, cioè in `light` e `accent`,
+che sono quello che il bloom deve trovare.
+
+**Il margine è aritmetica, non opinione**, ed è stato verificato con un arnese usa-e-getta che
+percorre tutto lo spettro di `world_t` × `depth_t` e calcola il contributo di ogni ruolo al
+bright pass. Ha trovato subito un caso che a occhio non si vedrebbe mai: le impostazioni del
+bloom si interpolano su `world_t`, quindi **un giocatore a metà flip è illuminato dalla soglia
+neutra (0.30) mentre il pavimento in fondo allo schermo è ancora disegnato nella palette
+Reale**. La prima versione della tabella aveva `real.near` a 0.369 — tranquillamente sotto lo
+0.50 del Reale — e fioriva al 20% ogni volta che il personaggio attraversava il centro. Adesso
+ogni fondo sta sotto la soglia *più bassa che può incontrare*, non solo sotto la propria. Il
+caso peggiore residuo è `neutral.near` a 0.087, ed è voluto: un soffio sui bordi dello schermo
+quando la convergenza prende il sopravvento.
+
+**Cosa manca ancora, e non è la palette.** Lo sketch resta più chiaro di così perché la sua
+luminosità è in gran parte *disegnata*: nuvole, aurore, piante, tutto contorno luminoso vuoto.
+Quella è scenografia, ed è la **R7**. Nello stesso ordine di idee, nello sketch le piattaforme
+sono rettangoli **cavi** con un tratto al neon, mentre da noi il terreno è una massa piena con
+il bordo illuminato: è un cambio di disegno, non di colore, e sta nella **R3** insieme al resto
+del tracciato.
+
 **Due assi del colore, da non far collidere mai**: la **tinta** si muove con la profondità (i
 due mondi convergono), la **saturazione** con la Corruzione (e si muove nello spazio, da
 sinistra).

@@ -48,29 +48,74 @@ Palette :: struct {
 	accent:     rl.Color, // the one thing allowed to shout
 }
 
-// Design Doc, section 12. Starting values, to be refined on screen.
+// The three palettes, sampled from the art direction (`docs/sketch/
+// sketch_3.jpeg`) rather than invented: teal and cyan below, violet and
+// lavender above, and a blazing white-cyan threshold between them.
+//
+// **They are darker than the sketch on purpose, and only in value.** The
+// hue and the saturation are the sketch's; the brightness is not. The
+// sketch is a flat illustration whose glow is painted in, while this
+// frame gets a real bloom pass afterwards — and that pass takes
+// max(r,g,b) against a threshold of 0.30 to 0.50 (fx/bloom.odin). The
+// sketch's sky peaks at 0.68, so adopting it literally would put the
+// whole background through the bright pass and turn the screen into
+// haze. The brightness the sketch has in its sky is therefore spent
+// where it belongs here: in `light` and `accent`, which are what the
+// bloom is supposed to find.
+//
+// Every background value below is kept under the *lowest* threshold it
+// can ever meet, not merely under its own world's. That distinction was
+// found by measuring rather than by reading: the bloom settings are
+// interpolated on world_t, so a player halfway through a flip is lit by
+// the neutral palette's threshold of 0.30 while the floor at the bottom
+// of the screen is still drawn in the Real palette. The first version of
+// this table put real.near at 0.369, which is comfortably under Real's
+// own 0.50 and blooms at 20% every time the character crosses the middle.
+// The margins are arithmetic, not opinion — see ROADMAP.md, "La palette".
+//
+// The other reason the sketch reads lighter than this will is that its
+// brightness is mostly *drawn*: clouds, aurora, plants, all of it hollow
+// lit outline. That is scenery, and scenery is phase R7. Closing the
+// remaining gap is that job, not this table's.
+
+// The world below: cold teal, cyan light, green accent.
 REAL_PALETTE :: Palette {
-	deep       = rl.Color{0x0B, 0x0F, 0x17, 255},
-	near       = rl.Color{0x18, 0x22, 0x31, 255},
-	silhouette = rl.Color{0x05, 0x07, 0x0B, 255},
-	light      = rl.Color{0x8F, 0xB8, 0xE8, 255},
-	accent     = rl.Color{0xD8, 0xE8, 0xFF, 255},
+	deep       = rl.Color{0x16, 0x32, 0x3F, 255}, // max channel 0.247
+	near       = rl.Color{0x1A, 0x3E, 0x4C, 255}, // 0.298: under the *neutral* 0.30, not just Real's 0.50
+	silhouette = rl.Color{0x05, 0x0C, 0x11, 255},
+	light      = rl.Color{0x5F, 0xE0, 0xF0, 255},
+	accent     = rl.Color{0x8C, 0xF5, 0xB8, 255},
 }
 
+// The threshold between them, and the colour both worlds converge toward
+// as a run gets deeper. In the sketch this is the horizon: the brightest
+// thing on screen by a wide margin.
+//
+// Its background values are the tightest in the table, because its bloom
+// threshold is the lowest (0.30) *and* deep convergence pulls both other
+// palettes onto these numbers — so a value that blooms here blooms across
+// the entire late game.
 NEUTRAL_PALETTE :: Palette {
-	deep       = rl.Color{0x1A, 0x1B, 0x26, 255},
-	near       = rl.Color{0x3A, 0x35, 0x50, 255},
-	silhouette = rl.Color{0x0A, 0x09, 0x10, 255},
-	light      = rl.Color{0xF0, 0xE6, 0xD2, 255},
-	accent     = rl.Color{0xFF, 0xF6, 0xE0, 255},
+	deep       = rl.Color{0x23, 0x2B, 0x3E, 255}, // 0.243
+	near       = rl.Color{0x33, 0x3D, 0x54, 255}, // 0.329: a whisper over 0.30, deliberately
+	silhouette = rl.Color{0x07, 0x08, 0x10, 255},
+	light      = rl.Color{0xE4, 0xFA, 0xFF, 255},
+	accent     = rl.Color{0xF2, 0xFD, 0xFF, 255},
 }
 
+// The world above: violet, lavender light, pink accent.
+//
+// Its light used to be orange and its accent hot pink — a warm world
+// against a cold one, which was a reasonable idea and is not what the art
+// direction says. The sketch's upper half is lavender and rose over
+// violet, and warm orange was the single loudest thing on screen that the
+// sketches never contained.
 DREAM_PALETTE :: Palette {
-	deep       = rl.Color{0x2A, 0x0D, 0x33, 255},
-	near       = rl.Color{0x4E, 0x1B, 0x5C, 255},
-	silhouette = rl.Color{0x0B, 0x04, 0x10, 255},
-	light      = rl.Color{0xFF, 0xAE, 0x5C, 255},
-	accent     = rl.Color{0xFF, 0x6F, 0xBE, 255},
+	deep       = rl.Color{0x2C, 0x1F, 0x42, 255}, // 0.259
+	near       = rl.Color{0x3A, 0x24, 0x50, 255}, // 0.314, under Dream's 0.38
+	silhouette = rl.Color{0x0A, 0x06, 0x14, 255},
+	light      = rl.Color{0xB7, 0x9B, 0xF7, 255},
+	accent     = rl.Color{0xFF, 0x9F, 0xE2, 255},
 }
 
 // Shared line weights for the whole project — one "pen" for every
