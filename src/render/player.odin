@@ -544,11 +544,15 @@ new_player_figure :: proc(stride, time, world_t, whip, sprout_lean: f32) -> Play
 // converges with depth, because every palette in the set does.
 
 @(private)
-player_stroke :: proc(palette: core.Palette, weight, flare: f32) -> Stroke {
+player_stroke :: proc(palette: core.Palette, weight, flare: f32, gain: GlowGain) -> Stroke {
 	line := new_stroke(palette.light, TERRAIN_STROKE_THICKNESS * weight)
 	line.glow = PLAYER_STROKE_GLOW + PLAYER_FLIP_GLOW_BOOST * flare
 	line.spread = PLAYER_STROKE_SPREAD
 	line.core_light = PLAYER_CORE_LIGHT
+	// "The character is the same mark in both worlds; what changes is what
+	// is behind it and *how much it burns*" (Design Doc, section 10). The
+	// profile and the colour stay put; this is the half that moves.
+	apply_glow_gain(&line, gain)
 	return line
 }
 
@@ -680,11 +684,12 @@ draw_player_marks :: proc(
 	figure: PlayerFigure,
 	palette: core.Palette,
 	flare: f32,
+	gain: GlowGain,
 ) {
 	scratch := make([dynamic]rl.Vector2, 0, 64, context.temp_allocator)
 
-	limb := player_stroke(palette, PLAYER_STROKE_WEIGHT, flare)
-	torso := player_stroke(palette, PLAYER_TORSO_WEIGHT, flare)
+	limb := player_stroke(palette, PLAYER_STROKE_WEIGHT, flare, gain)
+	torso := player_stroke(palette, PLAYER_TORSO_WEIGHT, flare, gain)
 
 	// The spine first and underneath: it is the heaviest mark, and the
 	// limbs read as growing out of it rather than as crossing it.
@@ -702,12 +707,12 @@ draw_player_marks :: proc(
 	// what the taper was built for; the leaves are two short heavier ones
 	// off the joint. It is part of the figure, not a decoration laid over
 	// it, so it is the same colour at a lighter weight.
-	stem := player_stroke(palette, PLAYER_SPROUT_WEIGHT, flare)
+	stem := player_stroke(palette, PLAYER_SPROUT_WEIGHT, flare, gain)
 	stem.taper = PLAYER_SPROUT_TAPER
 	sprout := [3]rl.Vector2{figure.sprout_base, figure.sprout_joint, figure.sprout_tip}
 	draw_player_bone(pose, sprout[:], stem, &scratch)
 
-	leaf := player_stroke(palette, PLAYER_LEAF_WEIGHT, flare)
+	leaf := player_stroke(palette, PLAYER_LEAF_WEIGHT, flare, gain)
 	for leaf_end in figure.leaves {
 		blade := [2]rl.Vector2{figure.sprout_joint, leaf_end}
 		draw_player_bone(pose, blade[:], leaf, &scratch)
@@ -716,7 +721,7 @@ draw_player_marks :: proc(
 	// The bulb last, so its core is the crispest thing on the character.
 	outline := make([dynamic]rl.Vector2, 0, PLAYER_HEAD_ARC_STEPS * 2, context.temp_allocator)
 	build_head_outline(pose, figure, &outline)
-	bulb := player_stroke(palette, PLAYER_HEAD_WEIGHT, flare)
+	bulb := player_stroke(palette, PLAYER_HEAD_WEIGHT, flare, gain)
 	bulb.closed = true
 	draw_stroke(outline[:], bulb)
 }
@@ -783,9 +788,10 @@ draw_player :: proc(player: game.Player, world: game.World, palettes: core.Palet
 	// light is the character wherever it stands (Design Doc, section 10).
 	// What changes between the two worlds is the field behind it and how
 	// much it burns — never its profile and never its colour.
-	draw_player_marks(pose, figure, palettes.neutral, whip)
+	gain := glow_gain(palettes.world_t)
+	draw_player_marks(pose, figure, palettes.neutral, whip, gain)
 
-	draw_player_eye(pose, figure, palettes.current.accent)
+	draw_player_eye(pose, figure, palettes.current.accent, gain)
 }
 
 // The one point of light on the head, set toward the front.
@@ -798,16 +804,13 @@ draw_player :: proc(player: game.Player, world: game.World, palettes: core.Palet
 // to break when the figure turns over.
 
 @(private)
-draw_player_eye :: proc(
-	pose: PlayerPose,
-	figure: PlayerFigure,
-	color: rl.Color,
-) {
+draw_player_eye :: proc(pose: PlayerPose, figure: PlayerFigure, color: rl.Color, gain: GlowGain) {
 	// The eye rides the head rather than the box: the head moves with the
 	// bounce and the float, and an eye that did not would swim inside it.
 	local := figure.head + PLAYER_EYE_OFFSET
 	centre := pose_point(pose, local)
 	eye := new_stroke(color, PLAYER_EYE_RADIUS * 2 * pose.unit)
 	eye.glow = PLAYER_EYE_GLOW
+	apply_glow_gain(&eye, gain)
 	draw_stroke_dot(centre, eye)
 }

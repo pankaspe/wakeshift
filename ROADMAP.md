@@ -68,12 +68,10 @@ pool vero (R5) e l'economia (R6).
 **La Linea** di Cavandoli. La fase che la porta a schermo è la **RL**, ed è in corso: va prima
 della R5 perché cambia cos'*è* un pattern.
 
-**Prossima**: la RL.4 — il glow cresce verso l'Onirico e la corsia dormiente si assottiglia. Con
-la RL.1, la RL.2 e la RL.3 fatte **non c'è più niente di pieno a schermo tranne il fondo**: un
-campo che cambia colore, due tratti continui che sono il pavimento e il soffitto con i cubi
-dentro, e un personaggio fatto dello stesso segno, più spesso e più bianco. La gerarchia dei pesi
-del documento è a posto per i primi due gradini; la RL.4 fa il terzo (la corsia dormiente) e la
-RL.8 il quarto (la parallasse).
+**Prossima**: la RL.5 — il mondo si disegna a destra. Con la RL.1÷RL.4 fatte **non c'è più niente
+di pieno a schermo tranne il fondo**, e la gerarchia dei pesi del documento è in piedi per tre
+gradini su quattro: personaggio, corsia viva, corsia dormiente. Manca la parallasse, che è la
+RL.8.
 
 **Cosa sopravvive intatto e non va toccato**: tutto `platform/` (finestra, display,
 salvataggio, cifratura, percorsi); `fx/bloom`; `render/stroke` e `render/glow`; i menu e le
@@ -440,7 +438,7 @@ livello applicato allo schermo, è un posto dove la linea ha smesso di esserci.
 | RL.1 ✅ | **Il fondo diventa il mondo**: due fondi con vignettatura, uno per mondo, e una miscela che *insegue* `world_t` con il suo ritardo invece di seguirlo. Presentazione pura: il valore ritardato vive in `main` accanto a `display_time` e non tocca mai la simulazione | **Opus** |
 | RL.2 ✅ | **Il tratto è il mondo**: `render/terrain.odin` ridisegna le due corsie come polilinee continue senza riempimento, e gli ostacoli entrano **dentro** la stessa polilinea invece di essere disegnati sopra. `render/obstacle.odin` si svuota | **Opus** |
 | RL.3 ✅ | **Il personaggio è una continuazione della linea**: contorno aperto al posto della sagoma piena, con il tratto più pesante e il nucleo più bianco del mondo attorno. Il sistema di pose resta intero — cambia solo l'ultimo passaggio | **Opus** |
-| RL.4 | **Il glow cresce verso l'Onirico**, e la corsia dormiente si assottiglia. Qui si decide anche se le due linee stanno bene entrambe piene: La Linea ne ha una, noi ne abbiamo due, e due tratti paralleli identici leggono come un tubo invece che come un orizzonte | Sonnet |
+| RL.4 ✅ | **Il glow cresce verso l'Onirico**, e la corsia dormiente si assottiglia. Qui si decide anche se le due linee stanno bene entrambe piene: La Linea ne ha una, noi ne abbiamo due, e due tratti paralleli identici leggono come un tubo invece che come un orizzonte | Sonnet |
 | RL.5 | **Il mondo si disegna a destra**: un fronte di disegno speculare a quello della Corruzione, con il pennino che lo marca. Una volta fatta la RL.2 è **un ritaglio, non un'animazione per ostacolo** — ed è il motivo per cui le due idee stanno nella stessa fase | **Opus** |
 | RL.6 | **La Corruzione diventa un segno**: `fx/particles.odin` anticipato dalla R7, pool fisso pre-allocato, e la linea che si sfilaccia dietro. Poi si decide la sorte di `fx/corruption.odin`: la mia proposta è provare prima con le sole particelle e tenere lo shader spento ma non cancellato, perché la scelta di andare a nero è venuta da un playtest e va disfatta con un altro playtest, non a tavolino | **Opus** |
 | RL.7 | **Le curve**: adottare `core:math/ease` della libreria standard (tutto il set Penner) e cancellare `core/ease.odin`. `ease.ease` è una funzione pura e può stare ovunque; il tween `flux` alloca e va a orologio, quindi **solo presentazione** o salta il determinismo — replay e validazione del punteggio | Sonnet |
@@ -674,6 +672,73 @@ troppo pesante o troppo leggero (`PLAYER_STROKE_WEIGHT`, che tira dietro gamba e
 il divampare del flip si sente adesso che è sulla linea invece che in un disco. Se non basta, la
 correzione che il documento ha già messo in conto è **ingrandire il personaggio**, ed è una
 decisione tua, non mia.
+
+---
+
+#### RL.4 ✅ — Il glow cresce verso l'Onirico (4 settembre 2026)
+
+**La domanda aperta della fase ha una risposta: no, le due linee non stanno bene entrambe piene.**
+La corsia dormiente adesso è più sottile (`TERRAIN_DORMANT_WEIGHT`, 0.70 del peso vivo) e più
+fioca (alpha 0.55 contro 0.85). L'asimmetria **non** è "il soffitto è secondario": segue il
+giocatore, quindi quello che si assottiglia è sempre la corsia in cui non sei.
+
+**Il glow è stato misurato prima di essere scritto**, e la misura ha cambiato il numero. Il bloom
+dice qualcosa su questo dalla fase 4: l'alone della corsia viva passava già da **5 a 23 righe
+accese** fra i due mondi. Ma non dice la stessa frase — `NEUTRAL_BLOOM` è di proposito il punto
+più abbagliante dello schermo, quindi la curva del bloom è **una campana** (5 → 26 → 23), e una
+campana non sa indicare una direzione. Quindi il guadagno primitivo aggiunto qui è piccolo, ed è
+la metà **monotona**: da sola fa 4 → 6 → 10 righe.
+
+Due moltiplicatori invece di uno, perché "più glow" ha due significati e un frame LDR li tratta
+in modo molto diverso: più forte spinge l'alone verso il bianco e satura, più largo resta morbido
+e copre solo più aria. L'Onirico è quello morbido, quindi la crescita sta soprattutto nella
+portata (`GLOW_DREAM_STRENGTH` 0.35, `GLOW_DREAM_SPREAD` 0.50).
+
+**Va su `world_t` diretto, non sul fondo ritardato.** Il fondo insegue con mezzo secondo di
+ritardo (RL.1); il glow no. È il canale che dice dove stai **andando**: si muove nell'istante in
+cui premi, e il colore arriva un secondo dopo.
+
+**La scoperta che giustifica il canale più di quanto pensassi.** Sia la palette sia il bloom
+**convergono verso il neutro con la profondità** (`CONVERGENCE_MAX` 0.72): tardi in una run i due
+canali vecchi vengono appiattiti di proposito. Il guadagno di RL.4 è un moltiplicatore su
+`world_t` e non converge, quindi è **l'unico che continua a parlare** quando i colori hanno
+smesso. Misurato a `depth_t = 1`: **8 righe contro 26** fra Reale e Onirico.
+
+**Misurato** (armatura usa e getta, cancellata):
+
+- Mondo Reale, frame vero con fondo e bloom: corsia viva picco **239** su un campo di 76; corsia
+  dormiente picco **185** su un campo di 53. Cioè 54 livelli più fioca ma ancora 132 sopra il
+  proprio campo — presente, non sparita.
+- **Onesto sull'assottigliamento**: a 2.80 px, il 30% in meno fa 1.96 px, cioè **meno di un
+  pixel di differenza**. Nel conteggio delle righe non si vede (2 righe di nucleo in entrambi i
+  casi); a schermo la porta l'antialiasing, e il lavoro percettivo lo fa soprattutto l'alpha. Se
+  vuoi che il peso conti davvero, la leva è alzare `TERRAIN_STROKE_THICKNESS` — che è anche la
+  leva che ingrandisce il personaggio, perché i suoi pesi ne sono multipli.
+- Gerarchia in un frame vero: `world_t 0` → personaggio 255, viva 239, dormiente 185.
+  `world_t 1` → 255, 255, 193. Nell'Onirico personaggio e corsia viva **saturano entrambi**:
+  sopra sta ancora per peso (4.34 px contro 2.80) ma non più per luminosità. La saturazione a
+  `world_t 1` c'era già prima di questa fase.
+
+**Ricadute e cose da tenere d'occhio**:
+
+- `render/palette.odin` guadagna `GlowGain` / `glow_gain` / `apply_glow_gain`, e **ogni** segno
+  del gioco ci passa: terreno, code dei buchi, aperture oniriche, cubo fluttuante, Sentinella,
+  personaggio, occhio. Il canale è una cosa sola, non un'abitudine che ogni file deve ricordarsi.
+- `render/terrain.odin` guadagna `LaneLight` (palette + quanto è sveglia + guadagno) perché le
+  procedure private stavano arrivando a otto parametri.
+- **Un ostacolo non si assottiglia mai con la sua corsia.** Il mondo può ritirarsi dal lato in cui
+  non sei; un pericolo no, perché il pilastro 3 gli promette una fase di arrivo visibile e
+  l'arrivo avviene mentre la corsia è ancora quella dormiente. L'eccezione è il cubo saldato nella
+  linea del terreno, ed è un'eccezione per costruzione e non per scelta: quello *è* il suolo, e si
+  legge dai suoi due angoli retti, non dal suo peso. Da guardare al playtest.
+- **Se il canale non si legge, quello che lo maschera è `NEUTRAL_BLOOM`**, non questo. È una
+  dichiarazione di design della fase 4 ("la soglia fra veglia e sonno è il posto più difficile
+  dove guardare fisso") e non l'ho ribaltata a tavolino. Stessa cosa per la convergenza del bloom
+  con la profondità.
+
+**Cosa tocca a te giudicare**: se le due corsie hanno smesso di leggersi come un tubo; se la
+dormiente è troppo fioca o non abbastanza; se il glow verso l'Onirico si *sente* come "sto
+andando di là" o se la campana del bloom se lo mangia; e se l'Onirico satura troppo.
 
 ---
 

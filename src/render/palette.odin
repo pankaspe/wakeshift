@@ -72,3 +72,46 @@ new_menu_palette :: proc(display_time: f32) -> core.PaletteSet {
 	phase := display_time / MENU_DRIFT_PERIOD * 2 * math.PI
 	return core.new_palette_set(0.5 + MENU_DRIFT_RANGE * math.sin(phase), 0)
 }
+
+// --- How much the picture burns ---
+//
+// Decision 4 of the art direction: the line's glow grows toward the
+// Dream. It is the second channel that says where you are *going* —
+// position and type of motion say where you are, and pillar 6 forbids
+// leaning on colour alone — so it rides world_t directly rather than the
+// background's lagged chase. It is meant to lead the field, not follow
+// it: the glow moves the instant the player commits, and the colour
+// arrives a second later.
+//
+// Two multipliers rather than one, because "more glow" has two meanings
+// and an LDR frame treats them very differently. Brighter drives the halo
+// toward white and saturates; wider keeps it soft and simply covers more
+// air. The Dream is the soft one, so most of the growth is in the reach.
+//
+// Both numbers are small because the picture was measured before they
+// were written. fx/bloom.odin has been saying something about this since
+// phase 4 — the live lane's halo already grew from 6 lit rows to 16
+// between the two worlds — but it is not the same sentence: the bloom is
+// brightest at the *neutral* world on purpose, so its curve is a bell and
+// a bell cannot state a direction. This is the monotone half, and it is
+// the half decision 4 asked for.
+GLOW_DREAM_STRENGTH :: 0.35
+GLOW_DREAM_SPREAD :: 0.50
+
+GlowGain :: struct {
+	strength: f32,
+	spread:   f32,
+}
+
+glow_gain :: proc(world_t: f32) -> GlowGain {
+	t := clamp(world_t, 0, 1)
+	return GlowGain{strength = 1 + GLOW_DREAM_STRENGTH * t, spread = 1 + GLOW_DREAM_SPREAD * t}
+}
+
+// Applies the scene's glow to one mark. Everything drawn with a stroke
+// goes through here, so the channel is one thing rather than a habit each
+// file has to remember.
+apply_glow_gain :: proc(stroke: ^Stroke, gain: GlowGain) {
+	stroke.glow *= gain.strength
+	stroke.spread *= gain.spread
+}

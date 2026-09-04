@@ -89,8 +89,8 @@ systems" complication below rather than working around it. Four decisions are al
 bind the phase: **the background changes, never the stroke**; the blend **lags** `world_t` by
 half a second or so, because a flip is 0.16 s and three in a row would strobe; the background
 never competes with the line for attention; and the line's **glow grows toward Dream**, which is
-the second channel that says where you are going (pillar 6). The first three are built (RL.1);
-the fourth is RL.4. The world also **draws itself on
+the second channel that says where you are going (pillar 6). All four are built. The world also
+**draws itself on
 the right** as the Corruption eats it on the left — two mirrored fronts — and the draw front may
 never move far enough left to steal warning time (pillar 3).
 
@@ -99,10 +99,11 @@ v2.1 for the art direction), and **R1 through R4 are built and playtested**: two
 gesture, a cube that *blocks* rather than kills in six forms, a Corruption front advancing from
 the left that eats the ground a mistake costs you, a track whose corridor undulates and pinches,
 and the Sentinel — so all three dangers and all three verbs are on screen. **Phase RL is in
-progress**: RL.1, RL.2 and RL.3 are done, so **nothing on screen is filled but the background** —
-a field whose colour is the world, two unfilled strokes that are the floor and the ceiling with
-the cubes welded into them, and a character made of the same mark, heavier and whiter. Still
-missing: the real pattern pool (R5), fragments and the Gate (R6).
+progress**: RL.1 through RL.4 are done, so **nothing on screen is filled but the background** — a
+field whose colour is the world, two unfilled strokes that are the floor and the ceiling with the
+cubes welded into them, a character made of the same mark but heavier and whiter, and a dormant
+lane that thins and dims behind the one you are in. Still missing: the real pattern pool (R5),
+fragments and the Gate (R6).
 
 Why it was rewritten, measured rather than guessed: 200 simulated runs that never touched the
 key, **161 survived the whole first tier**, median death at 35 s; **86% of the time** nothing on
@@ -504,6 +505,33 @@ gameplay, layout or render code knows what monitor it is on.
   silently mirrors the light away from whatever emitted it.
 - Drawing rate is a setting; the simulation rate is not.
 
+### The glow is a third channel, and it is the one that survives depth
+
+Decision 4 of the art direction: the line's glow grows toward the Dream, so that where you are
+*going* is said by something other than colour (pillar 6). It lives in `render/palette.odin` as
+`GlowGain` / `glow_gain` / `apply_glow_gain`, and **every stroke in the game goes through it** —
+terrain, gap tails, Dream openings, the floating cube, the Sentinel, the character, the eye. One
+channel, not a habit each file has to remember.
+
+Four things the implementation established, all found by measuring before writing:
+
+- **The bloom already said something about this, and it is not the same sentence.** Since phase 4
+  the live lane's halo grew from 5 lit rows to 23 across the crossing — but `NEUTRAL_BLOOM` is
+  deliberately the most dazzling setting there is, so the bloom's curve is a **bell** (5 → 26 →
+  23) and a bell cannot state a direction. What RL.4 added is the monotone half (4 → 6 → 10 on
+  its own), which is why both its constants are small. If the channel ever fails to read, the
+  thing masking it is `NEUTRAL_BLOOM`, not the gain.
+- **It rides `world_t` directly, never the lagged `background_t`.** The field chases with half a
+  second of lag on purpose (RL.1); the glow must not, because it is meant to *lead* the colour —
+  it moves the instant the player commits and the field arrives a second later.
+- **It is the only one of the three channels that survives the depth convergence.** Palette and
+  bloom both converge toward the neutral as a run deepens (`CONVERGENCE_MAX`, 0.72), so late in a
+  run the two older channels are being flattened by design. A plain multiplier on `world_t` is
+  not, and at `depth_t = 1` it still separates the two worlds by 8 lit rows against 26.
+- **Two multipliers, not one.** "More glow" means two things and an LDR frame treats them very
+  differently: brighter drives the halo toward white and saturates, wider keeps it soft and
+  covers more air. The Dream is the soft one, so most of the growth is in the reach.
+
 ### Colour has two systems, and they must not collide
 
 Two things change the colour of everything, and they are kept apart by being different *kinds*
@@ -604,9 +632,15 @@ line fraying into particles.
   mistake that inverting body and rim was.
 - **The weight hierarchy is a rule, and it lives in the arithmetic.** Character, then the live
   lane, then the dormant lane, then the parallax — thickest and whitest first (Design Doc,
-  section 10). `render/player.odin`'s weights are *multiples of* `TERRAIN_STROKE_THICKNESS`
-  rather than numbers of their own, so tuning the world cannot silently invert the order. Do the
-  same for anything new that joins the ladder.
+  section 10). `TERRAIN_STROKE_THICKNESS` is the rung everything else is expressed against:
+  `render/player.odin`'s weights are multiples of it and `TERRAIN_DORMANT_WEIGHT` is a fraction
+  of it, so tuning the world cannot silently invert the order. Do the same for anything new that
+  joins the ladder — RL.8's parallax is the last rung.
+- **An obstacle never thins with its lane.** The world may recede on the side the player is not
+  on; a danger may not, because pillar 3 promises it a visible arrival phase and the arrival
+  happens while that lane is still the dormant one. The cube welded into the terrain's own line
+  is the exception, and it is one by construction rather than by choice: it *is* the ground, and
+  it is read by its two right angles rather than by its weight.
 - **No hardcoded pixel timings in patterns.** Patterns are time offsets; positions are derived at
   runtime from elapsed time and scroll speed.
 

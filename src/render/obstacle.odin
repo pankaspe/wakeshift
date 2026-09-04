@@ -41,6 +41,15 @@ OBSTACLE_GLOW_SPREAD :: 4
 // How present an obstacle's line is when its world is dormant, and how
 // much it gains once that world is the one being played in. Above the
 // terrain's, because a danger has to be read before it is reached.
+//
+// And, unlike the terrain, an obstacle drawn here never *thins* with its
+// lane (RL.4). The world is allowed to recede on the side the player is
+// not on; a danger is not, because pillar 3 promises every one of them a
+// visible arrival phase and the arrival happens while the lane is still
+// the dormant one. The cube welded into the terrain's own line is the
+// exception, and it is one by construction rather than by choice — it is
+// the ground, and it is read by its two right angles rather than by its
+// weight.
 OBSTACLE_EDGE_DORMANT :: 0.55
 OBSTACLE_EDGE_ALIVE :: 0.95
 
@@ -76,6 +85,7 @@ draw_obstacle :: proc(obstacle: game.Obstacle, world: game.World, palettes: core
 		game.get_obstacle_size(obstacle, world),
 		is_real ? palettes.real : palettes.dream,
 		is_real ? palettes.real_alive : palettes.dream_alive,
+		glow_gain(palettes.world_t),
 	)
 }
 
@@ -89,13 +99,18 @@ draw_obstacle :: proc(obstacle: game.Obstacle, world: game.World, palettes: core
 // lane's own line, so it reads as resting on it and lifts away from it,
 // which is the whole gesture of La Linea for free.
 @(private)
-draw_floating_cube :: proc(position, size: rl.Vector2, palette: core.Palette, alive: f32) {
+draw_floating_cube :: proc(
+	position, size: rl.Vector2,
+	palette: core.Palette,
+	alive: f32,
+	gain: GlowGain,
+) {
 	center := rl.Vector2{position.x + size.x * 0.5, position.y + size.y * 0.5}
 	draw_glow_circle(
 		center,
-		size.x * FLOAT_GLOW_RADIUS,
+		size.x * FLOAT_GLOW_RADIUS * gain.spread,
 		palette.accent,
-		FLOAT_GLOW_STRENGTH * (0.4 + 0.6 * alive),
+		FLOAT_GLOW_STRENGTH * (0.4 + 0.6 * alive) * gain.strength,
 	)
 
 	box := [4]rl.Vector2 {
@@ -104,7 +119,7 @@ draw_floating_cube :: proc(position, size: rl.Vector2, palette: core.Palette, al
 		{position.x + size.x, position.y + size.y},
 		{position.x, position.y + size.y},
 	}
-	draw_obstacle_outline(box[:], palette, alive)
+	draw_obstacle_outline(box[:], palette, alive, gain)
 }
 
 // --- The Sentinel ---
@@ -142,16 +157,22 @@ draw_sentinel :: proc(obstacle: game.Obstacle, world: game.World, palettes: core
 		axis[i] = rl.Vector2{x, spine}
 	}
 
+	gain := glow_gain(palettes.world_t)
+
 	edge := new_stroke(core.with_alpha(palette.light, SENTINEL_EDGE_ALPHA), core.LIGHT_RIM_THICKNESS)
 	edge.glow = SENTINEL_GLOW_STRENGTH
 	edge.spread = SENTINEL_GLOW_SPREAD
 	edge.closed = true
+	apply_glow_gain(&edge, gain)
 	draw_stroke(outline[:], edge)
 
+	// The gain is the scene's, not a lane's, so applying it here does not
+	// give the beam a world: it burns with everything else on screen.
 	core_line := new_stroke(core.with_alpha(palette.accent, SENTINEL_AXIS_ALPHA), core.RIM_THICKNESS)
 	core_line.glow = SENTINEL_GLOW_STRENGTH
 	core_line.spread = SENTINEL_GLOW_SPREAD
 	core_line.core_light = 0.5
+	apply_glow_gain(&core_line, gain)
 	draw_stroke(axis[:], core_line)
 }
 
@@ -160,7 +181,12 @@ draw_sentinel :: proc(obstacle: game.Obstacle, world: game.World, palettes: core
 // happen to meet. This is what replaced the filled box plus border every
 // obstacle used to carry.
 @(private)
-draw_obstacle_outline :: proc(points: []rl.Vector2, palette: core.Palette, alive: f32) {
+draw_obstacle_outline :: proc(
+	points: []rl.Vector2,
+	palette: core.Palette,
+	alive: f32,
+	gain: GlowGain,
+) {
 	alpha := OBSTACLE_EDGE_DORMANT + (OBSTACLE_EDGE_ALIVE - OBSTACLE_EDGE_DORMANT) * alive
 
 	edge := new_stroke(core.with_alpha(palette.light, alpha), TERRAIN_STROKE_THICKNESS)
@@ -168,5 +194,6 @@ draw_obstacle_outline :: proc(points: []rl.Vector2, palette: core.Palette, alive
 	edge.spread = OBSTACLE_GLOW_SPREAD
 	edge.core_light = TERRAIN_CORE_LIGHT
 	edge.closed = true
+	apply_glow_gain(&edge, gain)
 	draw_stroke(points, edge)
 }

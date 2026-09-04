@@ -58,22 +58,34 @@ import "../game"
 import "core:slice"
 import rl "vendor:raylib/v55"
 
-// The mark the world is drawn with. It used to be a rim light running
-// along the top of a filled mass; with the fill gone it *is* the mass, so
-// it carries more weight, more light and more halo than the rim did.
+// The mark the world is drawn with, at the weight the *live* lane gets.
+// It used to be a rim light running along the top of a filled mass; with
+// the fill gone it *is* the mass, so it carries more weight, more light
+// and more halo than the rim did.
+//
+// It is also the rung of the weight hierarchy everything else is measured
+// against (Design Doc, section 10): the character is a multiple of it
+// above, the dormant lane a fraction of it below.
 TERRAIN_STROKE_THICKNESS :: 2.8
 TERRAIN_CORE_LIGHT :: 0.30
 TERRAIN_GLOW_STRENGTH :: 0.45
 TERRAIN_GLOW_SPREAD :: 5.5
 
-// How present the line is when its world is dormant, and how much it
-// gains once that world is the one being played in.
+// What the sleeping lane keeps of that weight, and of that opacity.
 //
-// The dormant floor is no longer backed by a silhouette, so this number
-// is the whole of its presence: it is the boundary between ground and
-// air, and losing it would cost readability (pillar 2) to buy mood.
-// Phase RL.4 decides whether the dormant lane should instead thin out.
-TERRAIN_RIM_DORMANT :: 0.45
+// RL.4's decision, and it is the one the phase was named for: the two
+// lanes are **not** both drawn full. La Linea has one line; we have two,
+// and two identical parallel strokes read as a tube rather than as a
+// world with a floor and something above it. The asymmetry is not "the
+// ceiling is secondary" — it follows the player, so what thins is always
+// the lane they are not in.
+//
+// Thinner *and* fainter, as the doc asks, but neither taken far: the line
+// is no longer backed by a silhouette, so this is the whole of the
+// dormant lane's presence, and it is still the boundary between ground
+// and air. Losing it would cost readability (pillar 2) to buy mood.
+TERRAIN_DORMANT_WEIGHT :: 0.70
+TERRAIN_RIM_DORMANT :: 0.55
 TERRAIN_RIM_ALIVE :: 0.85
 
 // How far past each screen edge the terrain is built, so a hole whose
@@ -400,17 +412,45 @@ clip_outline :: proc(
 	return piece
 }
 
-// The light one lane's line is drawn in. Alpha and halo both grow with
-// how awake that world is; the colour and the weight do not, because the
-// two worlds are told apart by the field behind them (art direction,
-// decision 1).
+// Everything one lane needs to know about how it is lit: its own colours,
+// how awake its world is, and the scene-wide gain toward the Dream.
+//
+// One value rather than three loose floats, because every drawing
+// procedure below needs all three and none of them needs anything else.
 @(private)
-terrain_stroke :: proc(palette: core.Palette, alive: f32) -> Stroke {
-	alpha := TERRAIN_RIM_DORMANT + (TERRAIN_RIM_ALIVE - TERRAIN_RIM_DORMANT) * alive
-	line := new_stroke(core.with_alpha(palette.light, alpha), TERRAIN_STROKE_THICKNESS)
-	line.glow = TERRAIN_GLOW_STRENGTH * (0.45 + 0.55 * alive)
+LaneLight :: struct {
+	palette: core.Palette,
+	alive:   f32,
+	gain:    GlowGain,
+}
+
+@(private)
+lane_light :: proc(palettes: core.PaletteSet, is_floor: bool) -> LaneLight {
+	return LaneLight {
+		palette = is_floor ? palettes.real : palettes.dream,
+		alive = is_floor ? palettes.real_alive : palettes.dream_alive,
+		gain = glow_gain(palettes.world_t),
+	}
+}
+
+// The mark one lane's line is drawn with. Weight, opacity and halo all
+// grow with how awake that world is; the colour does not, because the two
+// worlds are told apart by the field behind them (art direction, decision
+// 1). On top of that the whole scene burns brighter toward the Dream,
+// which is decision 4 and is the same number everywhere on screen.
+@(private)
+terrain_stroke :: proc(light: LaneLight) -> Stroke {
+	alpha := TERRAIN_RIM_DORMANT + (TERRAIN_RIM_ALIVE - TERRAIN_RIM_DORMANT) * light.alive
+	weight := TERRAIN_DORMANT_WEIGHT + (1 - TERRAIN_DORMANT_WEIGHT) * light.alive
+
+	line := new_stroke(
+		core.with_alpha(light.palette.light, alpha),
+		TERRAIN_STROKE_THICKNESS * weight,
+	)
+	line.glow = TERRAIN_GLOW_STRENGTH * (0.45 + 0.55 * light.alive)
 	line.spread = TERRAIN_GLOW_SPREAD
 	line.core_light = TERRAIN_CORE_LIGHT
+	apply_glow_gain(&line, light.gain)
 	return line
 }
 
@@ -423,8 +463,7 @@ terrain_stroke :: proc(palette: core.Palette, alive: f32) -> Stroke {
 draw_terrain_piece :: proc(
 	world: game.World,
 	piece: ^[dynamic]rl.Vector2,
-	palette: core.Palette,
-	alive: f32,
+	light: LaneLight,
 	is_floor: bool,
 	broken_start, broken_end: bool,
 ) {
@@ -446,7 +485,7 @@ draw_terrain_piece :: proc(
 		}
 	}
 
-	draw_stroke(piece[:], terrain_stroke(palette, alive))
+	draw_stroke(piece[:], terrain_stroke(light))
 
 	// The ceiling dissolves: the line runs on past the lip and thins to
 	// nothing instead of stopping. Drawn as its own tapered stroke rather
@@ -454,10 +493,10 @@ draw_terrain_piece :: proc(
 	// and a piece has two of them.
 	if !is_floor {
 		if broken_start {
-			draw_dream_tail(world, piece[0], -1, palette, alive)
+			draw_dream_tail(world, piece[0], -1, light)
 		}
 		if broken_end {
-			draw_dream_tail(world, piece[len(piece) - 1], 1, palette, alive)
+			draw_dream_tail(world, piece[len(piece) - 1], 1, light)
 		}
 	}
 }
@@ -465,17 +504,11 @@ draw_terrain_piece :: proc(
 // The last of a ceiling, running into the opening and thinning away.
 // direction is -1 to the left of the piece and +1 to its right.
 @(private)
-draw_dream_tail :: proc(
-	world: game.World,
-	lip: rl.Vector2,
-	direction: f32,
-	palette: core.Palette,
-	alive: f32,
-) {
+draw_dream_tail :: proc(world: game.World, lip: rl.Vector2, direction: f32, light: LaneLight) {
 	end_x := lip.x + direction * DREAM_HOLE_FADE
 	tail := [2]rl.Vector2{lip, rl.Vector2{end_x, terrain_surface_y(world, false, end_x)}}
 
-	stroke := terrain_stroke(palette, alive)
+	stroke := terrain_stroke(light)
 	stroke.taper = DREAM_HOLE_TAPER
 	// Square at the wide end so it butts against the piece's round cap
 	// instead of adding a second one on top of it.
@@ -486,13 +519,18 @@ draw_dream_tail :: proc(
 // The light behind a dissolved ceiling. It is the whole of what a Dream
 // hole *is* now that nothing is filled: an opening, lit from beyond.
 @(private)
-draw_dream_opening :: proc(world: game.World, gap: Span, palette: core.Palette, alive: f32) {
+draw_dream_opening :: proc(world: game.World, gap: Span, light: LaneLight) {
 	width := gap.end - gap.start
 	center := rl.Vector2 {
 		(gap.start + gap.end) * 0.5,
 		terrain_surface_y(world, false, (gap.start + gap.end) * 0.5),
 	}
-	draw_glow_circle(center, width * 0.7, palette.accent, DREAM_HOLE_GLOW * (0.4 + 0.6 * alive))
+	draw_glow_circle(
+		center,
+		width * 0.7 * light.gain.spread,
+		light.palette.accent,
+		DREAM_HOLE_GLOW * (0.4 + 0.6 * light.alive) * light.gain.strength,
+	)
 }
 
 @(private)
@@ -503,8 +541,7 @@ draw_terrain_side :: proc(
 	is_floor: bool,
 ) {
 	lane := is_floor ? core.Lane.Real : core.Lane.Dream
-	palette := is_floor ? palettes.real : palettes.dream
-	alive := is_floor ? palettes.real_alive : palettes.dream_alive
+	light := lane_light(palettes, is_floor)
 
 	outline := build_lane_outline(world, obstacles, lane)
 	if len(outline) < 2 {
@@ -518,7 +555,7 @@ draw_terrain_side :: proc(
 	// The glow of an opening goes under the line, not over it.
 	if !is_floor {
 		for gap in gaps {
-			draw_dream_opening(world, gap, palette, alive)
+			draw_dream_opening(world, gap, light)
 		}
 	}
 
@@ -527,8 +564,7 @@ draw_terrain_side :: proc(
 		draw_terrain_piece(
 			world,
 			&piece,
-			palette,
-			alive,
+			light,
 			is_floor,
 			span.start > left + TERRAIN_EPSILON,
 			span.end < right - TERRAIN_EPSILON,
