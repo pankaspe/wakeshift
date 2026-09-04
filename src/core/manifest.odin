@@ -14,6 +14,10 @@
 * recorded data rather than live polling (core/input.odin), and a fixed
 * timestep so a tick means the same thing everywhere (core/time.odin).
 *
+* Since 1.0.0 a run's whole input is a list of ticks the key went down on.
+* There is nothing else to record because there is nothing else to press:
+* one key, one gesture, and no state that depends on how long it was held.
+*
 * Locally the same manifest is worth keeping for its own sake: it is a
 * recording of the best run, which is all a ghost or a replay needs.
 */
@@ -26,29 +30,16 @@ package core
 // 0.2.0: the Limen — a flip is a longer journey and holding stops it
 //        halfway, so the same input log played against 0.1.0 produces a
 //        different run
-// 0.3.0: the level generator changed shape. Patterns chain on sets rather
-//        than single lanes, a run now opens from the band the player is
-//        actually in, tiers put empty air between patterns and weight the
-//        draw by demand, and there are six patterns that did not exist.
-//        None of that touches the save format, but every one of them
-//        changes what a seed generates, so a 0.2.0 manifest replays into
-//        a different level here.
-// 0.4.0: the ground became geometry. The lanes are sampled off the
-//        terrain profile instead of being pinned to the screen edges, so
-//        the endpoints of every flip, the height of every obstacle and
-//        the Patroller's sweep all moved. The same input log survives a
-//        different set of collisions here than it did on 0.3.0.
-// 0.5.0: the floor rises. A seventh obstacle type — the Step, the ground
-//        itself lifting into a wall — with three patterns built on it, so
-//        the same seed draws a different sequence and meets something
-//        0.4.0 had no name for.
-// 0.6.0: the Corruption. Lucidity starts a run full and falls on its own,
-//        so whether the Limen opens at a given tick now depends on how
-//        much the player has been earning all run rather than only on
-//        what they spent. The same input log therefore suspends in
-//        different places, and a 0.5.0 manifest replays into a different
-//        run here even though the level it meets is identical.
-GAME_VERSION :: "0.6.0-alpha"
+// 0.3.0: patterns chain on sets of bands rather than single lanes
+// 0.4.0: the ground became geometry — lanes sampled off the terrain
+//        profile instead of pinned to the screen edges
+// 0.5.0: the Step, the ground itself lifting into a wall
+// 0.6.0: the Corruption as a passive drain on Lucidity
+// 1.0.0: the design rewrite (doc v2.0). Two states instead of three, no
+//        Lucidity, a shorter flip, and four obstacle types gone. Nothing
+//        recorded before this replays into anything meaningful, which is
+//        why the numbering leaves 0.x behind rather than continuing it.
+GAME_VERSION :: "1.0.0-alpha"
 
 RunManifest :: struct {
 	game_version:  string,
@@ -56,22 +47,14 @@ RunManifest :: struct {
 	tick_rate:     u32, // simulation steps per second this run was played at
 	tick_count:    u64, // how many steps the run lasted
 	flip_ticks:    []u64, // every tick the player pressed flip on, in order
-
-	// Every tick the key came back up, in order. A press and its release
-	// bracket one hold: the key is down over [press, release), which is
-	// all a replay needs to rebuild Input.flip_held tick by tick. Without
-	// this the Limen would be unreproducible — the same presses with
-	// different hold lengths are different runs.
-	release_ticks: []u64,
 	claimed_depth: f32, // what the client says it scored — to be verified, not trusted
 }
 
 // Collects flip presses as a run happens. Kept separate from RunManifest
 // because a manifest is a finished, immutable record while this grows.
 RunRecorder :: struct {
-	seed:          u64,
-	flip_ticks:    [dynamic]u64,
-	release_ticks: [dynamic]u64,
+	seed:       u64,
+	flip_ticks: [dynamic]u64,
 }
 
 new_run_recorder :: proc(seed: u64) -> RunRecorder {
@@ -81,9 +64,7 @@ new_run_recorder :: proc(seed: u64) -> RunRecorder {
 // Frees a recorder's storage. Call before overwriting one for a new run.
 destroy_run_recorder :: proc(recorder: ^RunRecorder) {
 	delete(recorder.flip_ticks)
-	delete(recorder.release_ticks)
 	recorder.flip_ticks = nil
-	recorder.release_ticks = nil
 }
 
 // Notes that flip was pressed on the given tick. Called once per
@@ -91,15 +72,6 @@ destroy_run_recorder :: proc(recorder: ^RunRecorder) {
 // the steps a replay would run.
 record_flip :: proc(recorder: ^RunRecorder, tick: u64) {
 	append(&recorder.flip_ticks, tick)
-}
-
-// Notes that the key came back up on the given tick, closing the hold
-// opened by the last recorded press. Called from the same place, on the
-// same clock: a press and a release on the same tick describe a hold that
-// no step ever saw, which is exactly what a tap short enough to fall
-// inside one step is.
-record_release :: proc(recorder: ^RunRecorder, tick: u64) {
-	append(&recorder.release_ticks, tick)
 }
 
 // Freezes the recording into a manifest describing the finished run.
@@ -114,7 +86,6 @@ build_manifest :: proc(recorder: RunRecorder, tick_count: u64, claimed_depth: f3
 		tick_rate = u32(TICK_RATE),
 		tick_count = tick_count,
 		flip_ticks = recorder.flip_ticks[:],
-		release_ticks = recorder.release_ticks[:],
 		claimed_depth = claimed_depth,
 	}
 }

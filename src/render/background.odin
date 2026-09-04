@@ -6,14 +6,12 @@
 *
 * What changes as the player moves is not *which* world is on screen but
 * which one is alive: the half being flown toward saturates and lights
-* up, the other dims toward the Limen without ever disappearing. That is
-* the whole reason the flip reads as a crossing rather than a toggle.
+* up, the other dims toward the neutral palette without ever
+* disappearing. That is the whole reason the flip reads as a crossing
+* rather than a toggle.
 *
-* The bands are the same vertical thirds the play area is divided into
-* (core/screen.odin): the horizon band is exactly the Limen, so when the
-* Limen becomes playable in roadmap phase 5, the player will be standing
-* in the part of the picture that has been drawn as a threshold all
-* along.
+* The horizon sits at the middle of the screen, which is the midpoint of
+* every flip: the character crosses its own horizon on the way over.
 *
 * Parallax silhouettes — the actual scenery — are roadmap phase 10. This
 * is the sky they will stand in front of.
@@ -29,7 +27,7 @@ import rl "vendor:raylib/v55"
 // times the height, so the gradient bands start and end on exact pixel
 // rows and cannot leave a seam between them.
 BACKGROUND_DREAM_EDGE :: core.SCREEN_HEIGHT * 3 / 10 // 216, bottom of the Dream lane
-BACKGROUND_HORIZON :: core.SCREEN_HEIGHT / 2 // 360, the middle of the Limen
+BACKGROUND_HORIZON :: core.SCREEN_HEIGHT / 2 // 360, the middle of the neutral palette
 BACKGROUND_REAL_EDGE :: core.SCREEN_HEIGHT * 7 / 10 // 504, top of the Real lane
 
 // The horizon is never quite still: a slow brightening and dimming, so
@@ -50,16 +48,16 @@ HORIZON_GLOW_DEPTH :: 0.12
 // and nothing else, so it can be run time during a run and wall time on
 // a menu without either looking wrong.
 draw_background :: proc(palettes: core.PaletteSet, time: f32) {
-	dream := core.dormant_palette(palettes.dream, palettes.limen, palettes.dream_alive)
-	real := core.dormant_palette(palettes.real, palettes.limen, palettes.real_alive)
+	dream := core.dormant_palette(palettes.dream, palettes.neutral, palettes.dream_alive)
+	real := core.dormant_palette(palettes.real, palettes.neutral, palettes.real_alive)
 
 	breath := (math.sin(time / HORIZON_BREATH_PERIOD * 2 * math.PI) + 1) * 0.5
 
-	// The horizon itself: the Limen's own background, warmed by whichever
+	// The horizon itself: the neutral palette's own background, warmed by whichever
 	// world is currently alive. Warmed only slightly — the threshold is
 	// washed out by definition, and it is the one part of the screen that
 	// must not take a side.
-	horizon_color := core.lerp_color(palettes.limen.deep, palettes.limen.near, 0.35 + 0.25 * breath)
+	horizon_color := core.lerp_color(palettes.neutral.deep, palettes.neutral.near, 0.35 + 0.25 * breath)
 	horizon_color = core.lerp_color(horizon_color, palettes.current.light, 0.10)
 
 	// Four vertical gradients: edge -> deep on each side, deep -> horizon

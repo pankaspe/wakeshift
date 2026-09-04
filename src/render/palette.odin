@@ -49,24 +49,16 @@ get_depth_t :: proc(world: game.World) -> f32 {
 	return clamp((world.elapsed_time - CONVERGENCE_START_TIME) / span, 0, 1)
 }
 
-// The palette of a live run: the player's height picks the blend, the
-// elapsed time converges the two worlds toward the Limen, and what is
-// left of the Lucidity decides how much colour any of it still has
-// (roadmap T8.1).
+// The palette of a live run: the player's height picks the blend between
+// the two worlds, and the elapsed time converges them toward the neutral
+// palette.
 //
-// Lucidity arrives by value like the other two, and for the same reason:
-// this is a pure reading of game state, so a replay that reproduces the
-// state reproduces the picture.
-new_scene_palette :: proc(
-	player: game.Player,
-	world: game.World,
-	lucidity: game.Lucidity,
-) -> core.PaletteSet {
-	return core.new_palette_set(
-		get_world_t(player, world),
-		get_depth_t(world),
-		game.get_corruption_t(lucidity),
-	)
+// The third argument, corruption, is 0 until roadmap R2.4 gives it a
+// front to read from. It stays in the signature because the axis it
+// drives is already built and tested (core/palette.odin) — what is
+// missing is the game state to feed it, not the colour maths.
+new_scene_palette :: proc(player: game.Player, world: game.World) -> core.PaletteSet {
+	return core.new_palette_set(get_world_t(player, world), get_depth_t(world), 0)
 }
 
 // The palette for a screen with no run behind it (menus, options). It
@@ -74,11 +66,11 @@ new_scene_palette :: proc(
 // menu breathes the same way the game does — and so the first thing the
 // player ever sees already states the premise.
 MENU_DRIFT_PERIOD :: 14.0 // seconds for a full Real -> Dream -> Real cycle
-MENU_DRIFT_RANGE :: 0.42 // how far either side of the Limen it travels
+MENU_DRIFT_RANGE :: 0.42 // how far either side of the midpoint it travels
 
-// No corruption on a menu: there is no run to have let its Lucidity run
-// out, and the first thing anyone sees should be the world at full
-// colour — it is the thing the Corruption later takes away.
+// No corruption on a menu: there is no run behind it, and the first thing
+// anyone sees should be the world at full colour — it is the thing the
+// Corruption later takes away.
 new_menu_palette :: proc(display_time: f32) -> core.PaletteSet {
 	phase := display_time / MENU_DRIFT_PERIOD * 2 * math.PI
 	return core.new_palette_set(0.5 + MENU_DRIFT_RANGE * math.sin(phase), 0, 0)

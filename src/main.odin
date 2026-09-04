@@ -108,6 +108,7 @@ main :: proc() {
 	// not just the base one
 	game.build_tier_pools()
 	game.validate_tier_pools()
+	game.validate_tier_balance()
 
 	// --- Persistent state (survives across runs, not reset by reset_run) ---
 
@@ -166,9 +167,8 @@ main :: proc() {
 	// RunManifest instead (roadmap T2.8) and change nothing else.
 	run_seed := rand.uint64()
 
-	// pattern generator: starts 2 safe seconds in, from the band the
-	// player actually starts in (see reset_run)
-	generator := game.new_pattern_generator(game.all_patterns, 2.0, {.Real}, run_seed)
+	// pattern generator: starts 2 safe seconds in
+	generator := game.new_pattern_generator(game.all_patterns, 2.0, run_seed)
 
 	// records which ticks the player flipped on, so a run that sets a
 	// record can be stored as something replayable rather than a bare
@@ -176,11 +176,8 @@ main :: proc() {
 	recorder := core.new_run_recorder(run_seed)
 	defer core.destroy_run_recorder(&recorder)
 
-	// run score, Dream Depth (section 12)
+	// run score, Dream Depth: the distance travelled, and the only score
 	score := game.new_score()
-
-	// near-miss streak, drives the score multiplier (section 17)
-	lucidity := game.new_lucidity()
 
 	// --- Fixed timestep bookkeeping (core/time.odin) ---
 
@@ -198,17 +195,6 @@ main :: proc() {
 	// step would otherwise drop the press, and one that runs two would
 	// apply it twice.
 	pending_input := core.Input{}
-
-	// The simulation's own view of whether the flip key is down
-	// (core/input.odin). It goes up on the step that consumed a press and
-	// comes down on the first step that sees the key released, and it
-	// starts every run false — a key already held when a run begins does
-	// nothing until it is released and pressed again.
-	//
-	// Kept here rather than read straight off the keyboard because it is
-	// simulation state: the Limen depends on it, so a run is only
-	// reproducible if every change to it is recorded (core/manifest.odin).
-	flip_down := false
 
 	// --- Main loop ---
 	for !rl.WindowShouldClose() && !should_quit {
@@ -270,10 +256,9 @@ main :: proc() {
 				switch main_menu.selected {
 				case 0:
 					run_seed = rand.uint64()
-					game.reset_run(&player, &world, &score, &obstacles, &generator, &lucidity, run_seed)
+					game.reset_run(&player, &world, &score, &obstacles, &generator, run_seed)
 					accumulator = 0
 					pending_input = core.Input{}
-					flip_down = false
 					core.destroy_run_recorder(&recorder)
 					recorder = core.new_run_recorder(run_seed)
 					game_state = .Playing
@@ -313,20 +298,9 @@ main :: proc() {
 				// world.tick is still the count of completed steps here,
 				// so it names the step this input is about to drive —
 				// exactly the index a replay would feed it back on.
-				//
-				// Press first, then release: a key tapped and let go
-				// inside a single frame records both on the same tick,
-				// which describes a hold no step ever saw. That is what a
-				// tap that short is.
 				if step_input.flip {
-					flip_down = true
 					core.record_flip(&recorder, world.tick)
 				}
-				if flip_down && !input.flip_held {
-					flip_down = false
-					core.record_release(&recorder, world.tick)
-				}
-				step_input.flip_held = flip_down
 
 				// figure out the current difficulty tier (based on the previous
 				// step's elapsed_time — one step of lag here is irrelevant)
@@ -346,22 +320,11 @@ main :: proc() {
 					game.tiers[tier_index].scroll_speed,
 				)
 
-				// update the player (input, the journey, the Limen).
-				// Lucidity goes in by pointer because suspension spends
-				// it, and it has to be spent before the score is paid at
-				// the multiplier it leaves behind.
-				game.update_player(&player, world, &lucidity, step_input, core.FIXED_TIMESTEP)
+				// update the player: the press, and the journey it starts
+				game.update_player(&player, world, step_input, core.FIXED_TIMESTEP)
 
-				// run down the HUD's payout flash
-				game.update_lucidity(&lucidity, core.FIXED_TIMESTEP)
-
-				// update the score, scaled by the current Lucidity multiplier
-				game.update_score(
-					&score,
-					player,
-					core.FIXED_TIMESTEP,
-					game.get_score_multiplier(lucidity),
-				)
+				// depth is the distance the world scrolled this step
+				game.update_score(&score, world, core.FIXED_TIMESTEP)
 
 				// keep generating obstacles ahead of the player
 				game.generate_ahead(&generator, &obstacles, world.elapsed_time)
@@ -370,13 +333,6 @@ main :: proc() {
 				for obstacle in obstacles {
 					if game.check_player_obstacle_collision(player, obstacle, world) {
 						game_state = .GameOver
-						// Deliberately *not* reset here any more. It used
-						// to be, back when nothing read Lucidity after the
-						// run ended; since T8.1 the palette does, and
-						// refilling the tank on the death frame would
-						// snap a corrupted world back to full colour on
-						// the very frame the player lost it. reset_run
-						// clears it before the next run either way.
 
 						// the run just ended: this is the one moment we check
 						// and persist a new personal best
@@ -390,21 +346,7 @@ main :: proc() {
 					}
 				}
 
-				// mark obstacles that just passed the player as resolved,
-				// registering a near-miss into the Lucidity streak when
-				// deserved (only if the run didn't just end above)
-				if game_state == .Playing {
-					for i in 0 ..< len(obstacles) {
-						obstacle := &obstacles[i]
-						if !obstacle.lucidity_resolved &&
-						   world.elapsed_time >= obstacle.arrival_time {
-							obstacle.lucidity_resolved = true
-							game.register_obstacle_passed(&lucidity, player, obstacle^)
-						}
-					}
-				}
-
-				// drop obstacles that are off-screen and already counted,
+				// drop obstacles that are off-screen,
 				// so the list stays short instead of growing all run
 				game.remove_finished_obstacles(&obstacles, world)
 
@@ -413,7 +355,6 @@ main :: proc() {
 				if game_state != .Playing {
 					accumulator = 0
 					pending_input = core.Input{}
-					flip_down = false
 					break
 				}
 			}
@@ -464,10 +405,9 @@ main :: proc() {
 		case .GameOver:
 			if input.confirm {
 				run_seed = rand.uint64()
-				game.reset_run(&player, &world, &score, &obstacles, &generator, &lucidity, run_seed)
+				game.reset_run(&player, &world, &score, &obstacles, &generator, run_seed)
 				accumulator = 0
 				pending_input = core.Input{}
-				flip_down = false
 				core.destroy_run_recorder(&recorder)
 				recorder = core.new_run_recorder(run_seed)
 				game_state = .Playing
@@ -497,10 +437,10 @@ main :: proc() {
 
 		palettes :=
 			showing_run \
-			? render.new_scene_palette(player, world, lucidity) \
+			? render.new_scene_palette(player, world) \
 			: render.new_menu_palette(display_time)
 
-		rl.ClearBackground(palettes.limen.deep)
+		rl.ClearBackground(palettes.neutral.deep)
 		render.draw_background(palettes, showing_run ? world.elapsed_time : display_time)
 
 		switch game_state {
@@ -521,7 +461,6 @@ main :: proc() {
 			draw_gameplay(interpolated_world(world, accumulator), obstacles[:], player, palettes)
 			ui.draw_hud(
 				score,
-				lucidity,
 				game.tiers[game.get_current_tier_index(world.elapsed_time)].name,
 				palettes,
 			)
@@ -531,7 +470,6 @@ main :: proc() {
 			draw_gameplay(world, obstacles[:], player, palettes)
 			ui.draw_hud(
 				score,
-				lucidity,
 				game.tiers[game.get_current_tier_index(world.elapsed_time)].name,
 				palettes,
 			)

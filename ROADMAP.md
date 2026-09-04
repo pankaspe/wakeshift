@@ -58,8 +58,10 @@ non muoversi era la risposta giusta quasi sempre.
 
 ## Stato attuale
 
-**Il codice a schermo è ancora la v1.3**: tre stati, Lucidity, sette ostacoli. La v2.0 esiste
-solo come documento. Le fasi qui sotto sono la strada per allineare il codice al documento.
+**Fatta la R1**: il codice è due corsie, un gesto, due tipi di ostacolo. Il gioco vecchio è
+stato tolto; quello nuovo non è ancora stato costruito — il cubo uccide ancora invece di
+bloccare, non c'è nessun fronte di Corruzione, il tracciato è ancora una coppia di corsie
+dritte e i Frammenti non esistono. È tutto da R2 in avanti.
 
 **Cosa sopravvive intatto e non va toccato**: tutto `platform/` (finestra, display,
 salvataggio, cifratura, percorsi); `fx/bloom`; `render/stroke` e `render/glow`; i menu e le
@@ -70,25 +72,60 @@ costruito nella T8.1.
 
 ## Le fasi
 
-### Fase R1 — Sfoltire
+### ✅ Fase R1 — Sfoltire
 
-**Obiettivo**: togliere tutto ciò che la v2.0 non ha, prima di costruire. Si demolisce per
-primo perché ogni fase successiva costa meno su una base più piccola, e perché il rischio è
-basso: alla fine il gioco deve ancora compilare e girare, solo con meno cose dentro.
+Tolto tutto ciò che la v2.0 non ha, prima di costruire. Il gioco compila, parte e gira: due
+corsie, un gesto, due tipi di ostacolo. Da 7 file di gameplay a 6, e `game/lucidity.odin`
+cancellato per intero.
 
-| Task | Descrizione | Modello |
+**Cosa è sparito**: lo stato sospeso e la distinzione tap/hold (e con loro `Input.flip_held`,
+i tick di rilascio nel manifesto, la posa raccolta e gli anelli nell'occhio); la Lucidity
+intera, il near-miss, il moltiplicatore e la barra nell'HUD; quattro tipi di ostacolo
+(Feint, Forma pulsante, Pattugliatore, Gradino) più il ritaglio del Gradino nel terreno;
+`core.Band`, `core.Bands` e tutta la macchina di concatenamento fra pattern. La palette del
+Limine è diventata la palette **neutra** — stesso colore, ruolo diverso: non è più uno stato,
+è il punto verso cui i due mondi convergono con la profondità.
+
+**Le tre decisioni che restano vincolanti**
+
+1. **Il contratto è una riga.** *In ogni istante almeno una corsia dev'essere non letale.*
+   `validate_pattern_pool` la verifica per aritmetica invece che per attenzione dell'autore:
+   calcola la finestra temporale in cui ogni evento rende letale la sua corsia — alla velocità
+   più lenta e con la larghezza massima che quel tipo può estrarre, cioè il caso peggiore — e
+   controlla che una finestra Reale e una Onirica non si sovrappongano mai. **Controlla anche
+   la giuntura**, per ogni coppia ordinata di pattern al `gap` più stretto fra i tier: una
+   voragine larga alla fine di un pattern e un cubo all'inizio del successivo sono autorati in
+   due momenti diversi e si incontrano solo a runtime.
+2. **I pattern non si concatenano più.** Non serve: se una corsia è sempre aperta, in qualunque
+   corsia il pattern trovi il giocatore c'è qualcosa che può fare. Ed è proprio il
+   concatenamento che aveva ucciso la v1.x — garantiva di entrare in ogni pattern dalla fascia
+   sicura, cioè quella in cui la minaccia non è. La lezione sta in `CLAUDE.md`: **un contratto
+   che ti garantisce di partire al sicuro è un contratto che premia lo stare fermi.**
+3. **Il buffer del tap è profondo uno, di proposito.** Misurato: cinque pressioni su cinque
+   step consecutivi producono due flip, non cinque. Una coda più profonda lascerebbe accumulare
+   flip che il giocatore non vede più arrivare, e il personaggio continuerebbe a girarsi dopo
+   che ha smesso di chiederlo. Una pressione in anticipo è perdono; cinque è il gioco che si
+   gioca da solo.
+
+**Misurato** (arnese usa-e-getta sulla simulazione vera, 200 seed × 120 s, poi cancellato):
+
+| | prima (v1.3) | adesso |
 |---|---|---|
-| R1.1 | **Via il Limine**: `PlayerState.Suspended`, la distinzione tap/hold, `advance_suspension`, `input.flip_held`. Il flip diventa un viaggio e basta, `FLIP_DURATION` scende a ~0.16 s. Tocca la macchina a stati e il recorder (niente più `record_release`) | **Opus** |
-| R1.2 | **Via la Lucidity**: cancellare `game/lucidity.odin`, il near-miss, il moltiplicatore, la soglia di sospensione, la barra nell'HUD. Il punteggio resta la sola distanza | Sonnet |
-| R1.3 | **Via quattro ostacoli**: Feint, Forma pulsante, Pattugliatore, Gradino. `Block` → `Cube`, `Chasm` e `DreamHole` → `Gap`. Il pool di pattern si riduce a quelli che restano esprimibili | Sonnet |
-| R1.4 | **Il contratto collassa**: da insiemi di fasce a una riga — *in ogni istante almeno una corsia dev'essere non letale*. `core.Bands` sparisce, `validate_pattern_pool` si riscrive attorno alla regola nuova | **Opus** |
-| R1.5 ⚑ | Playtest: il gioco gira, due corsie, un gesto, e non è peggiorato rispetto a prima di iniziare | — |
+| run senza mai premere che superano il tier 1 | **161/200** | **0/200** |
+| morte mediana senza input | 35.5 s | **3.5 s** |
+| almeno una corsia letale | 13.7% | **19.9%** |
+| entrambe le corsie letali | 0.0% | 0.000% ✅ (è la regola) |
+| durata del flip | 0.24 s | **0.167 s** |
 
-**Ricaduta sul salvataggio**: `SAVE_FORMAT_VERSION` va alzata — sparisce la Lucidity dai dati
-salvati. **I salvataggi esistenti diventano illeggibili e il record personale si perde.** È il
-comportamento giusto (meglio azzerare che indovinare) ma va fatto sapendo cosa costa.
-`GAME_VERSION` → `1.0.0-alpha`: qui la simulazione cambia tanto che la numerazione a 0.x non
-significa più niente.
+Il numero che conta è il primo: **stare fermi non porta più da nessuna parte.** Il 19.9% è
+ancora lontano dal 40% della Definition of Done, ed è giusto così — la densità e il pool vero
+sono la R5, e il pool attuale è volutamente minimo (11 pattern, due tipi di ostacolo) perché
+autorarlo adesso vorrebbe dire autorarlo contro un cubo che ancora uccide.
+
+**Ricaduta sul salvataggio, fatta**: `SAVE_FORMAT_VERSION` 4 → 5 e `GAME_VERSION` →
+`1.0.0-alpha`. **I salvataggi esistenti sono illeggibili e il record personale si è perso**, che
+è il comportamento giusto due volte: il formato non ha più i tick di rilascio, e una profondità
+segnata nel gioco a tre stati era segnata in un altro gioco.
 
 ---
 

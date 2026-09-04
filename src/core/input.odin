@@ -10,27 +10,20 @@
 * balancing a change against the exact same run (Design Doc, section 10).
 * Input has to be a value that can be recorded and fed back in.
 *
-* Every field here is edge-triggered — true only on the frame the key went
-* down — except flip_held, which is a level: the Limen needs to know that
-* the key is *still* down, not that it just went down.
+* Every field here is edge-triggered: true only on the frame the key went
+* down. There is no level-triggered field and there must not be one — the
+* whole control scheme is a single gesture, and a key that means something
+* different while it is *held* is the second gesture by another name
+* (Design Doc, pillar 1).
 */
 package core
 
 Input :: struct {
 	// --- Simulation input ---
-	// The two fields the run itself depends on, and so the two a
-	// RunManifest has to record (core/manifest.odin).
-	flip:              bool, // SPACE went down: start a flip
-	flip_held:         bool, // SPACE is still down: stop at the middle of the flip
-
-	// flip_held is the *simulation's* view of the key, not the keyboard's:
-	// it goes down on a press the run consumed and comes up when the key
-	// is released, and it starts every run false. A key already held when
-	// a run begins therefore does nothing until it is released and pressed
-	// again — which is both the behaviour a player expects and what makes
-	// the recorded press/release log a complete description of the input.
-	// main.odin owns that latch; platform/input.odin only reports the raw
-	// key.
+	// The one field the run itself depends on, and so the only one a
+	// RunManifest has to record (core/manifest.odin). A press during a
+	// journey is not lost: game/player.odin queues it.
+	flip:              bool, // SPACE went down: change lane
 
 	// --- Meta input ---
 	// Screen navigation and window control. Deliberately outside the

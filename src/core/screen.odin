@@ -11,17 +11,15 @@ package core
 SCREEN_WIDTH :: 1280
 SCREEN_HEIGHT :: 720
 
-// Vertical split of the play area (Design Doc, section 6):
-// Dream lane 30% / Limen 40% / Real lane 30%.
-// Nothing reads these: they describe the *reading* of the column, and the
-// two walls are where the terrain says they are (core/terrain.odin) while
-// the Limen is the midpoint of the journey between them.
-DREAM_LANE_RATIO :: 0.30
-LIMEN_RATIO :: 0.40
-REAL_LANE_RATIO :: 0.30
-
-// Fixed horizontal position of the player on screen (Design Doc, section 5):
-// the player stays put, the world scrolls past it. Lives here rather than
-// with the player because obstacle position math depends on it too, and
+// Where the player sits on screen: they stay put, the world scrolls past.
+//
+// **This becomes a variable in roadmap R2.1** — a resting position the
+// character is pulled back toward, which they lose ground against when a
+// cube pins them. Everything that converts a screen x into world time
+// reads it, so it is the one constant in the project whose promotion
+// touches the most code (Design Doc, section 5).
+//
+// Lives here rather than with the player because obstacle position maths
+// depends on it too, and
 // obstacle code has no reason to know about the player just for this.
 PLAYER_X :: 200

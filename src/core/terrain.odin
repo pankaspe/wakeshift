@@ -26,12 +26,13 @@
 * ground under one chosen point. Sampling a single x would sink one
 * corner of anything standing on a slope by up to a third of its height.
 *
-* Both walls carry the same profile, and that is load-bearing rather
-* than lazy: floor y is SCREEN_HEIGHT - h and ceiling y is h, so the
-* midpoint of a journey between them is (SCREEN_HEIGHT - size) / 2 with
-* h cancelling out. The Limen therefore never moves vertically however
-* uneven the ground gets, and it keeps landing on the horizon the
-* background draws at the middle of the screen.
+* Both walls currently carry the same profile, so the corridor between
+* them has a constant height. That was load-bearing while the midpoint of
+* a journey was a playable state; it no longer is, and roadmap R3
+* replaces this whole file with a track described by a *spine* (where the
+* corridor's centre sits) and a *span* (how tall it is), which can move
+* independently. The one rule that survives the rewrite is the one below:
+* the profile is a function of time, not of scrolled pixels.
 */
 package core
 
@@ -125,9 +126,8 @@ terrain_support_height :: proc(ground: Ground, x, width: f32) -> f32 {
 //
 // Real lane: the feet stand on the floor. Dream lane: the head hangs
 // from the ceiling. Both follow the terrain rather than the screen edge,
-// so every endpoint of a flip — and with it the Limen at the middle, and
-// the world_t the palette reads off the player's height — moves with the
-// ground (Design Doc, sections 5-6).
+// so every endpoint of a flip — and with it the world_t the palette reads
+// off the player's height — moves with the ground (Design Doc, section 4).
 get_lane_y :: proc(ground: Ground, lane: Lane, x: f32, size: rl.Vector2) -> f32 {
 	height := terrain_support_height(ground, x, size.x)
 	switch lane {

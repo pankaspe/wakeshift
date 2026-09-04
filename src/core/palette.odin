@@ -3,12 +3,12 @@
 * The three-world color system and the two continuous variables that
 * drive it (Design Doc, section 12).
 *
-*   world_t  where the player is vertically: 0 = floor (Real), 0.5 =
-*            middle (Limen), 1 = ceiling (Dream). Continuous, never
-*            stepped — this is what makes a flip look like a crossing
-*            instead of a state change.
+*   world_t  where the player is vertically: 0 = floor (Real), 1 =
+*            ceiling (Dream), and everything in between while a flip is
+*            crossing. Continuous, never stepped — this is what makes a
+*            flip look like a crossing instead of a state change.
 *   depth_t  how far into the run we are: as it grows, the Real and
-*            Dream palettes both converge toward the Limen's washed-out
+*            Dream palettes both converge toward the neutral palette's washed-out
 *            one, until the two worlds stop being told apart by color
 *            (the "convergence", Design Doc section 12). Position and
 *            type of motion are what carry the player from there on.
@@ -19,7 +19,7 @@
 * The last two both change the color of everything, so they are kept on
 * separate axes or the image stops agreeing with itself: **depth_t moves
 * the hue, corruption moves the saturation**. Convergence walks Real and
-* Dream toward the Limen's hue; corruption drains what is left of the
+* Dream toward the neutral palette's hue; corruption drains what is left of the
 * color without touching how bright it is, because "the world went out"
 * has to stay distinguishable from "the two worlds became one".
 *
@@ -57,7 +57,7 @@ REAL_PALETTE :: Palette {
 	accent     = rl.Color{0xD8, 0xE8, 0xFF, 255},
 }
 
-LIMEN_PALETTE :: Palette {
+NEUTRAL_PALETTE :: Palette {
 	deep       = rl.Color{0x1A, 0x1B, 0x26, 255},
 	near       = rl.Color{0x3A, 0x35, 0x50, 255},
 	silhouette = rl.Color{0x0A, 0x09, 0x10, 255},
@@ -80,7 +80,7 @@ DREAM_PALETTE :: Palette {
 RIM_THICKNESS :: 1.8 // dark separation line, used sparingly now
 LIGHT_RIM_THICKNESS :: 2.6 // the lit edge that reads as the light source
 
-// How far the two worlds travel toward the Limen at maximum depth.
+// How far the two worlds travel toward the neutral palette at maximum depth.
 // Deliberately short of 1: at full convergence the palettes are nearly
 // indistinguishable, but the horizon must not vanish outright or the
 // screen stops having a top and a bottom at all.
@@ -186,7 +186,7 @@ lerp_palette :: proc(a, b: Palette, t: f32) -> Palette {
 // and passed down; nothing recomputes it per element.
 PaletteSet :: struct {
 	real:        Palette,
-	limen:       Palette,
+	neutral:       Palette,
 	dream:       Palette,
 
 	// Sampled at world_t: the palette of "wherever the player is right
@@ -196,7 +196,7 @@ PaletteSet :: struct {
 	depth_t:     f32,
 
 	// How alive each world is, 0..1 (they do not sum to 1 by accident:
-	// at the Limen both are half alive, which is the point).
+	// at the neutral palette both are half alive, which is the point).
 	real_alive:  f32,
 	dream_alive: f32,
 
@@ -209,32 +209,34 @@ PaletteSet :: struct {
 	corruption_t: f32,
 }
 
-// Interpolates Real -> Limen over the lower half of world_t and
-// Limen -> Dream over the upper half. Two segments rather than one
-// straight Real -> Dream blend, because the Limen has a palette of its
-// own and is not the average of the other two (Design Doc, section 12).
+// Interpolates Real -> neutral over the lower half of world_t and
+// neutral -> Dream over the upper half. Two segments rather than one
+// straight Real -> Dream blend, because the neutral palette is not the
+// average of the other two: it is what both worlds converge toward with
+// depth, so the blend has to actually pass through it (Design Doc,
+// section 10).
 sample_palette :: proc(set: PaletteSet, world_t: f32) -> Palette {
 	t := clamp(world_t, 0, 1)
 	if t <= 0.5 {
-		return lerp_palette(set.real, set.limen, t * 2)
+		return lerp_palette(set.real, set.neutral, t * 2)
 	}
-	return lerp_palette(set.limen, set.dream, (t - 0.5) * 2)
+	return lerp_palette(set.neutral, set.dream, (t - 0.5) * 2)
 }
 
 // Corruption is applied *after* convergence and to all three palettes at
 // once, which is the order that keeps the two systems from arguing: the
 // hue is settled first, then whatever hue that turned out to be is what
 // drains away. Doing it the other way round would have the convergence
-// pulling a grey Real palette toward a colored Limen one, and the world
+// pulling a grey Real palette toward a coloured neutral one, and the world
 // would gain color as it went out.
 new_palette_set :: proc(world_t: f32, depth_t: f32, corruption_t: f32 = 0) -> PaletteSet {
 	convergence := clamp(depth_t, 0, 1) * CONVERGENCE_MAX
 	corruption := clamp(corruption_t, 0, 1)
 
 	set := PaletteSet {
-		real         = lerp_palette(REAL_PALETTE, LIMEN_PALETTE, convergence),
-		limen        = LIMEN_PALETTE,
-		dream        = lerp_palette(DREAM_PALETTE, LIMEN_PALETTE, convergence),
+		real         = lerp_palette(REAL_PALETTE, NEUTRAL_PALETTE, convergence),
+		neutral        = NEUTRAL_PALETTE,
+		dream        = lerp_palette(DREAM_PALETTE, NEUTRAL_PALETTE, convergence),
 		world_t      = clamp(world_t, 0, 1),
 		depth_t      = clamp(depth_t, 0, 1),
 		real_alive   = 1 - clamp(world_t, 0, 1),
@@ -244,7 +246,7 @@ new_palette_set :: proc(world_t: f32, depth_t: f32, corruption_t: f32 = 0) -> Pa
 
 	if corruption > 0 {
 		set.real = desaturate_palette(set.real, corruption)
-		set.limen = desaturate_palette(set.limen, corruption)
+		set.neutral = desaturate_palette(set.neutral, corruption)
 		set.dream = desaturate_palette(set.dream, corruption)
 	}
 
@@ -253,16 +255,16 @@ new_palette_set :: proc(world_t: f32, depth_t: f32, corruption_t: f32 = 0) -> Pa
 }
 
 // The palette of a world that is currently the *other* one: its
-// background and its light fade toward the Limen, its silhouette does
+// background and its light fade toward the neutral palette, its silhouette does
 // not. Silhouettes stay solid black-ish in every world on purpose — they
 // are how the player reads shapes, and readability outranks mood
 // (pillar 2).
-dormant_palette :: proc(palette: Palette, limen: Palette, alive: f32) -> Palette {
+dormant_palette :: proc(palette: Palette, neutral: Palette, alive: f32) -> Palette {
 	fade := (1 - clamp(alive, 0, 1)) * DORMANT_FADE
 	faded := palette
-	faded.deep = lerp_color(palette.deep, limen.deep, fade)
-	faded.near = lerp_color(palette.near, limen.deep, fade)
-	faded.light = lerp_color(palette.light, limen.deep, fade)
-	faded.accent = lerp_color(palette.accent, limen.light, fade)
+	faded.deep = lerp_color(palette.deep, neutral.deep, fade)
+	faded.near = lerp_color(palette.near, neutral.deep, fade)
+	faded.light = lerp_color(palette.light, neutral.deep, fade)
+	faded.accent = lerp_color(palette.accent, neutral.light, fade)
 	return faded
 }

@@ -66,9 +66,11 @@ order before touching anything:
 3. The rest of this file — architecture rules and conventions.
 
 **Where the project stands.** The design was rewritten on 4 September 2026 (v1.3 → v2.0) and
-**the code has not caught up yet**. What is on screen is still the old game: three states, a
-spendable Lucidity, seven obstacle types. `ROADMAP.md` phases R1-R7 are the road to the new
-one, and R1 is demolition.
+**phase R1 is done**: the code is now two lanes, one gesture, and two obstacle types (Cube and
+Gap). The third state, the Lucidity, four obstacle types and the whole band-chaining contract
+are gone. What is *not* built yet is everything the rewrite is actually for — the cube still
+kills instead of blocking, there is no Corruption front, the track is still a flat pair of
+lanes, and there are no fragments. That is R2 onward.
 
 Why it was rewritten, measured rather than guessed: 200 simulated runs that never touched the
 key, **161 survived the whole first tier**, median death at 35 s; **86% of the time** nothing on
@@ -222,11 +224,11 @@ against its face, because the face scrolls with the world and they cannot keep p
 
 ### The three dangers, three verbs
 
-| | says | kills? |
-|---|---|---|
-| **Cube** | *do not be here, or you pay* | no — it **blocks** |
-| **Gap** | *do not be here* | yes |
-| **Sentinel** | *do not move right now* | yes |
+| | says | kills? | built? |
+|---|---|---|---|
+| **Cube** | *do not be here, or you pay* | no — it **blocks** | exists, but still kills (R2.3) |
+| **Gap** | *do not be here* | yes | ✅ |
+| **Sentinel** | *do not move right now* | yes | R4.4 |
 
 - **A cube blocks, and that is the design's centre of gravity.** Because it is not lethal, the
   game is finally allowed to threaten **both lanes at once** — a mirrored cube pair is legal,
@@ -424,7 +426,10 @@ the visual rule and the mechanic the same rule.
 - **`fx/` knows nothing about the game.** It is a parametric particle/post-processing module;
   gameplay may emit into it, but it never imports `game`.
 - **A flip is one journey with one clock.** One key, one gesture. A press during a journey is
-  *queued*, never blended — so a burst of taps never drops one.
+  *buffered* one deep, never blended: it takes off the instant that journey lands, carrying the
+  overshoot so back-to-back flips keep their cadence. One deep and no deeper — measured, five
+  presses on five steps give two flips, and a deeper queue would let mashing bank flips the
+  player can no longer see coming.
 - **Input is passed in, never read inside gameplay.** Gameplay and UI procedures take a
   `core.Input` value. Exactly one procedure polls the keyboard (`platform.read_input`) and
   exactly one reads the clock (`rl.GetFrameTime`, in the main loop). Adding a second of either
@@ -518,9 +523,18 @@ raise it with the user before writing code.
 
 Tracked here so they are not rediscovered. Each is scheduled in `ROADMAP.md`.
 
-- **The code is still v1.3 and the design is v2.0.** Anything in `src/` that mentions the Limen,
-  Lucidity, the Feint, the Pulsing Shape, the Patroller or the Step is scheduled for removal in
-  phase R1. Do not build on it.
+- **The cube still kills.** R1 removed the old game but did not yet build the new one: today a
+  Cube is a lethal rectangle, which is the v1.x rule wearing the new name. R2.3 is what makes it
+  block instead, and until then pillar 7 is a claim in the design doc rather than something the
+  code does.
+- **`core.PLAYER_X` is still a constant**, and R2.1 promotes it to game state. Everything that
+  converts a screen x into world time reads it (`core.ground_time_at_x`,
+  `game.get_obstacle_position`), so that promotion is the most invasive single change on the
+  roadmap — get it wrong and the level slides against itself whenever the player loses ground.
+- **The pool is a placeholder.** Eleven patterns over two obstacle types, authored only so that
+  R1 could be verified. The real pool is R5.2, after the cube blocks and the Sentinel exists.
+  Measured today: at least one lane is lethal 19.9% of the time, against a Definition of Done
+  that asks for over 40%.
 - Menus, HUD and the options screen take their colours from the palette but still use raylib's
   default bitmap font. Everything drawn from primitives is crisp at native resolution and only
   the text is not (phase R7).

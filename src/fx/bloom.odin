@@ -285,7 +285,7 @@ apply_bloom :: proc(bloom: ^Bloom, target: rl.RenderTexture2D, settings: BloomSe
 //
 // Design Doc, section 12, read as three settings rather than three
 // adjectives: hard in the Real world, invasive in the Dream, overexposed
-// in the Limen.
+// in the neutral palette.
 
 // Hard light: a high threshold, so only the lit edges themselves bloom
 // and everything else stays sharp. This is the world where shapes have
@@ -306,7 +306,7 @@ REAL_BLOOM :: BloomSettings {
 // sleeping is meant to be the hardest place on screen to look at
 // steadily — but it is also where the player is *choosing* to be, which
 // is why the intensity stops where it does instead of whiting out.
-LIMEN_BLOOM :: BloomSettings {
+NEUTRAL_BLOOM :: BloomSettings {
 	threshold = 0.30,
 	knee      = 0.34,
 	intensity = 1.30,
@@ -333,7 +333,7 @@ lerp_bloom :: proc(a, b: BloomSettings, t: f32) -> BloomSettings {
 // The bloom the player's height and the run's depth ask for.
 //
 // Interpolated in exactly the same two segments as the palette
-// (core/palette.odin) and converged toward the Limen by the same amount,
+// (core/palette.odin) and converged toward the neutral palette by the same amount,
 // because the light and the colors have to be describing one world. If
 // these two ever drift apart, the picture stops agreeing with itself.
 bloom_for_world :: proc(world_t, depth_t: f32) -> BloomSettings {
@@ -341,11 +341,11 @@ bloom_for_world :: proc(world_t, depth_t: f32) -> BloomSettings {
 
 	settings: BloomSettings
 	if t <= 0.5 {
-		settings = lerp_bloom(REAL_BLOOM, LIMEN_BLOOM, t * 2)
+		settings = lerp_bloom(REAL_BLOOM, NEUTRAL_BLOOM, t * 2)
 	} else {
-		settings = lerp_bloom(LIMEN_BLOOM, DREAM_BLOOM, (t - 0.5) * 2)
+		settings = lerp_bloom(NEUTRAL_BLOOM, DREAM_BLOOM, (t - 0.5) * 2)
 	}
 
 	convergence := clamp(depth_t, 0, 1) * core.CONVERGENCE_MAX
-	return lerp_bloom(settings, LIMEN_BLOOM, convergence)
+	return lerp_bloom(settings, NEUTRAL_BLOOM, convergence)
 }

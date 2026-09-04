@@ -3,47 +3,40 @@
 * Obstacles are described as events in time (when they should reach the
 * player), not as absolute pixel positions. Their on-screen x position is
 * derived every frame from the world's elapsed time and scroll speed.
-* This means changing scroll_speed later never breaks perceived timing
-* (Design Doc, section 6-7).
+* This means changing scroll speed later never breaks perceived timing —
+* which matters more than it used to, because from roadmap R6 the scroll
+* speed is something the *player* buys mid-run (Design Doc, sections 4
+* and 8).
 *
-* Six types, and — since phase 6 — genuinely six behaviours rather than
-* one behaviour with six skins. They split along two axes the design doc
-* draws (section 5):
+* Two types here, and the design has a third coming (the Sentinel, R4.4).
+* They split on the design doc's own axis (section 6):
 *
-*   full vs void      A Block is something that appears; a Chasm is the
-*                     floor failing to be there. The two are opposite
-*                     readings, and after phase 6 they are opposite
-*                     *rules*: a Block kills whoever touches it, a Chasm
-*                     kills only whoever is still standing on the floor
-*                     when it passes underneath (see collision.odin).
-*                     The Step (T7.5.5) is the third case and belongs to
-*                     neither end: not a thing standing on the floor and
-*                     not the floor missing, but the floor itself rising
-*                     into the lane. It asks a Block's question — be
-*                     elsewhere — in a Chasm's voice, since it is the
-*                     ground doing it and so only reaches whoever is on
-*                     the ground.
-*   honest vs         The Real world's obstacles are static and mean what
-*   anticipatory      they show. The Feint and the Patroller do not: they
-*                     anticipate the obvious answer rather than react to
-*                     the player, which is the distinction the design doc
-*                     is careful about (section 5, "what makes an obstacle
-*                     intelligent"). Nothing here ever reads the player's
-*                     position — an obstacle that adapts feels stolen even
-*                     when it is survivable, and breaks pillar 3.
+*   the Cube   something that is *there*. In R1 it still kills on
+*              contact; from R2.3 it stops killing and starts costing
+*              ground, which is the whole point of the rewrite and the
+*              reason it is the only obstacle allowed on both lanes at
+*              once.
+*   the Gap    the lane failing to be there. It kills only whoever is
+*              still resting on that lane when it passes, so being
+*              mid-flip answers it as completely as being on the other
+*              lane does (see collision.odin).
 *
-* Everything an obstacle does over time is a function of *its own*
-* arrival_time, never of global clock time. That is not tidiness: an
-* obstacle whose animation runs off the world clock presents a different
-* face every time the same pattern is generated, so the pattern author
-* cannot say what the player will face and the player cannot learn it.
-* phase_offset is authored in the pattern for the same reason — randomness
-* would put fairness back in the hands of the seed.
+* Nothing here ever reads the player's position. An obstacle that adapts
+* feels stolen even when it is survivable, and it breaks pillar 3: the
+* threat has to be readable before the commitment, which means it has to
+* have been decided before the player moved.
+*
+* The v1.x file had seven types and a lot of machinery for the four that
+* are gone (roadmap R1.3). Two of them are worth remembering rather than
+* rediscovering: everything an obstacle does over time has to be a
+* function of *its own* arrival_time and never of the global clock, or
+* the same pattern presents a different face every time it is generated;
+* and any randomness in an obstacle has to come from the run's own
+* generator, or fairness ends up in the hands of the seed.
 */
 package game
 
 import "../core"
-import "core:math"
 import "core:math/rand"
 import rl "vendor:raylib/v55"
 
@@ -51,85 +44,41 @@ import rl "vendor:raylib/v55"
 OBSTACLE_SIZE :: 54
 
 ObstacleType :: enum {
-	Block, // Real, full: sticks up from the floor, kills on contact
-	Chasm, // Real, void: a gap in the floor, kills only the grounded
-	PulsingShape, // Dream, full: hangs from the ceiling, grows and retracts
-	DreamHole, // Dream, void: the ceiling dissolves, kills only whoever hangs from it
-	Feint, // either lane: looks like a threat, retracts before it arrives, never lethal
-	Patroller, // either lane: sweeps the whole column on a readable cycle
-	Step, // Real, neither: the floor itself rises into a wall
+	Cube, // either lane, full: sticks out into the lane
+	Gap, // either lane: the surface is simply not there
 }
 
-// Which lane a type belongs to, per the thematic pairing in Design Doc
-// section 5 (Real = full/static, Dream = void/dynamic), and whether it is
-// bound to a lane at all. The Feint and the Patroller are not: a bluff
-// works in either world, and a Patroller crosses the whole column by
-// definition. Used to catch pattern-authoring mistakes early (see
-// validate_pattern_pool).
-expected_lane_for_type :: proc(obstacle_type: ObstacleType) -> (lane: core.Lane, bound: bool) {
-	switch obstacle_type {
-	case .Block, .Chasm, .Step:
-		return .Real, true
-	case .PulsingShape, .DreamHole:
-		return .Dream, true
-	case .Feint, .Patroller:
-		return .Real, false
-	}
-	return .Real, false
+// True for the type that is an *absence* rather than a thing. It is also
+// exactly the set the terrain draws rather than draw_obstacle: only the
+// code that knows where its own surface is can cut a hole in it.
+is_gap :: proc(obstacle_type: ObstacleType) -> bool {
+	return obstacle_type == .Gap
 }
-
-// True for the two types that are an *absence* rather than a thing.
-is_void_obstacle :: proc(obstacle_type: ObstacleType) -> bool {
-	return obstacle_type == .Chasm || obstacle_type == .DreamHole
-}
-
-// True for everything the *terrain* draws rather than draw_obstacle: the
-// two voids and the Step. They have one thing in common that decides
-// both their drawing and their rule — they are the ground itself doing
-// something, so only the code that knows where the surface is can draw
-// them, and only whoever is standing on that surface is touched by them.
-is_terrain_obstacle :: proc(obstacle_type: ObstacleType) -> bool {
-	return is_void_obstacle(obstacle_type) || obstacle_type == .Step
-}
-
-// --- Step (Real, the floor as a wall) ---
-//
-// How far the floor lifts. Taller than the player is, so that a raised
-// stretch reads as something to be elsewhere for rather than as a bump
-// (the character is PLAYER_SIZE tall standing on the floor).
-STEP_HEIGHT :: 52
-
-// How long a raised stretch runs, in pixels of world. Wider than a
-// chasm on average: a hole is a moment to not be down for, and a step is
-// a stretch. At the opening speed these are 0.32 s, 0.44 s and 0.60 s of
-// floor that is not there to stand on.
-STEP_WIDTH_SHORT :: OBSTACLE_SIZE * 1.6
-STEP_WIDTH_MEDIUM :: OBSTACLE_SIZE * 2.2
-STEP_WIDTH_LONG :: OBSTACLE_SIZE * 3.0
 
 Obstacle :: struct {
-	arrival_time:      f32, // world.elapsed_time value at which this obstacle reaches PLAYER_X
-	lane:              core.Lane,
-	size:              rl.Vector2,
-	obstacle_type:     ObstacleType,
-
-	// Where in its own cycle an animated obstacle is at the moment it
-	// arrives, in turns (0..1). Authored by the pattern, never drawn at
-	// random: it is the difference between "a pulsing shape" and "a
-	// pulsing shape that will be a wall when it reaches you", and the
-	// player can only learn the second one.
-	phase_offset:      f32,
-	lucidity_resolved: bool, // true once this obstacle has been checked for a near-miss
+	arrival_time:  f32, // world.elapsed_time value at which this obstacle reaches PLAYER_X
+	lane:          core.Lane,
+	size:          rl.Vector2,
+	obstacle_type: ObstacleType,
 }
 
-// Chasm and Dream Hole width variants. Picked randomly at creation —
-// purely flavour, and the one random choice left in an obstacle, so a
-// pattern still knows exactly what it is asking of the player.
+// Gap width variants. Picked randomly at creation — flavour, and the one
+// random choice left in an obstacle, so a pattern still knows exactly
+// what it is asking of the player. GAP_WIDTH_LONG is what
+// validate_pattern_pool checks against, since it is the worst case.
 GAP_WIDTH_SHORT :: OBSTACLE_SIZE * 1.2
 GAP_WIDTH_MEDIUM :: OBSTACLE_SIZE * 1.9
 GAP_WIDTH_LONG :: OBSTACLE_SIZE * 2.6
 
-// Creates an obstacle that will arrive at the player's x position at the given time.
+// The widest this type can ever turn out to be. Used by the fairness
+// check, which has to reason about a pattern before its random choices
+// have been made.
+get_max_width :: proc(obstacle_type: ObstacleType) -> f32 {
+	return obstacle_type == .Gap ? GAP_WIDTH_LONG : OBSTACLE_SIZE
+}
+
+// Creates an obstacle that will arrive at the player's x position at the
+// given time.
 //
 // Takes the caller's random generator rather than reaching for the global
 // one: every random choice a run makes has to come from the run's own
@@ -138,11 +87,10 @@ new_obstacle :: proc(
 	arrival_time: f32,
 	lane: core.Lane,
 	obstacle_type: ObstacleType,
-	phase_offset: f32,
 	rng: rand.Generator,
 ) -> Obstacle {
 	width: f32 = OBSTACLE_SIZE
-	if is_void_obstacle(obstacle_type) {
+	if obstacle_type == .Gap {
 		roll := rand.float32(rng)
 		switch {
 		case roll < 0.4:
@@ -153,154 +101,39 @@ new_obstacle :: proc(
 			width = GAP_WIDTH_LONG
 		}
 	}
-	if obstacle_type == .Patroller {
-		width = PATROLLER_SIZE
-	}
-
-	height: f32 = OBSTACLE_SIZE
-	if obstacle_type == .Step {
-		// Same treatment as a gap's width, and for the same reason: it is
-		// flavour, and it is the one random choice left in an obstacle, so
-		// a pattern still knows exactly what it is asking of the player.
-		roll := rand.float32(rng)
-		switch {
-		case roll < 0.4:
-			width = STEP_WIDTH_SHORT
-		case roll < 0.75:
-			width = STEP_WIDTH_MEDIUM
-		case:
-			width = STEP_WIDTH_LONG
-		}
-		height = STEP_HEIGHT
-	}
 
 	return Obstacle {
 		arrival_time = arrival_time,
 		lane = lane,
-		size = rl.Vector2{width, height},
+		size = rl.Vector2{width, OBSTACLE_SIZE},
 		obstacle_type = obstacle_type,
-		phase_offset = phase_offset,
 	}
 }
 
-// Seconds since this obstacle arrived at the player (negative before).
-// Every animation below is a function of this and nothing else.
-get_obstacle_age :: proc(obstacle: Obstacle, world: World) -> f32 {
-	return world.elapsed_time - obstacle.arrival_time
-}
-
-// --- Pulsing Shape (Dream, full) ---
-
-PULSING_SHAPE_MIN_HEIGHT :: 8
-PULSING_SHAPE_MAX_HEIGHT :: 55
-PULSING_SHAPE_PERIOD :: 0.7 // seconds per full grow-retract cycle
-
-// Anchored to arrival, so what the player sees coming is what they get.
-// Driven by global time, as it was until phase 6, the same pattern could
-// present a 55px wall on one run and an 8px stub on the next: the level
-// was different every time for reasons neither the author nor the player
-// could see.
-get_pulsing_height :: proc(obstacle: Obstacle, world: World) -> f32 {
-	phase := get_obstacle_age(obstacle, world) / PULSING_SHAPE_PERIOD + obstacle.phase_offset
-	pulse := (math.sin(phase * 2 * math.PI) + 1) / 2 // remapped from [-1,1] to [0,1]
-	return PULSING_SHAPE_MIN_HEIGHT + pulse * (PULSING_SHAPE_MAX_HEIGHT - PULSING_SHAPE_MIN_HEIGHT)
-}
-
-// --- Feint (either lane, never lethal) ---
+// An obstacle's size right now.
 //
-// It grows exactly like the full obstacle of its lane, holds long enough
-// to be believed, then retracts to nothing before it arrives. Whoever
-// answers it with the obvious flip lands in whatever the pattern put in
-// the other lane; whoever waits sees it go.
-//
-// The retraction has to *finish* far enough ahead of arrival that the
-// player still has time to read the real threat and commit a flip — a
-// bluff that resolves after the last useful moment is not a bluff, it is
-// a trick, and pillar 3 says the information is always available before
-// the commitment.
-
-FEINT_APPEAR :: 2.2 // seconds before arrival it starts growing
-FEINT_PEAK :: 1.3 // fully grown from here...
-FEINT_GONE :: 0.6 // ...back to nothing by here
-
-get_feint_height :: proc(obstacle: Obstacle, world: World) -> f32 {
-	time_left := -get_obstacle_age(obstacle, world)
-
-	switch {
-	case time_left > FEINT_APPEAR, time_left <= FEINT_GONE:
-		return 0
-	case time_left > FEINT_PEAK:
-		t := (FEINT_APPEAR - time_left) / (FEINT_APPEAR - FEINT_PEAK)
-		return OBSTACLE_SIZE * core.ease_out_quad(t)
-	case:
-		t := (FEINT_PEAK - time_left) / (FEINT_PEAK - FEINT_GONE)
-		return OBSTACLE_SIZE * (1 - core.ease_in_out_quad(t))
-	}
-}
-
-// --- Patroller (either lane, sweeps the column) ---
-//
-// The one real presence in the set, and the one thing that threatens the
-// middle — which is what closes the imbalance phase 5 left behind, where
-// holding in the Limen risked nothing but fuel.
-//
-// It sweeps floor to ceiling on a cosine anchored to its arrival, so a
-// pattern says where it will be at the moment it reaches the player by
-// choosing phase_offset: 0 puts it at the ceiling, 0.25 in the middle,
-// 0.5 on the floor. Nothing about it reads the player.
-
-PATROLLER_SIZE :: 46
-PATROLLER_PERIOD :: 1.7 // seconds per full round trip
-
-// 0 at the ceiling, 1 on the floor.
-get_patroller_sweep :: proc(obstacle: Obstacle, world: World) -> f32 {
-	phase := get_obstacle_age(obstacle, world) / PATROLLER_PERIOD + obstacle.phase_offset
-	return (1 - math.cos(phase * 2 * math.PI)) * 0.5
-}
-
-// --- Geometry ---
-
-// Returns the obstacle's current size. Fixed for everything whose shape
-// does not move; the two that do are the ones whose *timing* is the
-// threat rather than their position.
+// Nothing animates yet, so this is the stored size — but the world stays
+// in the signature because the floating cube (roadmap R4.2) makes it a
+// function of the obstacle's *own* age again. That rule is worth stating
+// where it will be read: an animation driven by the global clock presents
+// a different face every time the same pattern is generated, so the
+// author cannot say what the player will face and the player cannot
+// learn it.
 get_obstacle_size :: proc(obstacle: Obstacle, world: World) -> rl.Vector2 {
-	#partial switch obstacle.obstacle_type {
-	case .PulsingShape:
-		return rl.Vector2{obstacle.size.x, get_pulsing_height(obstacle, world)}
-	case .Feint:
-		return rl.Vector2{obstacle.size.x, get_feint_height(obstacle, world)}
-	case .Patroller:
-		return rl.Vector2{PATROLLER_SIZE, PATROLLER_SIZE}
-	}
 	return obstacle.size
 }
 
 // Computes the obstacle's current on-screen position, derived from how
 // much time remains until (or has passed since) its arrival_time.
 //
-// x is the same for everything: the world scrolls, obstacles do not move
-// through it. y is where the types part company — most hang off the wall
-// of their own lane, the Patroller is somewhere on its sweep.
+// The world scrolls; obstacles do not move through it. y comes from the
+// terrain, so an obstacle sits on the surface of its own lane however
+// uneven that surface is.
 get_obstacle_position :: proc(obstacle: Obstacle, world: World) -> rl.Vector2 {
 	time_until_arrival := obstacle.arrival_time - world.elapsed_time
 	x := core.PLAYER_X + time_until_arrival * world.scroll_speed
 	size := get_obstacle_size(obstacle, world)
-
-	ground := get_ground(world)
-
-	if obstacle.obstacle_type == .Patroller {
-		// It crosses the column between the two walls, not between the two
-		// screen edges: over raised ground the second would put it inside
-		// the terrain. The phase still means what it always meant — 0 at
-		// the ceiling, 0.5 on the floor — because the ends of the sweep
-		// are the walls themselves.
-		sweep := get_patroller_sweep(obstacle, world)
-		ceiling := core.get_lane_y(ground, .Dream, x, size)
-		floor := core.get_lane_y(ground, .Real, x, size)
-		return rl.Vector2{x, ceiling + (floor - ceiling) * sweep}
-	}
-
-	return rl.Vector2{x, core.get_lane_y(ground, obstacle.lane, x, size)}
+	return rl.Vector2{x, core.get_lane_y(get_ground(world), obstacle.lane, x, size)}
 }
 
 get_obstacle_rect :: proc(obstacle: Obstacle, world: World) -> rl.Rectangle {
@@ -315,20 +148,14 @@ get_obstacle_rect :: proc(obstacle: Obstacle, world: World) -> rl.Rectangle {
 // shadow) cannot silently start culling things that are still visible.
 OBSTACLE_CULL_MARGIN :: 200
 
-// True once an obstacle can no longer affect anything: it is well past
-// the left edge of the screen, and its near-miss has already been counted.
+// True once an obstacle can no longer affect anything.
 //
-// Both conditions matter. Position alone would be enough for collision and
-// drawing, but the Lucidity streak is registered the moment an obstacle
-// passes the player (see register_obstacle_passed), and dropping one before
-// that happened would silently lose a point of streak.
+// Position alone is the whole test now. It used to also wait for the
+// near-miss to have been counted, and that condition went with the
+// Lucidity it fed (roadmap R1.2).
 is_obstacle_finished :: proc(obstacle: Obstacle, world: World) -> bool {
-	if !obstacle.lucidity_resolved {
-		return false
-	}
 	position := get_obstacle_position(obstacle, world)
-	size := get_obstacle_size(obstacle, world)
-	return position.x + size.x < -OBSTACLE_CULL_MARGIN
+	return position.x + obstacle.size.x < -OBSTACLE_CULL_MARGIN
 }
 
 // Drops obstacles that are finished with, keeping the list from growing
@@ -336,10 +163,10 @@ is_obstacle_finished :: proc(obstacle: Obstacle, world: World) -> bool {
 // few hundred dead entries to be walked on every single step.
 //
 // Compacts the whole list rather than dropping a finished prefix, because
-// finished obstacles do not arrive in order: gaps range from 65 to 140 px
-// wide, so a newer but narrow obstacle can leave the screen before an
-// older but wide one. A prefix scan would stop at the first survivor and
-// leak everything behind it.
+// finished obstacles do not arrive in order: gaps are up to two and a
+// half times as wide as a cube, so a newer but narrow obstacle can leave
+// the screen before an older but wide one. A prefix scan would stop at
+// the first survivor and leak everything behind it.
 //
 // Survivors keep their original order. Nothing downstream depends on that
 // today, but obstacles are generated in ascending arrival_time and quietly

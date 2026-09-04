@@ -17,10 +17,6 @@ import rl "vendor:raylib/v55"
 read_input :: proc() -> core.Input {
 	return core.Input {
 		flip = rl.IsKeyPressed(.SPACE),
-
-		// The raw key. main.odin turns this into the simulation's own
-		// latched view of it (core/input.odin) before any step sees it.
-		flip_held = rl.IsKeyDown(.SPACE),
 		pause = rl.IsKeyPressed(.ESCAPE),
 		confirm = rl.IsKeyPressed(.ENTER),
 		menu_up = rl.IsKeyPressed(.UP),

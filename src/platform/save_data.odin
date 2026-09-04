@@ -21,10 +21,13 @@ import "core:encoding/cbor"
 // 2: + the best run's RunManifest (roadmap T2.8)
 // 3: + display settings (roadmap T2.5.4)
 // 4: + the manifest's release ticks, needed to replay the Limen's holds
-//    (roadmap T5.1). Discards every existing save, which is correct here
-//    for a second reason: a score set before the third state existed was
-//    set in a different game.
-SAVE_FORMAT_VERSION :: 4
+//    (roadmap T5.1)
+// 5: - those release ticks again. The design rewrite (doc v2.0) removed
+//    the third state, so there is no hold to replay and a manifest is
+//    once more just the ticks the key went down on. Discards every
+//    existing save, which is right for a second reason: a depth set in
+//    the three-state game was set in a different game (roadmap R1.2).
+SAVE_FORMAT_VERSION :: 5
 
 SaveData :: struct {
 	format_version: int,
@@ -63,7 +66,6 @@ new_save_data :: proc() -> SaveData {
 destroy_save_data :: proc(data: ^SaveData, allocator := context.allocator) {
 	delete(data.best_run.game_version, allocator)
 	delete(data.best_run.flip_ticks, allocator)
-	delete(data.best_run.release_ticks, allocator)
 	data.best_run = core.RunManifest{}
 }
 

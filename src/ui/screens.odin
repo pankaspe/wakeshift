@@ -42,115 +42,24 @@ draw_main_menu :: proc(menu: Menu, high_score: f32, palettes: core.PaletteSet) {
 	draw_centered_text(best_text, 520, 20, core.with_alpha(palettes.current.light, TEXT_MUTED))
 }
 
-// Where the Lucidity bar sits and how big it is. Left-aligned under the
-// tier line, so the three readouts read as one column.
-LUCIDITY_BAR_X :: 20
-LUCIDITY_BAR_Y :: 80
-LUCIDITY_BAR_WIDTH :: 210
-LUCIDITY_BAR_HEIGHT :: 14
-
-// In-game score readout, difficulty tier, and the Lucidity bar.
-draw_hud :: proc(
-	score: game.Score,
-	lucidity: game.Lucidity,
-	tier_name: string,
-	palettes: core.PaletteSet,
-) {
+// In-game readout. Depth and the difficulty tier, and that is the whole
+// HUD (Design Doc, section 11).
+//
+// There used to be a Lucidity bar here. There is no bar now and there is
+// not meant to be one: from roadmap R2 the distance between the character
+// and the Corruption front is the only meter the run has, drawn at full
+// size in the world itself. A player watching for obstacles has no
+// attention left for the bottom of the screen.
+draw_hud :: proc(score: game.Score, tier_name: string, palettes: core.PaletteSet) {
 	score_text := fmt.ctprintf("Depth: %.0f", score.value)
 	rl.DrawText(score_text, 20, 20, 24, core.with_alpha(palettes.current.light, TEXT_PRIMARY))
 
 	tier_text := fmt.ctprintf("Tier: %s", tier_name)
 	rl.DrawText(tier_text, 20, 50, 18, core.with_alpha(palettes.current.light, TEXT_SECONDARY))
-
-	draw_lucidity_bar(lucidity, palettes)
-}
-
-// Lucidity as a tank, not a tally (roadmap T5.6). It has to say three
-// things at a glance, and a number said none of them: how much is left,
-// whether there is enough to enter the Limen at all, and that it is
-// draining *right now* while suspended.
-//
-// The threshold is drawn as a notch in the bar rather than explained.
-// Below it the fill goes pale instead of accent — the Limen's own
-// washed-out color, which is precisely the state being denied.
-draw_lucidity_bar :: proc(lucidity: game.Lucidity, palettes: core.PaletteSet) {
-	fraction := game.get_lucidity_fraction(lucidity)
-	usable := game.can_suspend(lucidity)
-
-	// The tank itself.
-	rl.DrawRectangle(
-		LUCIDITY_BAR_X,
-		LUCIDITY_BAR_Y,
-		LUCIDITY_BAR_WIDTH,
-		LUCIDITY_BAR_HEIGHT,
-		core.with_alpha(palettes.limen.deep, 0.55),
-	)
-
-	fill_width := i32(f32(LUCIDITY_BAR_WIDTH) * fraction)
-	if fill_width > 0 {
-		fill_color := usable ? palettes.current.accent : core.with_alpha(palettes.limen.light, 0.45)
-
-		// A payout brightens the fill for a moment. Without it the bar
-		// creeps up in silence and the player cannot tell what earned it
-		// — which is exactly how it read in playtest.
-		flash := game.get_lucidity_flash(lucidity)
-		fill_color = core.lerp_color(fill_color, palettes.limen.light, flash * 0.8)
-
-		rl.DrawRectangle(
-			LUCIDITY_BAR_X,
-			LUCIDITY_BAR_Y,
-			fill_width,
-			LUCIDITY_BAR_HEIGHT,
-			fill_color,
-		)
-
-		// ...and throws a halo off the bar, which is the part visible out
-		// of the corner of an eye that is watching the character.
-		if flash > 0 {
-			glow := i32(6 * flash)
-			rl.DrawRectangleLines(
-				LUCIDITY_BAR_X - glow,
-				LUCIDITY_BAR_Y - glow,
-				LUCIDITY_BAR_WIDTH + glow * 2,
-				LUCIDITY_BAR_HEIGHT + glow * 2,
-				core.with_alpha(palettes.current.accent, flash),
-			)
-		}
-	}
-
-	// The notch: the point past which the Limen will open.
-	threshold: f32 = f32(game.LUCIDITY_SUSPEND_MINIMUM) / f32(game.LUCIDITY_MAX)
-	notch_x := LUCIDITY_BAR_X + i32(f32(LUCIDITY_BAR_WIDTH) * threshold)
-	rl.DrawRectangle(
-		notch_x,
-		LUCIDITY_BAR_Y - 2,
-		2,
-		LUCIDITY_BAR_HEIGHT + 4,
-		core.with_alpha(palettes.current.light, usable ? TEXT_SECONDARY : TEXT_PRIMARY),
-	)
-
-	rl.DrawRectangleLines(
-		LUCIDITY_BAR_X,
-		LUCIDITY_BAR_Y,
-		LUCIDITY_BAR_WIDTH,
-		LUCIDITY_BAR_HEIGHT,
-		core.with_alpha(palettes.current.light, TEXT_MUTED),
-	)
-
-	// The multiplier the tank is currently paying, to the right of it:
-	// the same number seen as a reward rather than as fuel.
-	multiplier_text := fmt.ctprintf("x%.2f", game.get_score_multiplier(lucidity))
-	rl.DrawText(
-		multiplier_text,
-		LUCIDITY_BAR_X + LUCIDITY_BAR_WIDTH + 12,
-		LUCIDITY_BAR_Y - 2,
-		18,
-		usable ? palettes.current.accent : core.with_alpha(palettes.current.light, TEXT_SECONDARY),
-	)
 }
 
 // Pushes the frozen gameplay frame back behind an overlay. Uses the
-// Limen's deep background rather than plain black: dimming toward the
+// neutral palette's deep background rather than plain black: dimming toward the
 // threshold keeps the pause inside the game's own palette instead of
 // dropping a grey sheet over it.
 draw_overlay_scrim :: proc(palettes: core.PaletteSet) {
@@ -159,7 +68,7 @@ draw_overlay_scrim :: proc(palettes: core.PaletteSet) {
 		0,
 		core.SCREEN_WIDTH,
 		core.SCREEN_HEIGHT,
-		core.with_alpha(palettes.limen.deep, OVERLAY_SCRIM_ALPHA),
+		core.with_alpha(palettes.neutral.deep, OVERLAY_SCRIM_ALPHA),
 	)
 }
 
