@@ -58,14 +58,20 @@ non muoversi era la risposta giusta quasi sempre.
 
 ## Stato attuale
 
-**Fatte R1, R2 e R3, playtest compresi.** Il gioco adesso *è* quello del documento nel suo
-cuore: due corsie, un gesto, il cubo che blocca invece di uccidere, la Corruzione che avanza da
-sinistra mangiando il terreno che perdi, e un corridoio che ondeggia e si strozza. Mancano la
-Sentinella e le varianti del cubo (R4), il pool vero (R5) e l'economia (R6).
+**Fatte R1, R2 e R3, playtest compresi; la R4 è costruita e aspetta il suo.** Il gioco adesso
+*è* quello del documento nel suo cuore: due corsie, un gesto, il cubo che blocca invece di
+uccidere in sei forme, la Corruzione che avanza da sinistra mangiando il terreno che perdi, un
+corridoio che ondeggia e si strozza, e la Sentinella — quindi tutti e tre i pericoli e tutti e
+tre i verbi sono a schermo. Mancano il pool vero (R5) e l'economia (R6).
 
-**Prossima**: il playtest della R4 (R4.6), poi la R5. Il punto 3 delle note del playtest R2.6 —
-il contatto col cubo — è arrivato a scadenza: adesso il cubo ha le sue varianti e la Sentinella
-esiste, quindi è il momento di guardarlo.
+**Il 4 settembre 2026 la direzione artistica è cambiata da capo**: via lo stile Ori, dentro
+**La Linea** di Cavandoli. La fase che la porta a schermo è la **RL**, e va fatta prima della
+R5 perché cambia cos'*è* un pattern.
+
+**Prossima**: il playtest della R4 (R4.6), poi la RL. Il playtest della R4 va fatto **adesso e
+sulle meccaniche** — se i tre pericoli fanno domande diverse — e non sull'aspetto, che sta per
+essere buttato: come si legge la coppia a specchio si rigiudica dopo la RL. Il punto 3 delle
+note del playtest R2.6 — il contatto col cubo — è arrivato a scadenza insieme al resto.
 
 **Cosa sopravvive intatto e non va toccato**: tutto `platform/` (finestra, display,
 salvataggio, cifratura, percorsi); `fx/bloom`; `render/stroke` e `render/glow`; i menu e le
@@ -403,6 +409,115 @@ visto** (arnese usa-e-getta sulla simulazione vera, poi cancellato):
 
 ---
 
+### Fase RL — La Linea
+
+**Obiettivo**: dare un'anima al gioco. La grafica diventa **La Linea** di Osvaldo Cavandoli
+(`docs/inspiration/La_Linea.png`): un fondo pieno e un unico tratto continuo che *è* il mondo,
+da cui il personaggio si solleva e in cui gli ostacoli rientrano. **La simulazione non cambia di
+una riga**: è una fase che tocca solo `render/`, `fx/` e la palette.
+
+**Perché adesso e non nella R7.** Perché la R5.2 autora venti-venticinque pattern, e con questa
+grammatica un pattern non è più "una lista di oggetti sopra un fondale": è **una forma della
+linea**. Autorare il pool prima vorrebbe dire autorarlo contro una grammatica che stiamo per
+buttare.
+
+**Perché il codice è già pronto per riceverla.** `render/stroke.odin` — nucleo luminoso, alone
+additivo, giunti saldati, terminali tondi — è esattamente il pennello che serve: è stato scritto
+per lo sketch 3 e si scopre che era il file giusto per il progetto sbagliato. Il tracciato è già
+due numeri a fotogrammi chiave e `render/terrain.odin` già disegna il pavimento **come una
+polilinea**: non si cambia modello, si toglie il riempimento. E il bloom LDR, che oggi è tarato
+contro uno schermo pieno di masse scure che sfiorano le soglie, ha finalmente il suo caso
+ideale: un tratto sottile e brillante su un fondo scuro.
+
+#### La grammatica nuova
+
+La vecchia regola di leggibilità era *"la scenografia è linea, il pericolo è massa"*, ed è la
+regola che protegge il pilastro 2: se tutto diventa linea, sparisce e va sostituita **prima** di
+scrivere codice. La sostituta era già scritta in `render/obstacle.odin` senza saperlo — *un cubo
+è l'unica cosa nel mondo con angoli retti, e la scenografia è tutta curve*. È una regola
+**geometrica, non di riempimento**, quindi sopravvive intatta:
+
+> **Il mondo curva, il pericolo fa angolo.**
+
+E i tre pericoli diventano le tre cose che una linea sa fare, il che è più leggibile di adesso,
+non meno:
+
+| | cosa fa la linea |
+|---|---|
+| **Cubo** | si alza di scatto e ritorna — un gradino con due angoli retti, tutt'uno col pavimento |
+| **Buco** | **si interrompe**: è l'unica discontinuità del gioco |
+| **Sentinella** | **attraversa** il corridoio da parte a parte |
+| **Corruzione** | dietro di te **si sfilaccia in particelle** |
+
+L'ultima riga è un guadagno secco. Oggi la Corruzione è un post-process che uccide il colore del
+frame, con tutta la complessità documentata in `CLAUDE.md` ("il colore ha due sistemi e non
+devono scontrarsi"). Come linea che si deframmenta quella complessità **sparisce**: non è più un
+livello applicato allo schermo, è un posto dove la linea ha smesso di esserci.
+
+#### Le decisioni prese, e che vincolano i task
+
+1. **Cambia il fondo, non il tratto.** I due mondi si distinguono per il colore *dietro*; la
+   linea resta sempre lo stesso segno, così legge come "il mondo" e non come "una cosa che
+   cambia". Il flip diventa un evento a tutto schermo, che è quello che il gesto centrale del
+   gioco merita.
+2. **La sfumatura è lenta, e più lenta del flip.** Il flip dura 0.16 s e in un burst se ne fanno
+   tre di fila: un fondo che segue `world_t` alla lettera è uno stroboscopio. Il fondo insegue
+   con un ritardo suo (ordine di 0.5–0.8 s), quindi durante una raffica resta a metà strada
+   invece di sbattere avanti e indietro.
+3. **Il fondo non deve dare fastidio.** Sta sotto la linea in tutto: valore, contrasto,
+   dettaglio. Nessun elemento del fondo compete con il tratto per l'attenzione, e la
+   vignettatura serve a spingere l'occhio verso il centro dove si gioca.
+4. **Il glow della linea cresce verso l'Onirico.** È il secondo canale che dice dove stai
+   andando, e regge il pilastro 6 insieme alla posizione: mai il colore da solo.
+5. **Il mondo si disegna a destra mentre si sfilaccia a sinistra.** Due fronti speculari: uno
+   mangia, uno fa. È la gag centrale del cartone e diventa la struttura dello schermo.
+6. **Il fronte di disegno non è una manopola di difficoltà.** Sta al bordo destro o quasi. Il
+   giocatore vede oggi 1080 px avanti, cioè circa 4 s: spostare il fronte a sinistra ruberebbe
+   preavviso, e il pilastro 3 dice che ogni pericolo ha una fase di arrivo visibile.
+
+| Task | Descrizione | Modello |
+|---|---|---|
+| RL.1 | **Il fondo diventa il mondo**: due fondi con vignettatura, uno per mondo, e una miscela che *insegue* `world_t` con il suo ritardo invece di seguirlo. Presentazione pura: il valore ritardato vive in `main` accanto a `display_time` e non tocca mai la simulazione | **Opus** |
+| RL.2 | **Il tratto è il mondo**: `render/terrain.odin` ridisegna le due corsie come polilinee continue senza riempimento, e gli ostacoli entrano **dentro** la stessa polilinea invece di essere disegnati sopra. `render/obstacle.odin` si svuota | **Opus** |
+| RL.3 | **Il personaggio è una continuazione della linea**: contorno aperto al posto della sagoma piena, con il tratto più pesante e il nucleo più bianco del mondo attorno. Il sistema di pose resta intero — cambia solo l'ultimo passaggio | **Opus** |
+| RL.4 | **Il glow cresce verso l'Onirico**, e la corsia dormiente si assottiglia. Qui si decide anche se le due linee stanno bene entrambe piene: La Linea ne ha una, noi ne abbiamo due, e due tratti paralleli identici leggono come un tubo invece che come un orizzonte | Sonnet |
+| RL.5 | **Il mondo si disegna a destra**: un fronte di disegno speculare a quello della Corruzione, con il pennino che lo marca. Una volta fatta la RL.2 è **un ritaglio, non un'animazione per ostacolo** — ed è il motivo per cui le due idee stanno nella stessa fase | **Opus** |
+| RL.6 | **La Corruzione diventa un segno**: `fx/particles.odin` anticipato dalla R7, pool fisso pre-allocato, e la linea che si sfilaccia dietro. Poi si decide la sorte di `fx/corruption.odin`: la mia proposta è provare prima con le sole particelle e tenere lo shader spento ma non cancellato, perché la scelta di andare a nero è venuta da un playtest e va disfatta con un altro playtest, non a tavolino | **Opus** |
+| RL.7 | **Le curve**: adottare `core:math/ease` della libreria standard (tutto il set Penner) e cancellare `core/ease.odin`. `ease.ease` è una funzione pura e può stare ovunque; il tween `flux` alloca e va a orologio, quindi **solo presentazione** o salta il determinismo — replay e validazione del punteggio | Sonnet |
+| RL.8 | **Parallasse**: linee più sottili, più fioche e più lente dietro. Anticipata dalla R7, e con questa direzione costa un decimo | Sonnet |
+| RL.9 ⚑ | Playtest: il mondo si legge in due secondi, il fondo non dà fastidio, il flip si sente come un evento, e il personaggio a 45 px si vede | — |
+
+#### I rischi che segnalo adesso
+
+- **Il personaggio a 45 px fatto di tratto sottile.** Nel cartone lui riempie il fotogramma; da
+  noi è un ottavo dell'altezza dello schermo. È l'unico punto in cui il lavoro si *complica*
+  invece di semplificarsi, perché la sagoma piena era una stampella di leggibilità e la
+  togliamo. Mitigazioni nella RL.3, ma se non basta la correzione è ingrandire il personaggio,
+  ed è una decisione di design.
+- **Il gradino può leggersi come terreno.** Un cubo che diventa una gobba nella linea rischia di
+  leggersi come "il suolo si alza" (innocuo) invece che come "cosa che costa". È esattamente ciò
+  a cui risponde *il mondo curva, il pericolo fa angolo*, e va verificato leggendo i pixel, non
+  a occhio.
+- **Il banding nei gradienti** (nota 2 del playtest R2.6) smette di essere un difetto minore: un
+  fondo pieno con vignettatura è tutta la superficie dello schermo. Va risolto in questa fase e
+  non rimandato.
+- **Legale, una riga sola**: il personaggio di Cavandoli è protetto. "Uno che lo ricorda" fatto
+  del nostro tratto va bene; copiarne il profilo no.
+
+#### Cosa consuma della R7
+
+Particelle (intera), Scenografia (intera), e la parte della UI che riguarda lo stile. Alla R7
+restano audio, game feel, il font vero e il Referto Onirico.
+
+#### Cosa va aggiornato in `docs/`
+
+La sezione 10 del documento di design (*Identità visiva*) e i riferimenti a `docs/sketch/`
+descrivono una direzione che non è più quella. Il documento è tuo: dimmi se lo riscrivo io o se
+preferisci farlo, ma va fatto **prima** della R5, per la stessa ragione per cui va fatta prima
+la RL.
+
+---
+
 ### Fase R5 — I pattern e la difficoltà
 
 **Obiettivo**: riempire il gioco. Un pool nuovo, e una curva di difficoltà che **non usa la
@@ -438,9 +553,8 @@ tasto.
 Quello che rende il gioco finito, in ordine di impatto. Da spacchettare in task quando ci si
 arriva: farlo adesso sarebbe pianificare contro un gioco che non abbiamo ancora giocato.
 
-- **Particelle** — `fx/particles.odin`, pool fisso pre-allocato, emitter parametrico. Preset
-  Reale (polvere lineare) e Onirico (fluttuanti a spirale). Il blocco e la raccolta di un
-  frammento sono i due momenti che le chiedono di più.
+**La RL le ha portato via due voci**: le particelle (`fx/particles.odin` nasce lì, per la
+Corruzione che si sfilaccia) e la scenografia in parallasse. Quello che resta:
 - **Game feel** — screen shake, squash & stretch, camera che reagisce, e la taratura finale di
   tutti i numeri.
 - **Audio** — due tracce sincronizzate con crossfade sul flip (mai un cambio di brano); la
@@ -448,28 +562,35 @@ arriva: farlo adesso sarebbe pianificare contro un gioco che non abbiamo ancora 
   impatto.
 - **UI** — un font vero al posto del bitmap di raylib, e il **Referto Onirico**: profondità,
   record, frammenti, cosa hai comprato, e **di cosa sei morto**.
-- **Scenografia** — il primo strato disegnato col tratto al neon, in parallasse. *La
-  scenografia è linea, il pericolo è massa.*
+- **Scenografia** — quello che va *oltre* la parallasse della RL, se dopo il playtest si
+  scopre che serve.
 
 ---
 
 ## La direzione artistica
 
-Vincolante, non indicativa. `docs/sketch/sketch_3` **governa tutto**, gioco e schermate
-(scelto il 3 settembre 2026), e `spirito_foresta` il personaggio. `sketch_1` e `sketch_2` sono
-cave da cui prendere, non riferimenti. Tutto è raggiungibile con primitive più palette più
-bloom: il progetto non ha asset grafici esterni e non ne avrà.
+**Cambiata da capo il 4 settembre 2026: è La Linea** (`docs/inspiration/La_Linea.png`). Un fondo
+pieno, un unico tratto continuo che è il mondo, il personaggio che si solleva dal tratto e ci
+rientra. Vincolante, non indicativa. La fase che la porta a schermo è la **RL**, dove stanno
+la grammatica nuova e le decisioni prese.
 
-L'unico modo in cui questo stile può fallire è che sia **uniforme** — tutto morbido, tutto
-dello stesso peso di linea. La regola che lo tiene leggibile:
+Resta vero che tutto è raggiungibile con primitive più palette più bloom: il progetto non ha
+asset grafici esterni e non ne avrà. Anzi, adesso ne ha bisogno di meno.
 
-- **la scenografia è linea** — contorni luminosi vuoti, sullo sfondo;
-- **il pericolo è massa** — sagome scure piene con un bordo illuminato;
-- **i Frammenti sono luce piena** — né l'una né l'altra: sono la sola cosa che si vuole toccare.
+### La direzione precedente — superata, ma non tutta
 
-E l'incastro che tiene insieme grafica e meccanica: **la Corruzione è ciò che trasforma il
-mondo da linea a massa.** Scenografia corrotta piena e scura, scenografia sana contorno
-luminoso — così la regola visiva e la regola di gioco sono la stessa regola.
+`docs/sketch/sketch_3` ha governato dal 3 settembre al 4 settembre 2026 e non governa più.
+Quello che se ne porta via ha il suo valore e va tenuto:
+
+- **La regola che lo teneva leggibile era geometrica, non di riempimento.** *La scenografia è
+  linea, il pericolo è massa* diventa *il mondo curva, il pericolo fa angolo* — stessa regola,
+  senza il riempimento (vedi RL).
+- **`render/stroke.odin` è nato per lo sketch 3** e con La Linea diventa tutto il renderer
+  invece di un dettaglio. È il pezzo di lavoro che il cambio di direzione promuove invece di
+  buttare.
+- **L'aritmetica del bloom qui sotto resta vera**, anche se i colori cambieranno: un valore di
+  fondo deve stare sotto la soglia *più bassa che può incontrare*, non sotto la propria. È la
+  cosa da rileggere prima di scegliere i due fondi nuovi.
 
 ### La palette ✅ (4 settembre 2026)
 

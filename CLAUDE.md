@@ -3,9 +3,14 @@
 Operational rules for developing this project.
 
 - **What and why** → `docs/design_doc.md` (**v2.0**)
-- **What it looks like** → `docs/sketch/` — binding art direction, summarised in `ROADMAP.md`
-  under "La direzione artistica". `docs/` is deliberately **not tracked by git**: it is the
-  author's working material and lives only on their disk.
+- **What it looks like** → **`docs/inspiration/La_Linea.png`**. The art direction changed
+  wholesale on 4 September 2026: out goes the Ori-like silhouette-and-light of
+  `docs/sketch/sketch_3`, in comes **La Linea** — a filled background, one continuous stroke
+  that *is* the world, a character who rises out of that stroke and returns to it. It is
+  binding, it is summarised in `ROADMAP.md` under "La direzione artistica", and the phase that
+  puts it on screen is **RL**, which also carries the decisions taken. Section 10 of the design
+  doc still describes the old direction and is stale. `docs/` is deliberately **not tracked by
+  git**: it is the author's working material and lives only on their disk.
 - **How, in what order, with which model** → `ROADMAP.md` (Italian; the user's working file)
 - **How we work** → this file
 
@@ -64,6 +69,28 @@ order before touching anything:
    Everything is reachable with primitives plus palette plus bloom — the project has no
    external art assets and is not getting any.
 3. The rest of this file — architecture rules and conventions.
+
+**The art direction is La Linea, and what that changes.** The simulation does not change at
+all — RL touches `render/`, `fx/` and the palette and nothing else. What changes is the
+grammar, and one rule has to be replaced before any of it is written. The old readability rule
+was *scenery is line, danger is mass*; if everything is line, it is gone. Its replacement was
+already written in `render/obstacle.odin` without anyone noticing — *a cube is the one thing in
+the world with right angles, and the scenery is all curves* — because that rule is
+**geometric, not about fill**, so it survives the change intact:
+
+> **The world curves, the danger corners.**
+
+The three dangers become three things a line can do: the cube is a step with two right angles
+*in* the surface, the gap is the line **stopping** (the only discontinuity in the game), the
+Sentinel **crosses** the corridor. The Corruption stops being a filter on the frame and becomes
+a mark — the line fraying into particles behind you — which deletes the whole "colour has two
+systems" complication below rather than working around it. Four decisions are already taken and
+bind the phase: **the background changes, never the stroke**; the blend **lags** `world_t` by
+half a second or so, because a flip is 0.16 s and three in a row would strobe; the background
+never competes with the line for attention; and the line's **glow grows toward Dream**, which is
+the second channel that says where you are going (pillar 6). The world also **draws itself on
+the right** as the Corruption eats it on the left — two mirrored fronts — and the draw front may
+never move far enough left to steal warning time (pillar 3).
 
 **Where the project stands.** The design was rewritten on 4 September 2026 (v1.3 → v2.0), and
 **R1 through R4 are built** (R4 awaits its playtest): two lanes, one gesture, a cube that
