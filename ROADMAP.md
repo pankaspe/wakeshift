@@ -63,8 +63,9 @@ cuore: due corsie, un gesto, il cubo che blocca invece di uccidere, la Corruzion
 sinistra mangiando il terreno che perdi, e un corridoio che ondeggia e si strozza. Mancano la
 Sentinella e le varianti del cubo (R4), il pool vero (R5) e l'economia (R6).
 
-**Prossima**: R4. E lì va ripreso anche il punto 3 delle note del playtest R2.6 — il contatto
-col cubo — perché è il momento in cui il cubo smette di essere una forma sola.
+**Prossima**: il playtest della R4 (R4.6), poi la R5. Il punto 3 delle note del playtest R2.6 —
+il contatto col cubo — è arrivato a scadenza: adesso il cubo ha le sue varianti e la Sentinella
+esiste, quindi è il momento di guardarlo.
 
 **Cosa sopravvive intatto e non va toccato**: tutto `platform/` (finestra, display,
 salvataggio, cifratura, percorsi); `fx/bloom`; `render/stroke` e `render/glow`; i menu e le
@@ -329,19 +330,76 @@ non una svista.
 
 ---
 
-### Fase R4 — I tre pericoli
+### Fase R4 — I tre pericoli — **costruita, in attesa del playtest**
 
 **Obiettivo**: tutta la varietà da tre elementi e tre verbi. *Il cubo costa, il buco uccide, la
 Sentinella vieta di muoversi.*
 
-| Task | Descrizione | Modello |
-|---|---|---|
-| R4.1 | Le varianti del cubo: singolo di lato n, pila, piramide, **cubo a specchio** (su entrambe le corsie — legale, perché non uccide) | Sonnet |
-| R4.2 | Il cubo fluttuante dell'Onirico: sale e scende, a volte blocca e a volte ci passi sotto. L'unico ostacolo di tempismo del set | **Opus** |
-| R4.3 | Il **buco**, largo, con bordi netti e pozzo scuro sul pavimento e bordi sfumati con bagliore sul soffitto | Sonnet |
-| R4.4 | La **Sentinella**: raggio nella fascia centrale del corridoio, letale per chi attraversa e innocuo per chi sta fermo su una corsia | **Opus** |
-| R4.5 | La validazione automatica della regola di equità: nessun istante con entrambe le corsie letali, nessuna Sentinella sopra un buco | **Opus** |
-| R4.6 ⚑ | Playtest: i tre elementi si combinano in domande diverse, e il cubo a specchio si legge come una scelta e non come un bug | — |
+| Task | Descrizione | Modello | |
+|---|---|---|---|
+| R4.1 | Le varianti del cubo: singolo di lato n, pila, piramide, **cubo a specchio** (su entrambe le corsie — legale, perché non uccide) | Sonnet | ✅ |
+| R4.2 | Il cubo fluttuante dell'Onirico: sale e scende, a volte blocca e a volte ci passi sotto. L'unico ostacolo di tempismo del set | **Opus** | ✅ |
+| R4.3 | Il **buco**, largo, con bordi netti e pozzo scuro sul pavimento e bordi sfumati con bagliore sul soffitto | Sonnet | ✅ già fatto in R2/R3 |
+| R4.4 | La **Sentinella**: raggio nella fascia centrale del corridoio, letale per chi attraversa e innocuo per chi sta fermo su una corsia | **Opus** | ✅ |
+| R4.5 | La validazione automatica della regola di equità: nessun istante con entrambe le corsie letali, nessuna Sentinella sopra un buco | **Opus** | ✅ |
+| R4.6 ⚑ | Playtest: i tre elementi si combinano in domande diverse, e il cubo a specchio si legge come una scelta e non come un bug | — | ⚑ tocca a te |
+
+**Cos'è stato costruito.** Il cubo è **una primitiva in sei taglie** (`CubeForm`): standard,
+piccolo, largo, pila, piramide, fluttuante. Meccanicamente conta solo la larghezza — e, sul
+fluttuante, se la scatola è nella fascia del corpo — quindi pila e piramide costano quanto sono
+larghe e l'altezza è retorica. È un pregio: si leggono come *peggio* a colpo d'occhio costando
+uguale. La Sentinella occupa il 42% dello spessore attorno alla spina, cavalca la spina per
+tutta la sua lunghezza, ed è disegnata con la palette **neutra**: non è di nessuno dei due
+mondi. Il buco era già come lo chiede il documento dalla R2, e non l'ho toccato.
+
+**Tre cose che la simulazione rigiocata ha detto e che il ragionamento a tavolino non aveva
+visto** (arnese usa-e-getta sulla simulazione vera, poi cancellato):
+
+1. **Il cubo ti trattiene, non ti trascina.** Chi atterra su una corsia già occupata sta *dietro*
+   alla faccia del cubo di un intero flip, e il vecchio aggancio lo avrebbe strappato indietro in
+   un solo passo — un teletrasporto visibile, e la ragione per cui una coppia a specchio sarebbe
+   stata inescapabile: cancellava esattamente il terreno che il flip aveva guadagnato. Adesso la
+   perdita in un passo è tetto allo scorrimento del mondo. Ne cadono fuori due cose: `velocity_x`
+   non può mai scendere sotto `-scroll_speed`, quindi l'aritmetica della profondità non ha più
+   bisogno di un clamp; e la coppia a specchio **finisce**, perché ogni flip avanza di
+   `flip_clearance` e prima o poi si passa.
+2. **La larghezza di un cubo isolato non costa niente.** Qualunque sia, la risposta è un flip
+   sulla corsia libera. La larghezza diventa un prezzo solo dove una corsia libera non c'è —
+   cioè nella coppia a specchio, e in nessun altro posto. Piccolo e largo stanno nel set per
+   l'occhio, non per la mano, ed è un mestiere legittimo.
+3. **Un cubo dentro il raggio della Sentinella è una trappola, non un prezzo.** Chi è incastrato
+   è fermo *nel mondo*, e nel mondo c'è anche il raggio: quindi il raggio non gli passa mai
+   sopra, e il flip che lo libererebbe è l'unica cosa che il raggio uccide. Resta lì finché la
+   Corruzione arriva, che è l'unica morte che il pilastro 7 vieta. Il validatore adesso lo
+   rifiuta. La combinazione che il documento vuole va costruita al contrario: **il raggio ti
+   tiene sulla corsia che hai scelto e il cubo ti aspetta lì l'istante in cui il divieto cade**,
+   il che lascia esattamente una finestra da un flip.
+
+**Misurato**
+
+| | |
+|---|---|
+| un flip guadagna, contro qualcosa di fermo nel mondo | 28.5 px a 270 px/s, 39.1 a 370 |
+| coppia a specchio standard, martellando il tasto | libero in **0.33 s** e 3 flip a 270; 0.20 s e 2 flip a 370 |
+| ... quanto costa in pista | **4 px** a 270, 6 px a 370 — un contrattempo, non un prezzo |
+| ... e restando fermi | non se ne esce mai: 310 passi bloccati, 1395 px mangiati |
+| corpo dentro la scatola mentre ci si passa | fino a **45 px, l'83%** di un cubo standard, per ~3 fotogrammi |
+| cubo isolato, qualunque forma | 1 flip, 4 px, identico da 27 a 162 px di larghezza |
+| Sentinella | fermi su una corsia qualsiasi: vivi. Attraversando: morti |
+| Sentinella + cubo, uscendo appena il divieto cade | lo si schiva del tutto, 0 px |
+| ... uscendo 0.25 s tardi | 6 passi incastrato, **27 px** — contro i 150 di pista minima |
+| perdita massima in un singolo passo | 6.1667 px contro uno scorrimento di 6.1667 → **mai di più** |
+| 180 s di generatore vero | 107 ostacoli, tutte e sei le forme presenti, picco 19 fotogrammi su 64 |
+| rilettura dei pixel, un fotogramma con tutto dentro | tutte e sette le forme disegnano; la piramide copre il 67% del suo rettangolo, che è (1+2+3)/9 |
+
+**Le due cose da giudicare al playtest, che io non posso giudicare**
+
+- **La coppia a specchio costa quasi niente** (4 px). Martellando si è a mezz'aria dieci passi su
+  undici, e a mezz'aria niente su una corsia ti tocca. Se deve costare di più la manopola è
+  `PLAYER_RECOVERY_RATIO`, ed è taratura da R5.3, non un bug.
+- **Mentre ci si passa attraverso, il corpo è dentro la scatola.** È il prezzo inevitabile della
+  regola qui sopra: per uscirne bisogna finire oltre, e l'unica strada è attraverso. Se si legge
+  come *incastrato* va bene; se si legge come *fantasma*, la correzione è di design e la decidi tu.
 
 ---
 

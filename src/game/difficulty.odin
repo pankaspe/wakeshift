@@ -81,6 +81,17 @@ tiers := []Tier {
 			// the ground can move once it already knows the controls.
 			pattern_narrows,
 			pattern_swell,
+
+			// The three new questions (roadmap R4). They are held back
+			// from the opening tier for the same reason the track is: a
+			// run should learn that a cube costs ground before it meets
+			// the pair that cannot be dodged, and should have flipped a
+			// few dozen times before something tells it not to.
+			pattern_pyramid,
+			pattern_bump_and_wall,
+			pattern_mirror,
+			pattern_float_open,
+			pattern_sentinel,
 		},
 	},
 	// The air is nearly gone and the draw is inverted: a breather is now
@@ -91,7 +102,16 @@ tiers := []Tier {
 		scroll_speed = 370,
 		gap = 0.2,
 		demand_weights = {1, 2, 4, 5},
-		added_patterns = []Pattern{pattern_gap_pair, pattern_burst},
+		added_patterns = []Pattern {
+			pattern_gap_pair,
+			pattern_burst,
+
+			// The two that combine the dangers rather than presenting
+			// them: a bob you have to read, and the beam that turns a
+			// block into the better of two outcomes.
+			pattern_float_pair,
+			pattern_sentinel_cube,
+		},
 	},
 }
 

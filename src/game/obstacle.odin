@@ -8,18 +8,31 @@
 * speed is something the *player* buys mid-run (Design Doc, sections 4
 * and 8).
 *
-* Two types here, and the design has a third coming (the Sentinel, R4.4).
-* They split on the design doc's own axis (section 6):
+* Three types, three verbs (Design Doc, section 6):
 *
-*   the Cube   something that is *there*. In R1 it still kills on
-*              contact; from R2.3 it stops killing and starts costing
-*              ground, which is the whole point of the rewrite and the
-*              reason it is the only obstacle allowed on both lanes at
-*              once.
-*   the Gap    the lane failing to be there. It kills only whoever is
-*              still resting on that lane when it passes, so being
-*              mid-flip answers it as completely as being on the other
-*              lane does (see collision.odin).
+*   the Cube      something that is *there*. It does not kill, it
+*                 **blocks**: you are stopped against its face and you
+*                 lose ground for as long as you stay. It is the only
+*                 thing in the game allowed on both lanes at once,
+*                 precisely because it is not lethal.
+*   the Gap       the lane failing to be there. It kills only whoever is
+*                 still resting on that lane when it passes, so being
+*                 mid-flip answers it as completely as being on the other
+*                 lane does (see collision.odin).
+*   the Sentinel  a beam across the middle of the corridor. It asks what
+*                 you are *doing* rather than where you are: standing on
+*                 either lane is safe, crossing is death.
+*
+* THE CUBE IS ONE PRIMITIVE AT SIX SIZES
+*
+* Everything the design asks of the obstacle set is a box on a lane at a
+* different size or a different height, and CubeForm is the whole
+* vocabulary. Mechanically only two numbers matter — the width, which is
+* the price, and whether the box is in the body's band at all — so a
+* stack and a pyramid cost exactly what they are wide and their height is
+* rhetoric. That is a feature: they are read at a glance as *worse* while
+* costing the same, which is how the set gets variety without getting
+* rules.
 *
 * Nothing here ever reads the player's position. An obstacle that adapts
 * feels stolen even when it is survivable, and it breaks pillar 3: the
@@ -37,16 +50,52 @@
 package game
 
 import "../core"
+import "core:math"
 import "core:math/rand"
 import rl "vendor:raylib/v55"
 
-// Obstacle reference size in pixels — same footprint as the player.
-OBSTACLE_SIZE :: 54
+// The side of the primitive, in pixels — every cube is some arrangement
+// of boxes this size, and the player is a little smaller than one.
+CUBE_UNIT :: 54
 
 ObstacleType :: enum {
-	Cube, // either lane, full: sticks out into the lane
+	Cube, // either lane: sticks out into it and blocks
 	Gap, // either lane: the surface is simply not there
+	Sentinel, // both lanes at once: crossing is what it forbids
 }
+
+// The cube vocabulary (Design Doc, section 6). Standard is first so that
+// it is the zero value: a pattern event that says nothing about its cube
+// gets the primitive.
+CubeForm :: enum {
+	Standard, // one unit square — the primitive
+	Small, // half a unit: a bump rather than a wall
+	Wide, // two units of width, which is two units of price
+	Stack, // one wide, three tall: costs what it is wide, looks worse
+	Pyramid, // three wide and stepped: says in advance which side to be on
+	Float, // bobs in and out of the body's band — the one timing cube
+}
+
+// How high a floating cube rises above the surface of its lane, and how
+// long a full rise-and-fall takes.
+//
+// The lift is comfortably over the player's own height, so at the top of
+// its travel the box is entirely clear of the body and the character
+// runs under it (over it, hanging from the ceiling — same picture with
+// the mirror applied). Anything under PLAYER_SIZE blocks.
+CUBE_FLOAT_LIFT :: 96
+CUBE_FLOAT_PERIOD :: 1.6
+
+// The beam's width, and how much of the corridor it takes.
+//
+// The width is about 0.7 s at the opening speed: long enough that "hold
+// still" is a commitment rather than a flinch. The band is a *fraction*
+// of the span because the corridor's width changes along the track, and
+// what has to stay true at every span is that a settled body on either
+// lane is clear of it: (1 - band)/2 of the narrowest corridor is 72 px
+// against a 45 px body.
+SENTINEL_WIDTH :: CUBE_UNIT * 3.5
+SENTINEL_BAND :: 0.42
 
 // True for the type that is an *absence* rather than a thing. It is also
 // exactly the set the terrain draws rather than draw_obstacle: only the
@@ -60,29 +109,77 @@ is_gap :: proc(obstacle_type: ObstacleType) -> bool {
 // (pattern.odin): two *lethal* lanes at once is unanswerable, while two
 // blocked lanes is a choice about which price to pay.
 is_lethal :: proc(obstacle_type: ObstacleType) -> bool {
-	return obstacle_type == .Gap
+	return obstacle_type == .Gap || obstacle_type == .Sentinel
+}
+
+// True for a danger that is lethal to *both* lanes at once rather than to
+// the one it stands on. Only the Sentinel is, and it is why the fairness
+// rule has a second sentence: nothing lethal may share its window, on
+// either lane (Design Doc, section 6).
+is_lethal_to_both_lanes :: proc(obstacle_type: ObstacleType) -> bool {
+	return obstacle_type == .Sentinel
+}
+
+// True for the type that costs ground instead of the run.
+blocks_lane :: proc(obstacle_type: ObstacleType) -> bool {
+	return obstacle_type == .Cube
 }
 
 Obstacle :: struct {
-	arrival_time:  f32, // world.elapsed_time at which this obstacle reaches WORLD_ANCHOR_X
-	lane:          core.Lane,
-	size:          rl.Vector2,
+	arrival_time: f32, // world.elapsed_time at which this obstacle reaches WORLD_ANCHOR_X
+	lane:         core.Lane, // meaningless for a Sentinel, which occupies both
+	size:         rl.Vector2,
 	obstacle_type: ObstacleType,
+
+	// Cube only. The form decides the box; the phase decides where in its
+	// bob a floating one is at the moment it reaches the anchor, so a
+	// pattern can author "this one blocks" and "this one you go under"
+	// out of the same obstacle.
+	cube:         CubeForm,
+	float_phase:  f32,
 }
 
 // Gap width variants. Picked randomly at creation — flavour, and the one
 // random choice left in an obstacle, so a pattern still knows exactly
 // what it is asking of the player. GAP_WIDTH_LONG is what
 // validate_pattern_pool checks against, since it is the worst case.
-GAP_WIDTH_SHORT :: OBSTACLE_SIZE * 1.2
-GAP_WIDTH_MEDIUM :: OBSTACLE_SIZE * 1.9
-GAP_WIDTH_LONG :: OBSTACLE_SIZE * 2.6
+GAP_WIDTH_SHORT :: CUBE_UNIT * 1.2
+GAP_WIDTH_MEDIUM :: CUBE_UNIT * 1.9
+GAP_WIDTH_LONG :: CUBE_UNIT * 2.6
 
-// The widest this type can ever turn out to be. Used by the fairness
+// The box a cube form stands in, before its lane decides which way up it
+// is. Width is the price; height is how the shape reads.
+get_cube_size :: proc(form: CubeForm) -> rl.Vector2 {
+	switch form {
+	case .Standard:
+		return rl.Vector2{CUBE_UNIT, CUBE_UNIT}
+	case .Small:
+		return rl.Vector2{CUBE_UNIT * 0.5, CUBE_UNIT * 0.5}
+	case .Wide:
+		return rl.Vector2{CUBE_UNIT * 2, CUBE_UNIT}
+	case .Stack:
+		return rl.Vector2{CUBE_UNIT, CUBE_UNIT * 3}
+	case .Pyramid:
+		return rl.Vector2{CUBE_UNIT * 3, CUBE_UNIT * 3}
+	case .Float:
+		return rl.Vector2{CUBE_UNIT, CUBE_UNIT}
+	}
+	return rl.Vector2{CUBE_UNIT, CUBE_UNIT}
+}
+
+// The widest this event can ever turn out to be. Used by the fairness
 // check, which has to reason about a pattern before its random choices
 // have been made.
-get_max_width :: proc(obstacle_type: ObstacleType) -> f32 {
-	return obstacle_type == .Gap ? GAP_WIDTH_LONG : OBSTACLE_SIZE
+get_max_width :: proc(obstacle_type: ObstacleType, form: CubeForm) -> f32 {
+	switch obstacle_type {
+	case .Gap:
+		return GAP_WIDTH_LONG
+	case .Sentinel:
+		return SENTINEL_WIDTH
+	case .Cube:
+		return get_cube_size(form).x
+	}
+	return CUBE_UNIT
 }
 
 // Creates an obstacle that will reach the world anchor at the given time.
@@ -95,10 +192,15 @@ new_obstacle :: proc(
 	arrival_time: f32,
 	lane: core.Lane,
 	obstacle_type: ObstacleType,
+	form: CubeForm,
+	float_phase: f32,
 	rng: rand.Generator,
 ) -> Obstacle {
-	width: f32 = OBSTACLE_SIZE
-	if obstacle_type == .Gap {
+	size := get_cube_size(form)
+
+	switch obstacle_type {
+	case .Gap:
+		width: f32 = GAP_WIDTH_SHORT
 		roll := rand.float32(rng)
 		switch {
 		case roll < 0.4:
@@ -108,27 +210,61 @@ new_obstacle :: proc(
 		case:
 			width = GAP_WIDTH_LONG
 		}
+		size = rl.Vector2{width, CUBE_UNIT}
+	case .Sentinel:
+		// The height is the corridor's, so it is answered per frame by
+		// get_obstacle_size rather than stored here.
+		size = rl.Vector2{SENTINEL_WIDTH, CUBE_UNIT}
+	case .Cube:
+	// the form already gave us the box
 	}
 
 	return Obstacle {
 		arrival_time = arrival_time,
 		lane = lane,
-		size = rl.Vector2{width, OBSTACLE_SIZE},
+		size = size,
 		obstacle_type = obstacle_type,
+		cube = form,
+		float_phase = float_phase,
 	}
+}
+
+// How far a floating cube currently stands off the surface of its lane.
+// Zero for every other form.
+//
+// A function of the obstacle's **own age**, never of the global clock: at
+// age zero it is at the phase its pattern authored, so the author knows
+// exactly what the player meets at the anchor and the player can learn
+// it. Driven by the world's clock rather than by integrated state, so the
+// display can evaluate it a fraction of a step ahead and get the same
+// answer the simulation would.
+//
+// A player who has *lost* ground meets it earlier in its rise and a
+// player who is running free meets it later — which is the one place in
+// the game where how much room you have changes what an obstacle asks of
+// you, and it is worth having.
+get_cube_lift :: proc(obstacle: Obstacle, world: World) -> f32 {
+	if obstacle.obstacle_type != .Cube || obstacle.cube != .Float {
+		return 0
+	}
+	age := world.elapsed_time - obstacle.arrival_time
+	turns := age / CUBE_FLOAT_PERIOD + obstacle.float_phase
+	return CUBE_FLOAT_LIFT * 0.5 * (1 - math.cos(turns * 2 * math.PI))
 }
 
 // An obstacle's size right now.
 //
-// Nothing animates yet, so this is the stored size — but the world stays
-// in the signature because the floating cube (roadmap R4.2) makes it a
-// function of the obstacle's *own* age again. That rule is worth stating
-// where it will be read: an animation driven by the global clock presents
-// a different face every time the same pattern is generated, so the
-// author cannot say what the player will face and the player cannot
-// learn it.
+// Stored for everything except the Sentinel, whose height is the
+// corridor's: the beam takes a fixed fraction of the span, so it opens
+// and closes with the world instead of being a bar of its own.
 get_obstacle_size :: proc(obstacle: Obstacle, world: World) -> rl.Vector2 {
-	return obstacle.size
+	if obstacle.obstacle_type != .Sentinel {
+		return obstacle.size
+	}
+	time_until_arrival := obstacle.arrival_time - world.elapsed_time
+	x := core.WORLD_ANCHOR_X + time_until_arrival * world.scroll_speed
+	_, span := get_track_at_x(world, x)
+	return rl.Vector2{obstacle.size.x, span * SENTINEL_BAND}
 }
 
 // Computes the obstacle's current on-screen position, derived from how
@@ -136,12 +272,27 @@ get_obstacle_size :: proc(obstacle: Obstacle, world: World) -> rl.Vector2 {
 //
 // The world scrolls; obstacles do not move through it. y comes from the
 // track, so an obstacle sits on the surface of its own lane however the
-// corridor is bending underneath it.
+// corridor is bending underneath it — and a Sentinel rides the spine,
+// which is the only thing it can do and still mean "the middle".
 get_obstacle_position :: proc(obstacle: Obstacle, world: World) -> rl.Vector2 {
 	time_until_arrival := obstacle.arrival_time - world.elapsed_time
 	x := core.WORLD_ANCHOR_X + time_until_arrival * world.scroll_speed
 	size := get_obstacle_size(obstacle, world)
-	return rl.Vector2{x, get_lane_y(world, obstacle.lane, x, size)}
+
+	if obstacle.obstacle_type == .Sentinel {
+		spine, _ := get_track_at_x(world, x)
+		return rl.Vector2{x, spine - size.y * 0.5}
+	}
+
+	y := get_lane_y(world, obstacle.lane, x, size)
+
+	// A lift is measured into the corridor, so it is upward on the floor
+	// and downward from the ceiling. Same number, mirrored, which is what
+	// keeps "it is high and you go under it" true in both worlds.
+	lift := get_cube_lift(obstacle, world)
+	y += obstacle.lane == .Real ? -lift : lift
+
+	return rl.Vector2{x, y}
 }
 
 get_obstacle_rect :: proc(obstacle: Obstacle, world: World) -> rl.Rectangle {

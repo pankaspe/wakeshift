@@ -57,6 +57,7 @@
 package game
 
 import "../core"
+import "core:math"
 import rl "vendor:raylib/v55"
 
 // Player reference size in pixels (Design Doc, section 6: ~40-50px)
@@ -281,6 +282,26 @@ update_player :: proc(
 // the dragging for free — the face is scrolling left, so being pushed
 // behind it every step *is* losing ground at exactly the world's speed,
 // with nobody having to say the word.
+//
+// **A cube holds the character; it never drags them.** That is the last
+// line, and it is what makes the mirrored pair a price rather than an
+// execution (roadmap R4.1). Placing the body at a cube's face is a
+// *forward* clamp when the cube is ahead — but a character who lands on
+// a lane that is already occupied is behind that face by up to a whole
+// flip's worth of ground, and the same clamp would then yank them
+// backwards in a single step. Capping the loss at the world's own scroll
+// says the only thing that is physically true: nothing pushes you back
+// faster than the world moves. Two consequences fall out of it, and both
+// are load-bearing —
+//
+//   * velocity_x can never be below -scroll_speed, so the depth
+//     arithmetic in score.odin (which adds the two) can never go
+//     negative and never has to clamp.
+//   * a pair of cubes facing each other across the corridor terminates.
+//     Pinned, the character holds station in the world; flipping is the
+//     only thing that buys ground, so each flip advances them by
+//     flip_clearance and enough of them work past the box. What they pay
+//     is exactly its width, which is what the design says a cube costs.
 @(private)
 advance_ground :: proc(
 	player: ^Player,
@@ -288,6 +309,8 @@ advance_ground :: proc(
 	obstacles: []Obstacle,
 	delta_time: f32,
 ) {
+	entry_x := player.position.x
+
 	recovery := world.scroll_speed * PLAYER_RECOVERY_RATIO * delta_time
 	player.position.x = min(player.position.x + recovery, core.PLAYER_HOME_X)
 
@@ -299,6 +322,31 @@ advance_ground :: proc(
 		player.is_blocked = true
 		player.position.x = min(player.position.x, get_obstacle_rect(obstacle, world).x - player.size.x)
 	}
+
+	player.position.x = max(player.position.x, entry_x - world.scroll_speed * delta_time)
+}
+
+// How much ground one flip buys against something standing still in the
+// world, in pixels.
+//
+// While the character is settled and blocked they hold station in the
+// world: the recovery is cancelled by the pin. Mid-flip nothing on a lane
+// can reach them, so the recovery runs unopposed, and this is all of it.
+// It is the unit the price of a mirrored pair is counted in.
+flip_clearance :: proc(scroll_speed: f32) -> f32 {
+	return scroll_speed * PLAYER_RECOVERY_RATIO * FLIP_DURATION
+}
+
+// How many flips it takes to work past a cube of the given width when the
+// opposite lane offers no way out. The body has to clear its own length
+// as well as the box, which is why a mirrored pair is never free even of
+// a cube with no width at all.
+mirror_flip_cost :: proc(width: f32, scroll_speed: f32) -> int {
+	clearance := flip_clearance(scroll_speed)
+	if clearance <= 0 {
+		return 0
+	}
+	return int(math.ceil((f32(PLAYER_SIZE) + width) / clearance))
 }
 
 // How much ground the character has left, in pixels: the distance from

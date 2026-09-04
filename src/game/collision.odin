@@ -17,10 +17,18 @@
 *   stopped against its face and dragged backwards with it, losing ground
 *   to the Corruption for as long as they stay there.
 *
-* That split is what makes the two read differently. A cube is a price:
+*   **what forbids.** A Sentinel. It is the only danger that asks what
+*   the character is *doing*: it takes the middle of the corridor, so a
+*   settled body on either lane is clear of it and a crossing one is not.
+*   For its length the flip is what kills you, which means committing to
+*   a lane before it arrives.
+*
+* That split is what makes the three read differently. A cube is a price:
 * be elsewhere when it goes by, or pay. A gap is a stretch not to be
-* standing in, and it is answered by being anywhere else at all. One asks
-* "move now or pay", the other says "do not be down here".
+* standing in, and it is answered by being anywhere else at all. A
+* Sentinel is a stretch not to be *moving* in. One asks "move now or
+* pay", the second says "do not be down here", the third says "do not
+* move".
 *
 * And it is what makes the design's centrepiece legal. Because a cube is
 * not lethal, **both lanes may hold one at the same time** — a mirrored
@@ -47,23 +55,33 @@ horizontally_overlapping :: proc(player: Player, obstacle: Obstacle, world: Worl
 
 // Checks whether an obstacle is currently killing the player.
 //
-// Invulnerability (the first INVULNERABILITY_DURATION of a flip) blocks
-// everything: it exists to forgive the flip started at the last possible
-// instant, and it runs out well before a journey ends.
+// Invulnerability is decided **per type**, not once at the top, and that
+// is the whole reason this is a switch. The grace period exists to
+// forgive the flip started at the last possible instant against a hole —
+// but against a Sentinel the flip *is* the mistake, so a rule that
+// forgave the first tenth of a second of every journey would hand out a
+// free crossing to anyone who left it late, which is exactly the player
+// the Sentinel is aimed at.
 check_player_obstacle_collision :: proc(player: Player, obstacle: Obstacle, world: World) -> bool {
-	if player.is_invulnerable {
-		return false
-	}
 	if !horizontally_overlapping(player, obstacle, world) {
 		return false
 	}
 
 	switch obstacle.obstacle_type {
 	case .Gap:
+		if player.is_invulnerable {
+			return false
+		}
 		// The surface is missing here. Only whoever is still resting on it
 		// falls: mid-flip and on the other lane are both simply *not on
 		// this one*.
 		return player.state != .Transitioning && player.lane == obstacle.lane
+
+	case .Sentinel:
+		// It has no lane, and it does not care which one you came from:
+		// the middle of the corridor is the only place it occupies and
+		// crossing is the only way to be there.
+		return player.state == .Transitioning
 
 	case .Cube:
 		return false // it costs, it does not kill — see blocks_player
@@ -85,7 +103,7 @@ check_player_obstacle_collision :: proc(player: Player, obstacle: Obstacle, worl
 // walk straight through the one obstacle that is supposed to cost
 // something.
 blocks_player :: proc(player: Player, obstacle: Obstacle, world: World) -> bool {
-	if obstacle.obstacle_type != .Cube {
+	if !blocks_lane(obstacle.obstacle_type) {
 		return false
 	}
 	if player.state == .Transitioning || player.lane != obstacle.lane {

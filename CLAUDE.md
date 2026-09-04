@@ -66,10 +66,11 @@ order before touching anything:
 3. The rest of this file — architecture rules and conventions.
 
 **Where the project stands.** The design was rewritten on 4 September 2026 (v1.3 → v2.0), and
-**R1 through R3 are done**: two lanes, one gesture, a cube that *blocks* rather than kills, a
-Corruption front advancing from the left that eats the ground a mistake costs you, and a track
-whose corridor undulates and pinches. The heart of the design is in the code. Still missing: the
-Sentinel and the cube variants (R4), the real pattern pool (R5), fragments and the Gate (R6).
+**R1 through R4 are built** (R4 awaits its playtest): two lanes, one gesture, a cube that
+*blocks* rather than kills in six forms, a Corruption front advancing from the left that eats
+the ground a mistake costs you, a track whose corridor undulates and pinches, and the Sentinel —
+so all three dangers and all three verbs are on screen. Still missing: the real pattern pool
+(R5), fragments and the Gate (R6).
 
 Why it was rewritten, measured rather than guessed: 200 simulated runs that never touched the
 key, **161 survived the whole first tier**, median death at 35 s; **86% of the time** nothing on
@@ -257,7 +258,40 @@ Three things follow, and all three are load-bearing:
 |---|---|---|---|
 | **Cube** | *do not be here, or you pay* | no — it **blocks** | ✅ |
 | **Gap** | *do not be here* | yes | ✅ |
-| **Sentinel** | *do not move right now* | yes | R4.4 |
+| **Sentinel** | *do not move right now* | yes | ✅ |
+
+The cube is **one primitive at six sizes** (`CubeForm`): standard, small, wide, stack, pyramid,
+and the floating one. Mechanically only the width matters — and, on the floating one, whether
+the box is in the body's band at all — so a stack and a pyramid cost exactly what they are wide
+and their height is rhetoric. That is the point: they read as *worse* at a glance while costing
+the same, which is the cheapest variety in the set.
+
+Three rules the implementation established, all found by replaying the simulation:
+
+- **A cube holds the character; it never drags them.** The pin clamps forward progress, and the
+  clamp is floored at one step's worth of scroll (`advance_ground`). Without the floor, a
+  character who lands on a lane that is already occupied is *behind* that face by a whole
+  flip's worth of ground and gets yanked backwards in a single step — which is both a visible
+  teleport and, because it erases exactly what the flip won, what makes a mirrored pair
+  unescapable. Two things fall out of the floor: `velocity_x` can never drop below
+  `-scroll_speed`, so the depth arithmetic in `score.odin` never has to clamp; and the pair
+  terminates, because each flip advances the character by `flip_clearance` and enough of them
+  work past the box.
+- **The width of a lone cube costs nothing.** Whatever it is, the answer is one flip to the free
+  lane. Width becomes a price only where there is no free lane — which is the mirrored pair and
+  nowhere else. Small and Wide are therefore in the set for the eye, not the hand, and that is a
+  legitimate job.
+- **A pin freezes the character *in the world*, so a cube inside a Sentinel's beam is a trap
+  rather than a price.** A pinned body no longer moves relative to anything authored in the
+  world, the beam included — so the beam can never pass them, and the flip that would free them
+  is the one thing it kills. They stand there until the Corruption arrives, which is the one
+  death pillar 7 forbids. `validate_pattern_pool` rejects it: the pinned box is
+  `[face - PLAYER_SIZE, face]`, so the beam has to have cleared that box before the face reaches
+  it, which is exactly the two event windows not overlapping. The combination the design wants
+  is therefore built the other way round — the beam holds you on the lane you chose and the cube
+  is waiting on it the instant the ban lifts, which leaves exactly one journey's worth of
+  window. Measured: leaving on the release dodges it entirely, leaving a quarter second late
+  costs 6 pinned steps and 27 px of runway.
 
 - **A cube blocks, and that is the design's centre of gravity.** Because it is not lethal, the
   game is finally allowed to threaten **both lanes at once** — a mirrored cube pair is legal,
@@ -265,8 +299,17 @@ Three things follow, and all three are load-bearing:
   price do I pay". The v1.x design could never do it: two lethal lanes is an unsolvable pattern.
   What a cube costs is its **width**, because width is how long you stay pinned.
 - **The Sentinel is the only danger that asks what you are *doing* rather than where you are.**
-  It occupies the middle band of the corridor, so standing on either lane is safe and crossing
-  is death. For its duration the flip is forbidden, which means committing to a lane in advance.
+  It occupies `SENTINEL_BAND` of the span, centred on the spine, so standing on either lane is
+  safe and crossing is death. Nothing forbids the press: the flip is simply what it kills, which
+  means committing to a lane in advance. A *fraction* of the span rather than a fixed height,
+  because the corridor's width changes along the track and what has to stay true at every span
+  is that a settled body is clear of it — at the narrowest corridor that leaves 72 px against a
+  45 px body. It has no lane, so it is drawn out of the **neutral** palette: it belongs to
+  neither world, and the one thing it must never look like is a threat to only one of them.
+- **Invulnerability is decided per type, not once at the top of the collision check.** The grace
+  period exists to forgive the flip started at the last possible instant against a hole — but
+  against a Sentinel the flip *is* the mistake, so forgiving the first tenth of a second of
+  every journey would hand a free crossing to exactly the player it is aimed at.
 - **The floor breaks, the ceiling dissolves.** Hard lit edges and a dark pit on one side; edges
   fading out over tens of pixels and a faint glow on the other. Same cut, opposite reading.
 - **The track owns the holes.** `render/` is the only code that knows where its own surface is,
@@ -562,16 +605,18 @@ raise it with the user before writing code.
 
 Tracked here so they are not rediscovered. Each is scheduled in `ROADMAP.md`.
 
-- **The obstacle set is still one cube shape.** Stacks, pyramids, the floating cube and the
-  mirrored pair are R4.1-R4.2, and the mirrored pair in particular has been *legal* since R2.3
-  without anything authoring it.
-- **No pattern uses a mirrored cube pair yet**, even though R2.3 made it legal — it is the
-  design's centrepiece and it is authored in R4.1. Until then the game has the *rule* that lets
-  both lanes be threatened at once and never exercises it.
-- **The pool is a placeholder.** Eleven patterns over two obstacle types, authored only so that
-  R1 could be verified. The real pool is R5.2, after the cube blocks and the Sentinel exists.
-  Measured today: at least one lane is lethal 19.9% of the time, against a Definition of Done
-  that asks for over 40%.
+- **A mirrored pair costs almost nothing in runway.** Measured: three flips, 0.33 s, 4 px given
+  up at the opening speed — a rhythm break rather than a price, because a mashing character is
+  mid-flip ten steps out of eleven and mid-flip nothing on a lane can reach them. Whether that
+  is enough is a tuning question for R5.3 and the knob is `PLAYER_RECOVERY_RATIO`, not a bug.
+- **Working through a mirrored pair draws the body inside a box.** Up to 45 px, which is 83% of
+  a standard cube, for about three frames of the encounter. It is the unavoidable price of the
+  no-backwards rule above: the character has to end up past the box, and the only way through
+  is through. Whether it reads as *wedged* or as *phasing* is the R4.6 playtest's call.
+- **The pool is still a placeholder**, now nineteen patterns over three obstacle types. The real
+  pool is R5.2. The last measurement of the number that condemned v1.3 — how much of the time at
+  least one lane is lethal — was 19.9%, against a Definition of Done that asks for over 40%, and
+  it has not been re-measured since the Sentinel arrived (R5.4 builds the tool that does).
 - Menus, HUD and the options screen take their colours from the palette but still use raylib's
   default bitmap font. Everything drawn from primitives is crisp at native resolution and only
   the text is not (phase R7).
