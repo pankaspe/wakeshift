@@ -36,22 +36,47 @@ import rl "vendor:raylib/v55"
 // and GameOver draw the same frozen scene underneath their own overlay,
 // so without this helper the three calls would repeat identically in
 // every case of the DRAW switch below.
+// Whether the Corruption still drains the finished frame to black behind
+// its front (fx/corruption.odin).
+//
+// Off since RL.6, because the world is a line now and the Corruption is
+// the line ceasing to be there: the terrain is clipped at the front and
+// frays into dust, so behind it there is nothing left to drain — only the
+// field, and a field with no drawing on it is what "the world is not
+// here" looks like on paper.
+//
+// The shader is kept and still compiles, and this is the one line that
+// brings it back. Going to black came out of a playtest (R2.6), so it is
+// undone by another playtest rather than on paper; the roadmap asks for
+// the two to be compared on screen before the file is deleted.
+CORRUPTION_FILTER_ENABLED :: false
+
 draw_gameplay :: proc(
 	world: game.World,
 	obstacles: []game.Obstacle,
 	player: game.Player,
 	corruption: game.Corruption,
 	palettes: core.PaletteSet,
+	particles: fx.Particles,
 ) {
-	render.draw_terrain(world, obstacles, palettes)
+	// The world exists between the two fronts: written by the pen on the
+	// right, eaten by the Corruption on the left. Both are a clip, and
+	// both of them are this one number and DRAW_FRONT_X.
+	front := corruption.front_x
+
+	render.draw_terrain(world, obstacles, palettes, front)
 	for obstacle in obstacles {
-		render.draw_obstacle(obstacle, world, palettes)
+		render.draw_obstacle(obstacle, world, palettes, front)
 	}
+
+	// The dust the world's line throws off as it reaches the front. Drawn
+	// with the world because it *is* the world, a moment later.
+	fx.draw_particles(particles)
+
 	render.draw_player(player, world, palettes)
 
 	// Last, over everything: the front is in front of the world it is
-	// eating. The colour behind it dies in a post-process on the finished
-	// frame (fx/corruption.odin) — this is only the edge.
+	// eating. This is the edge; the fraying is the dust above.
 	render.draw_corruption(corruption, player, palettes)
 }
 
@@ -115,6 +140,12 @@ main :: proc() {
 	// fails to compile.
 	corruption_fx := fx.new_corruption()
 	defer fx.destroy_corruption(corruption_fx)
+
+	// The dust the world's line comes apart into behind the front
+	// (fx/particles.odin, render/corruption.odin). A fixed pool, advanced
+	// from the frame clock like every other piece of presentation state —
+	// it never reaches the simulation, and its randomness is its own.
+	particles := fx.new_particles()
 
 	// One level of noise over the finished frame, between the bloom and
 	// the Corruption (fx/dither.odin). The background is the whole screen
@@ -294,6 +325,8 @@ main :: proc() {
 				case 0:
 					run_seed = rand.uint64()
 					game.reset_run(&player, &world, &score, &obstacles, &generator, &corruption, run_seed)
+				fx.clear_particles(&particles)
+					fx.clear_particles(&particles)
 					accumulator = 0
 					pending_input = core.Input{}
 					core.destroy_run_recorder(&recorder)
@@ -473,6 +506,7 @@ main :: proc() {
 			if input.confirm {
 				run_seed = rand.uint64()
 				game.reset_run(&player, &world, &score, &obstacles, &generator, &corruption, run_seed)
+				fx.clear_particles(&particles)
 				accumulator = 0
 				pending_input = core.Input{}
 				core.destroy_run_recorder(&recorder)
@@ -517,6 +551,19 @@ main :: proc() {
 		background_t = render.chase_background_t(background_t, palettes.world_t, frame_time)
 		render.draw_background(background, palettes, background_t, display_time)
 
+		// The world's line coming apart behind the front. Advanced from
+		// the frame clock, like background_t above and for the same
+		// reason: it is drawn, it is never simulated, and it may not reach
+		// a step.
+		//
+		// Only while actually playing, not for every state that *shows* a
+		// run: a paused frame is a still, and dust drifting across one
+		// would be the only thing on screen that had not stopped.
+		if game_state == .Playing {
+			render.emit_fray(&particles, world, corruption, player, palettes, frame_time)
+			fx.update_particles(&particles, frame_time)
+		}
+
 		switch game_state {
 		case .MainMenu:
 			ui.draw_main_menu(main_menu, high_score, palettes)
@@ -538,17 +585,18 @@ main :: proc() {
 				player,
 				corruption,
 				palettes,
+				particles,
 			)
 			ui.draw_hud(score, palettes)
 
 		case .Paused:
 			// draw the frozen gameplay frame underneath, then the overlay on top
-			draw_gameplay(world, obstacles[:], player, corruption, palettes)
+			draw_gameplay(world, obstacles[:], player, corruption, palettes, particles)
 			ui.draw_hud(score, palettes)
 			ui.draw_pause_overlay(pause_menu, palettes)
 
 		case .GameOver:
-			draw_gameplay(world, obstacles[:], player, corruption, palettes)
+			draw_gameplay(world, obstacles[:], player, corruption, palettes, particles)
 			ui.draw_game_over(score, high_score, palettes)
 
 		case .Options:
@@ -556,7 +604,7 @@ main :: proc() {
 			// it — the same overlay relationship the pause screen has, so
 			// changing a setting mid-run does not look like leaving it.
 			if options_return == .Paused {
-				draw_gameplay(world, obstacles[:], player, corruption, palettes)
+				draw_gameplay(world, obstacles[:], player, corruption, palettes, particles)
 			}
 			ui.draw_options_screen(options_screen, palettes)
 		}
@@ -574,11 +622,11 @@ main :: proc() {
 		// stays a black with nothing scattered in it (fx/dither.odin).
 		fx.apply_dither(dither, disp.render_target)
 
-		// After the bloom, so a lit edge's halo greys along with the edge
-		// that threw it. The front is given as a fraction of the frame,
-		// which is what keeps fx from needing to know the canvas is
-		// 1280 wide or that a game is what filled it.
-		if showing_run {
+		// Off since RL.6, and kept rather than deleted — see
+		// CORRUPTION_FILTER_ENABLED. The front is given as a fraction of
+		// the frame, which is what keeps fx from needing to know the canvas
+		// is 1280 wide or that a game is what filled it.
+		if CORRUPTION_FILTER_ENABLED && showing_run {
 			fx.apply_corruption(
 				&corruption_fx,
 				disp.render_target,

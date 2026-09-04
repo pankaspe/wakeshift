@@ -26,13 +26,19 @@
 * Both marks here are closed strokes with right angles in them, and
 * nothing else on screen has one.
 *
-* Both also **truncate themselves at the draw front** (RL.5). A cube
+* Both also **truncate themselves at both fronts** — written by the pen on
+* the right (RL.5), eaten by the Corruption on the left (RL.6). A cube
 * welded into the terrain gets that for free, because the terrain's spans
-* are cut there; these two are drawn on their own, so each builds its
-* outline only as far as the pen has reached and leaves the loop open
-* there. That is the whole reveal: no per-obstacle animation, no state
-* remembering how far along a shape is — just a shape built to a
-* different right edge every frame (render/draw_front.odin).
+* are cut at both; these two are drawn on their own, so each builds its
+* outline only across the stretch that currently exists and leaves the
+* loop open wherever it was cut. That is the whole reveal and the whole
+* decay: no per-obstacle animation, no state remembering how far along a
+* shape is — just a shape built between two moving edges every frame.
+*
+* Where the loose ends land is the part that is easy to get backwards, so
+* draw_cut_shape owns it: a shape cut on the right is open at the pen and
+* closed at the end it finished, one cut on the left is the mirror, and
+* one cut at both is not a loop at all — it is two marks.
 */
 package render
 
@@ -76,9 +82,14 @@ SENTINEL_GLOW_SPREAD :: 6
 SENTINEL_EDGE_ALPHA :: 0.75
 SENTINEL_AXIS_ALPHA :: 0.85
 
-draw_obstacle :: proc(obstacle: game.Obstacle, world: game.World, palettes: core.PaletteSet) {
+draw_obstacle :: proc(
+	obstacle: game.Obstacle,
+	world: game.World,
+	palettes: core.PaletteSet,
+	front_x: f32,
+) {
 	if obstacle.obstacle_type == .Sentinel {
-		draw_sentinel(obstacle, world, palettes)
+		draw_sentinel(obstacle, world, palettes, front_x)
 		return
 	}
 	// The Gap is the surface failing to exist and every other cube is a
@@ -91,19 +102,67 @@ draw_obstacle :: proc(obstacle: game.Obstacle, world: game.World, palettes: core
 	draw_floating_cube(
 		game.get_obstacle_position(obstacle, world),
 		game.get_obstacle_size(obstacle, world),
+		front_x,
 		is_real ? palettes.real : palettes.dream,
 		is_real ? palettes.real_alive : palettes.dream_alive,
 		glow_gain(palettes.world_t),
 	)
 }
 
-// Where a shape's right edge is right now: its own, or the pen, whichever
-// has been reached. Returns false when the pen has not got to the shape
-// at all, which is a shape that has simply not been drawn yet.
+// The stretch of a shape that exists right now, between the two fronts.
+//
+// `eaten` and `written` say which ends were cut, which is what decides
+// where the outline's loose ends belong. `any` is false for a shape the
+// pen has not reached yet or the Corruption has finished with.
 @(private)
-drawn_extent :: proc(left, width: f32) -> (right: f32, whole: bool, any: bool) {
-	right = min(left + width, DRAW_FRONT_X)
-	return right, right >= left + width - 0.01, right > left + 0.01
+drawn_extent :: proc(
+	left, width, front_x: f32,
+) -> (
+	from, to: f32,
+	eaten, written, any: bool,
+) {
+	from = max(left, front_x)
+	to = min(left + width, DRAW_FRONT_X)
+	return from, to, from > left + 0.01, to < left + width - 0.01, to > from + 0.01
+}
+
+// Draws a shape given its two edges, both left to right, so that the
+// loose ends land wherever it was cut.
+//
+// Cut on the right, the loose ends belong at the pen and the left end is
+// a mark the pen already finished; cut on the left it is the mirror; cut
+// at both there is no way round at all, so the two edges become two
+// separate marks. Uncut, it closes.
+@(private)
+draw_cut_shape :: proc(top, bottom: []rl.Vector2, eaten, written: bool, stroke: Stroke) {
+	mark := stroke
+
+	if eaten && written {
+		mark.closed = false
+		draw_stroke(top, mark)
+		draw_stroke(bottom, mark)
+		return
+	}
+
+	path := make([dynamic]rl.Vector2, 0, len(top) + len(bottom), context.temp_allocator)
+	if written {
+		#reverse for point in top {
+			append(&path, point)
+		}
+		for point in bottom {
+			append(&path, point)
+		}
+	} else {
+		for point in top {
+			append(&path, point)
+		}
+		#reverse for point in bottom {
+			append(&path, point)
+		}
+	}
+
+	mark.closed = !eaten && !written
+	draw_stroke(path[:], mark)
 }
 
 // The one cube that is not standing on anything: an open box of line,
@@ -118,48 +177,30 @@ drawn_extent :: proc(left, width: f32) -> (right: f32, whole: bool, any: bool) {
 @(private)
 draw_floating_cube :: proc(
 	position, size: rl.Vector2,
+	front_x: f32,
 	palette: core.Palette,
 	alive: f32,
 	gain: GlowGain,
 ) {
-	right, whole, any := drawn_extent(position.x, size.x)
+	from, to, eaten, written, any := drawn_extent(position.x, size.x, front_x)
 	if !any {
 		return
 	}
 
 	// The halo is part of the object, so it arrives with it rather than
-	// announcing it: it grows out of the front with the box.
-	center := rl.Vector2{(position.x + right) * 0.5, position.y + size.y * 0.5}
+	// announcing it: it grows out of the front with the box, and goes with
+	// it at the other end.
+	center := rl.Vector2{(from + to) * 0.5, position.y + size.y * 0.5}
 	draw_glow_circle(
 		center,
-		(right - position.x) * FLOAT_GLOW_RADIUS * gain.spread,
+		(to - from) * FLOAT_GLOW_RADIUS * gain.spread,
 		palette.accent,
 		FLOAT_GLOW_STRENGTH * (0.4 + 0.6 * alive) * gain.strength,
 	)
 
-	top := position.y
-	bottom := position.y + size.y
-
-	if whole {
-		box := [4]rl.Vector2 {
-			{position.x, top},
-			{right, top},
-			{right, bottom},
-			{position.x, bottom},
-		}
-		draw_obstacle_outline(box[:], palette, alive, gain, true)
-		return
-	}
-
-	// Half written: the loop stays open at the pen, so the box reads as a
-	// line that has not finished going round yet.
-	partial := [4]rl.Vector2 {
-		{right, top},
-		{position.x, top},
-		{position.x, bottom},
-		{right, bottom},
-	}
-	draw_obstacle_outline(partial[:], palette, alive, gain, false)
+	top := [2]rl.Vector2{{from, position.y}, {to, position.y}}
+	bottom := [2]rl.Vector2{{from, position.y + size.y}, {to, position.y + size.y}}
+	draw_cut_shape(top[:], bottom[:], eaten, written, obstacle_stroke(palette, alive, gain))
 }
 
 // --- The Sentinel ---
@@ -178,35 +219,37 @@ draw_floating_cube :: proc(
 // while it is up, and it is meant to be — it is the line the player must
 // not cross.
 @(private)
-draw_sentinel :: proc(obstacle: game.Obstacle, world: game.World, palettes: core.PaletteSet) {
+draw_sentinel :: proc(
+	obstacle: game.Obstacle,
+	world: game.World,
+	palettes: core.PaletteSet,
+	front_x: f32,
+) {
 	rect := game.get_obstacle_rect(obstacle, world)
 	palette := palettes.neutral
 
-	// The beam is 189 px wide, which is 0.7 s of crossing the pen at the
-	// opening speed. Popping it into existence whole would be the one
-	// place in the picture where something plainly did not get drawn.
-	right, whole, any := drawn_extent(rect.x, rect.width)
+	// The beam is 189 px wide, which is 0.7 s of crossing either front at
+	// the opening speed. Popping it into or out of existence whole would
+	// be the one place in the picture where something plainly did not get
+	// drawn, or did not get eaten.
+	from, to, eaten, written, any := drawn_extent(rect.x, rect.width, front_x)
 	if !any {
 		return
 	}
 
-	// The path runs *away* from the pen and back: the top edge from the
-	// drawn end to the left, round the left end, and the bottom edge back
-	// to the drawn end. Both loose ends are therefore at the pen, so
-	// closing the loop draws the beam's right end and leaving it open
-	// stops exactly where the ink stops. Built the other way round — which
-	// is how it read before RL.5 — a half-written beam would be capped at
-	// the pen and open at the end it had already finished.
-	outline: [(SENTINEL_SAMPLES + 1) * 2]rl.Vector2
+	// Both edges, left to right; draw_cut_shape decides which way round
+	// the path runs and therefore where its loose ends land.
+	top: [SENTINEL_SAMPLES + 1]rl.Vector2
+	bottom: [SENTINEL_SAMPLES + 1]rl.Vector2
 	axis: [SENTINEL_SAMPLES + 1]rl.Vector2
 
 	for i in 0 ..= SENTINEL_SAMPLES {
-		x := right - (right - rect.x) * f32(i) / f32(SENTINEL_SAMPLES)
+		x := from + (to - from) * f32(i) / f32(SENTINEL_SAMPLES)
 		spine, span := game.get_track_at_x(world, x)
 		half := span * game.SENTINEL_BAND * 0.5
 
-		outline[i] = rl.Vector2{x, spine - half}
-		outline[len(outline) - 1 - i] = rl.Vector2{x, spine + half}
+		top[i] = rl.Vector2{x, spine - half}
+		bottom[i] = rl.Vector2{x, spine + half}
 		axis[i] = rl.Vector2{x, spine}
 	}
 
@@ -215,9 +258,8 @@ draw_sentinel :: proc(obstacle: game.Obstacle, world: game.World, palettes: core
 	edge := new_stroke(core.with_alpha(palette.light, SENTINEL_EDGE_ALPHA), core.LIGHT_RIM_THICKNESS)
 	edge.glow = SENTINEL_GLOW_STRENGTH
 	edge.spread = SENTINEL_GLOW_SPREAD
-	edge.closed = whole
 	apply_glow_gain(&edge, gain)
-	draw_stroke(outline[:], edge)
+	draw_cut_shape(top[:], bottom[:], eaten, written, edge)
 
 	// The gain is the scene's, not a lane's, so applying it here does not
 	// give the beam a world: it burns with everything else on screen.
@@ -229,25 +271,17 @@ draw_sentinel :: proc(obstacle: game.Obstacle, world: game.World, palettes: core
 	draw_stroke(axis[:], core_line)
 }
 
-// A closed outline in the world's light: one neon mark welded back to its
-// own first point, so a right angle is a mitre rather than two lines that
-// happen to meet. This is what replaced the filled box plus border every
-// obstacle used to carry.
+// The mark an obstacle is outlined with: one neon line in the world's
+// light, which is what replaced the filled box plus border every obstacle
+// used to carry. Whether it closes is draw_cut_shape's business.
 @(private)
-draw_obstacle_outline :: proc(
-	points: []rl.Vector2,
-	palette: core.Palette,
-	alive: f32,
-	gain: GlowGain,
-	closed: bool,
-) {
+obstacle_stroke :: proc(palette: core.Palette, alive: f32, gain: GlowGain) -> Stroke {
 	alpha := OBSTACLE_EDGE_DORMANT + (OBSTACLE_EDGE_ALIVE - OBSTACLE_EDGE_DORMANT) * alive
 
 	edge := new_stroke(core.with_alpha(palette.light, alpha), TERRAIN_STROKE_THICKNESS)
 	edge.glow = OBSTACLE_GLOW_STRENGTH * (0.4 + 0.6 * alive)
 	edge.spread = OBSTACLE_GLOW_SPREAD
 	edge.core_light = TERRAIN_CORE_LIGHT
-	edge.closed = closed
 	apply_glow_gain(&edge, gain)
-	draw_stroke(points, edge)
+	return edge
 }

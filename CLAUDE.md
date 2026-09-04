@@ -99,11 +99,12 @@ v2.1 for the art direction), and **R1 through R4 are built and playtested**: two
 gesture, a cube that *blocks* rather than kills in six forms, a Corruption front advancing from
 the left that eats the ground a mistake costs you, a track whose corridor undulates and pinches,
 and the Sentinel — so all three dangers and all three verbs are on screen. **Phase RL is in
-progress**: RL.1 through RL.5 are done, so **nothing on screen is filled but the background** — a
+progress**: RL.1 through RL.6 are done, so **nothing on screen is filled but the background** — a
 field whose colour is the world, two unfilled strokes that are the floor and the ceiling with the
 cubes welded into them, a character made of the same mark but heavier and whiter, a dormant lane
-that thins and dims behind the one you are in, and a pen near the right edge that the world is
-being written by. Still missing: the real pattern pool (R5), fragments and the Gate (R6).
+that thins and dims behind the one you are in, and two fronts that are both clips: a pen near the
+right edge writing the world, and the Corruption fraying it into dust on the left. Still missing:
+the real pattern pool (R5), fragments and the Gate (R6).
 
 Why it was rewritten, measured rather than guessed: 200 simulated runs that never touched the
 key, **161 survived the whole first tier**, median death at 35 s; **86% of the time** nothing on
@@ -186,13 +187,17 @@ compositor had maximized into the work area with the panel still on top of it.
 core      ← imports nothing from the project
 platform  ← core
 game      ← core
-render    ← core, game
+fx        ← core          (bloom, dither, particles)
+render    ← core, game, fx
 ui        ← core, game
 main      ← everything
 
-fx        ← core          (bloom, dither; particles join it in phase RL.6)
 audio     ← core, game    (phase R7, not created yet)
 ```
+
+`render` gained its `fx` import in RL.6, when the Corruption became dust rather than a filter.
+The graph stays acyclic because `fx` still imports only `core` — and it must stay that way: what
+lives in `fx` is *what a particle is*, what lives in `render` is *what fraying looks like*.
 
 `game` does not import `platform`: input arrives as a `core.Input` value, so gameplay needs
 nothing from the platform layer at all. Keep it that way — it is what makes the simulation
@@ -505,6 +510,56 @@ gameplay, layout or render code knows what monitor it is on.
   silently mirrors the light away from whatever emitted it.
 - Drawing rate is a setting; the simulation rate is not.
 
+### Two fronts, both of them a clip
+
+The world exists **between two x values and nowhere else**: written by the pen on the right
+(RL.5, `render/draw_front.odin`), eaten by the Corruption on the left (RL.6,
+`render/corruption.odin`). In `draw_terrain_side` that is two lines of arithmetic, and it is the
+whole of both ideas — which is what RL.2 bought by putting the obstacles inside the terrain's own
+polyline. Neither front needs a per-object animation.
+
+- **A shape cut at one end is open there and closed at the end it finished; cut at both, it is
+  not a loop at all but two marks.** `draw_cut_shape` in `render/obstacle.odin` owns that, and it
+  is the part that is easy to get backwards in silence — before RL.5 the Sentinel's outline was
+  built from its left edge rightward, so a half-written beam would have been capped at the pen
+  and open at the end it had already finished.
+- **The Corruption's own lit edge is drawn with primitives and must stay drawn.** It was the
+  shader-independent fallback when there was a shader; with the shader off it is the only thing
+  marking the front, and a lethal front nobody can see is the one thing in this game that would
+  kill without showing the blow coming (pillar 3).
+- **The filter is off, not deleted.** `CORRUPTION_FILTER_ENABLED` in `main.odin` is the one line
+  that brings `fx/corruption.odin` back. It went to black because the world behind the front was
+  still *drawn*; with the line clipped there is nothing left there to drain but the field, and a
+  field with no drawing on it is what "the world is not here" looks like on paper. Going to black
+  came out of a playtest, so it gets undone by another one — RL.9 decides.
+
+### Particles are presentation, and they have their own everything
+
+`fx/particles.odin`, brought forward from R7 by RL.6. A fixed pool of 512, no allocation ever, at
+any frame rate, for any number of emitters; a dead particle's slot is filled by swapping the last
+live one into it, so nothing may depend on the order they are in. An emission that would overflow
+is dropped rather than growing the pool.
+
+- **Its randomness is its own generator**, seeded once — not the global `rand`, and deliberately
+  not the run's, which has to stay reproducible from a seed for replay and score validation to
+  mean anything. Dust that differs between two replays of one run is correct; a run that differs
+  because of dust would be a bug.
+- **The integration is exact, not stepped.** Drag is an exponential, so both the velocity and the
+  distance it covers are closed forms and a particle lands in the same place at 30 fps as at 240.
+  Measured: 0.00002 px apart over half a second. That is not vanity — the pool is advanced from
+  the frame clock, and a per-frame multiply would make the dust thicker on a fast machine.
+- **A stream keeps a fractional debt.** A rate under one particle per frame still emits; an
+  `int(rate * dt)` would round it away every frame forever.
+- **Each particle is one additive circle with no halo of its own.** The frame's bloom is what
+  makes them glow — the same resolution as everywhere else a primitive halo and a real one would
+  do the same job — and it keeps a full pool at 512 draw calls rather than 2 500.
+- **The dust is the lane's colour, not the front's.** It is what the line *was*, coming apart;
+  the front's edge is neutral because the boundary belongs to neither world. Two different
+  statements, and they are meant to look different.
+- **It stops when the game is paused.** Emission and update run only in `.Playing`, not for every
+  state that *shows* a run: a paused frame is a still, and dust drifting across one would be the
+  only thing on screen that had not stopped.
+
 ### The world is written, and that is a clip
 
 `render/draw_front.odin`. The world is not already there and scrolling past: it is drawn at a
@@ -577,9 +632,10 @@ express a boundary, and the axis it briefly carried was deleted along with the g
 
 Three rules the implementation established:
 
-- **It runs after the bloom** (`fx/corruption.odin`, called from `main`). A lit edge's halo is
-  part of the picture and has to be eaten along with the edge that threw it. Bloom itself is
-  untouched by any of this.
+- **It ran after the bloom** (`fx/corruption.odin`), because a lit edge's halo is part of the
+  picture and had to be eaten along with the edge that threw it. RL.6 switched that pass off:
+  with the line clipped at the front there is no halo left behind it to eat. The rule is kept
+  here because the file is kept, and reviving it means reviving the ordering too.
 - **The ramp sits behind the front, not across it.** The boundary's lit edge is drawn in the
   world at exactly `front_x` (`render/corruption.odin`), and a ramp centred on the front would
   eat the one mark that says where the front *is*. So the fade runs from `front - softness` up

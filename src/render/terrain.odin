@@ -549,6 +549,7 @@ draw_terrain_side :: proc(
 	world: game.World,
 	obstacles: []game.Obstacle,
 	palettes: core.PaletteSet,
+	front_x: f32,
 	is_floor: bool,
 ) {
 	lane := is_floor ? core.Lane.Real : core.Lane.Dream
@@ -558,11 +559,16 @@ draw_terrain_side :: proc(
 	if len(outline) < 2 {
 		return
 	}
-	left := outline[0].x
-	// The world stops at the pen, not at the edge of the screen (RL.5).
-	// One line, and it is the whole of "the line writes the world" — see
-	// render/draw_front.odin.
+	// The world exists between the two fronts and nowhere else: written by
+	// the pen on the right (RL.5), eaten by the Corruption on the left
+	// (RL.6). Two lines of arithmetic, and between them they are the whole
+	// of both ideas — which is what RL.2 bought by putting the obstacles
+	// inside this polyline (render/draw_front.odin, render/corruption.odin).
+	left := max(outline[0].x, front_x)
 	right := min(outline[len(outline) - 1].x, DRAW_FRONT_X)
+	if right <= left {
+		return
+	}
 
 	gaps := collect_gap_spans(world, obstacles, lane)
 
@@ -601,7 +607,14 @@ draw_terrain_side :: proc(
 	}
 }
 
-draw_terrain :: proc(world: game.World, obstacles: []game.Obstacle, palettes: core.PaletteSet) {
-	draw_terrain_side(world, obstacles, palettes, true) // floor
-	draw_terrain_side(world, obstacles, palettes, false) // ceiling
+// front_x is the Corruption's boundary: nothing left of it is drawn,
+// because there is nothing there any more.
+draw_terrain :: proc(
+	world: game.World,
+	obstacles: []game.Obstacle,
+	palettes: core.PaletteSet,
+	front_x: f32,
+) {
+	draw_terrain_side(world, obstacles, palettes, front_x, true) // floor
+	draw_terrain_side(world, obstacles, palettes, front_x, false) // ceiling
 }

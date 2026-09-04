@@ -68,11 +68,12 @@ pool vero (R5) e l'economia (R6).
 **La Linea** di Cavandoli. La fase che la porta a schermo è la **RL**, ed è in corso: va prima
 della R5 perché cambia cos'*è* un pattern.
 
-**Prossima**: la RL.6 — la Corruzione diventa un segno. Con la RL.1÷RL.5 fatte **non c'è più
-niente di pieno a schermo tranne il fondo**, la gerarchia dei pesi regge per tre gradini su
-quattro (manca la parallasse, RL.8), e **i due fronti sono a schermo**: a destra il mondo si
-disegna, a sinistra la Corruzione lo mangia — ma il fronte sinistro è ancora un filtro sul frame,
-ed è quello che la RL.6 trasforma in linea che si sfilaccia.
+**Prossima**: la RL.7 — le curve, cioè adottare `core:math/ease` e cancellare `core/ease.odin`.
+Con la RL.1÷RL.6 fatte **non c'è più niente di pieno a schermo tranne il fondo** e i due fronti
+sono entrambi ritagli: a destra la penna scrive, a sinistra la linea si sfilaccia in polvere.
+Restano due task di rifinitura (RL.7 curve, RL.8 parallasse) e poi il playtest della fase, la
+RL.9 — che adesso ha una domanda in più da rispondere: **lo shader della Corruzione va cancellato
+o riacceso** (una riga in `main.odin`).
 
 **Cosa sopravvive intatto e non va toccato**: tutto `platform/` (finestra, display,
 salvataggio, cifratura, percorsi); `fx/bloom`; `render/stroke` e `render/glow`; i menu e le
@@ -441,7 +442,7 @@ livello applicato allo schermo, è un posto dove la linea ha smesso di esserci.
 | RL.3 ✅ | **Il personaggio è una continuazione della linea**: contorno aperto al posto della sagoma piena, con il tratto più pesante e il nucleo più bianco del mondo attorno. Il sistema di pose resta intero — cambia solo l'ultimo passaggio | **Opus** |
 | RL.4 ✅ | **Il glow cresce verso l'Onirico**, e la corsia dormiente si assottiglia. Qui si decide anche se le due linee stanno bene entrambe piene: La Linea ne ha una, noi ne abbiamo due, e due tratti paralleli identici leggono come un tubo invece che come un orizzonte | Sonnet |
 | RL.5 ✅ | **Il mondo si disegna a destra**: un fronte di disegno speculare a quello della Corruzione, con il pennino che lo marca. Una volta fatta la RL.2 è **un ritaglio, non un'animazione per ostacolo** — ed è il motivo per cui le due idee stanno nella stessa fase | **Opus** |
-| RL.6 | **La Corruzione diventa un segno**: `fx/particles.odin` anticipato dalla R7, pool fisso pre-allocato, e la linea che si sfilaccia dietro. Poi si decide la sorte di `fx/corruption.odin`: la mia proposta è provare prima con le sole particelle e tenere lo shader spento ma non cancellato, perché la scelta di andare a nero è venuta da un playtest e va disfatta con un altro playtest, non a tavolino | **Opus** |
+| RL.6 ✅ | **La Corruzione diventa un segno**: `fx/particles.odin` anticipato dalla R7, pool fisso pre-allocato, e la linea che si sfilaccia dietro. Poi si decide la sorte di `fx/corruption.odin`: la mia proposta è provare prima con le sole particelle e tenere lo shader spento ma non cancellato, perché la scelta di andare a nero è venuta da un playtest e va disfatta con un altro playtest, non a tavolino | **Opus** |
 | RL.7 | **Le curve**: adottare `core:math/ease` della libreria standard (tutto il set Penner) e cancellare `core/ease.odin`. `ease.ease` è una funzione pura e può stare ovunque; il tween `flux` alloca e va a orologio, quindi **solo presentazione** o salta il determinismo — replay e validazione del punteggio | Sonnet |
 | RL.8 | **Parallasse**: linee più sottili, più fioche e più lente dietro. Anticipata dalla R7, e con questa direzione costa un decimo | Sonnet |
 | RL.9 ⚑ | Playtest: il mondo si legge in due secondi, il fondo non dà fastidio, il flip si sente come un evento, e il personaggio a 45 px si vede | — |
@@ -809,6 +810,92 @@ dove guardi, e una soglia assoluta risponde alla domanda sbagliata):
 ed è di proposito: era la scelta fra vederlo bene e rubare preavviso, e ho scelto il preavviso);
 se il pennino a due punti legge come una penna o come due; e se 48 px bastano o se il pennino
 vuole più aria — sapendo che ogni pixel in più è preavviso in meno.
+
+---
+
+#### RL.6 ✅ — La Corruzione diventa un segno (4 settembre 2026)
+
+**I due fronti sono adesso la stessa cosa scritta due volte**: una x con un ritaglio sopra. A
+destra la penna scrive il mondo (RL.5), a sinistra la Corruzione lo mangia — e la seconda metà
+esisteva solo come filtro sul frame finito. Adesso il terreno è **tagliato al fronte** esattamente
+come lo è al pennino, e il segno che fa è **la linea che si sfilaccia in polvere**. Un segno, non
+un filtro (documento, sezione 10).
+
+**`fx/particles.odin`, anticipato dalla R7.** Pool fisso da 512, zero allocazioni a qualunque
+frame rate e per qualunque numero di emettitori; una particella morta viene riempita scambiandoci
+dentro l'ultima viva, quindi niente qui dentro può dipendere dall'ordine. Un'emissione che
+sforerebbe viene scartata invece di far crescere il pool: la polvere che non c'è è invisibile, un
+frame che alloca è uno scatto che si sente.
+
+**Ha il suo generatore di casualità**, seminato una volta e passato per riferimento come tutti gli
+altri del progetto — non il `rand` globale e **di proposito non quello della run**, che deve
+restare riproducibile da un seed perché replay e punteggio vogliano dire qualcosa. Polvere che
+cambia fra due replay della stessa run è corretto; una run che cambia per via della polvere
+sarebbe un bug.
+
+**L'integrazione è esatta, non a passi.** Il drag è un esponenziale, quindi sia la velocità sia la
+distanza percorsa hanno forma chiusa. Non è vanità: il pool avanza sull'orologio del frame, e una
+moltiplicazione per frame renderebbe la polvere più fitta su una macchina veloce.
+
+**Lo shader è spento, non cancellato**, come chiedeva la proposta. `CORRUPTION_FILTER_ENABLED` in
+`main.odin` è la riga che lo riaccende. Il motivo per cui non serve più è preciso: andava a nero
+perché dietro il fronte il mondo era ancora **disegnato**; con la linea tagliata lì non resta
+niente da drenare se non il campo, e un campo senza disegno sopra *è* l'aspetto di "il mondo qui
+non c'è". Ma la scelta di andare a nero era venuta da un playtest (R2.6), quindi si disfa con un
+altro playtest: **è una domanda della RL.9**.
+
+**Il bordo illuminato del fronte resta disegnato con le primitive.** Era la ragione per cui
+esisteva — un fronte letale che nessuno vede sarebbe l'unica cosa del gioco che uccide senza
+mostrare il colpo (pilastro 3) — e adesso quella ragione è più forte, non più debole, perché non
+c'è più nessuno shader a fare da rete.
+
+**Misurato** (armatura usa e getta, cancellata):
+
+- Il pool, flusso costante a 110/s con vita 0.8 s (attesi ~88 vivi): **85 / 88 / 88 / 88** a 30,
+  60, 144 e 240 fps. Un flusso lento (12/s a 240 fps, cioè 0.05 particelle per frame) si assesta
+  a **10** invece di essere arrotondato a zero ogni frame — è a questo che serve il debito
+  frazionario. A 100 000/s il picco è **512**, cioè la capacità: si riempie e si ferma. Una
+  raffica di 120 un secondo dopo: **0 vive**.
+- Indipendenza dal frame rate: la stessa particella dopo 0.5 s di deriva finisce a
+  `(-9.6830, 8.3920)` a 60 fps, e a 30/144/240 fps atterra a **0.00000 / 0.00001 / 0.00002 px**
+  di distanza.
+- Il quadro, inchiostro per colonna attraversando il fronte a x=300:
+  `-60:0 -45:0 -30:0 -15:8 +0:195 +15:180 +30:173 +45:173 +60:175`. Dietro il fronte **zero**;
+  al fronte il bordo illuminato (195), e regge su **tutta** l'altezza dello schermo (182 vicino
+  al bordo alto, 182 vicino a quello basso).
+- Una Sentinella che copre 206..394 con il fronte a 300: **166** di inchiostro 40 px davanti al
+  fronte, **0** dietro. Si fa mangiare, non sparisce di colpo.
+- Dopo un secondo di sfilacciamento: **151** particelle vive, e **185** di inchiostro dietro il
+  fronte fuori dal corridoio, cioè dove solo la polvere può essere.
+
+**Ricadute**:
+
+- **`render` importa `fx`.** Il grafo resta aciclico (`fx ← core`), e `fx` continua a non sapere
+  niente del gioco: prende posizioni, velocità e colori. Quello che sta in `render` è *come si
+  sfilaccia*, che è direzione artistica.
+- `draw_terrain` e `draw_obstacle` prendono `front_x`. Il mondo esiste **fra i due fronti** e in
+  nessun altro posto, e sono due righe di aritmetica in `draw_terrain_side`.
+- `draw_cut_shape` è nuova e possiede la parte che era facile prendere al contrario: una forma
+  tagliata a destra ha i capi liberi sul pennino e il capo sinistro chiuso, una tagliata a
+  sinistra è lo specchio, **una tagliata da entrambe le parti non è più un anello — sono due
+  segni**. `draw_obstacle_outline` è diventata `obstacle_stroke`, perché adesso decide solo il
+  colore e il peso.
+- La polvere è del **colore della corsia**, non del fronte: è quello che la linea *era*, che si
+  disfa. Il bordo è neutro perché il confine non appartiene a nessuno dei due mondi. Sono due
+  affermazioni diverse ed è voluto che si vedano diverse.
+- La polvere **si ferma in pausa**: emissione e avanzamento girano solo in `.Playing`, non per
+  ogni stato che *mostra* una run. Un frame in pausa è un fermo immagine, e della polvere che ci
+  deriva sopra sarebbe l'unica cosa a schermo che non si è fermata.
+- `emit_fray` non guarda se sotto il fronte c'è un buco. Anche i bordi di un buco vengono
+  mangiati, e sbagliare lì non costa niente; dove conterebbe è il pennino, e quello controlla.
+
+**Cosa tocca a te giudicare, e la domanda grossa**: **lo shader va riacceso?** Adesso dietro il
+fronte resta il campo con sopra niente — che è esattamente il foglio bianco del cartone, ed è la
+ragione per cui secondo me non serve più. Ma è una cosa da guardare, non da decidere qui: se la
+zona morta legge come "non c'è ancora niente" invece che come "qui è finito", si riaccende con una
+riga. Poi: se la polvere è troppa o troppo poca, se va nella direzione giusta (indietro e *fuori*
+dal corridoio, per non attraversare mai la parte di schermo dove si gioca), e se crescere con la
+pressione si sente.
 
 ---
 
