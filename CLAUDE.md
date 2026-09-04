@@ -92,9 +92,8 @@ the second channel that says where you are going (pillar 6). The world also **dr
 the right** as the Corruption eats it on the left — two mirrored fronts — and the draw front may
 never move far enough left to steal warning time (pillar 3).
 
-**Where the project stands.** The design was rewritten on 4 September 2026 (v1.3 → v2.0, then v2.1 for the art
-direction), and
-**R1 through R4 are built** (R4 awaits its playtest): two lanes, one gesture, a cube that
+**Where the project stands.** The design was rewritten on 4 September 2026 (v1.3 → v2.0, then
+v2.1 for the art direction), and **R1 through R4 are built** (R4 awaits its playtest): two lanes, one gesture, a cube that
 *blocks* rather than kills in six forms, a Corruption front advancing from the left that eats
 the ground a mistake costs you, a track whose corridor undulates and pinches, and the Sentinel —
 so all three dangers and all three verbs are on screen. Still missing: the real pattern pool
