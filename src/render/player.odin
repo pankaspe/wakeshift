@@ -349,6 +349,32 @@ get_player_scale :: proc(player: game.Player) -> rl.Vector2 {
 	return rl.Vector2{1, 1}
 }
 
+// How far a rotation overshoots before it settles: Robert Penner's
+// easeOutBack, with his constant.
+//
+// It lives here rather than in a shared easing file because it is not a
+// generic curve, it is **the shape of this game's flip** — the most tuned
+// number in the project, and one a playtest has already had an opinion
+// about (the first version lingered mid-journey and was thrown out,
+// because a flourish placed on the player's own motion is friction and
+// not decoration).
+//
+// RL.7 moved the rest of core/ease.odin to core:math/ease and kept this
+// one, because the two are not the same curve. The standard library's
+// back_out is AHEasing's, and it is far wilder: measured over the flip's
+// half turn, ours overshoots by **18 degrees** and peaks at t=0.57, while
+// back_out overshoots by **68** and peaks at t=0.47 — an overshoot in the
+// middle of the journey rather than an impulse at the end of it, which is
+// precisely the version the playtest killed. Swapping to it is a game
+// feel decision, not a tidy-up.
+PLAYER_WHIP_OVERSHOOT :: 1.70158
+
+@(private)
+whip_ease :: proc(t: f32) -> f32 {
+	u := t - 1
+	return 1 + (PLAYER_WHIP_OVERSHOOT + 1) * u * u * u + PLAYER_WHIP_OVERSHOOT * u * u
+}
+
 // The whip (Design Doc, section 12): half a turn, in the direction of
 // travel, over the ~7 frames the flip lasts, with a small overshoot so
 // it lands as an impulse rather than as a swing. Every flip turns the
@@ -360,7 +386,7 @@ get_player_rotation :: proc(player: game.Player) -> f32 {
 
 	// The lane being left is whichever one we are not heading into.
 	from: f32 = player.target_lane == .Dream ? 0 : math.PI
-	return from + math.PI * core.ease_out_back(game.get_whip_progress(player))
+	return from + math.PI * whip_ease(game.get_whip_progress(player))
 }
 
 // Half a turn leaves the character upside down *and* facing backwards,

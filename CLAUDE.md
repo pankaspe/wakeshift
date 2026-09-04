@@ -99,7 +99,7 @@ v2.1 for the art direction), and **R1 through R4 are built and playtested**: two
 gesture, a cube that *blocks* rather than kills in six forms, a Corruption front advancing from
 the left that eats the ground a mistake costs you, a track whose corridor undulates and pinches,
 and the Sentinel — so all three dangers and all three verbs are on screen. **Phase RL is in
-progress**: RL.1 through RL.6 are done, so **nothing on screen is filled but the background** — a
+progress**: RL.1 through RL.7 are done, so **nothing on screen is filled but the background** — a
 field whose colour is the world, two unfilled strokes that are the floor and the ceiling with the
 cubes welded into them, a character made of the same mark but heavier and whiter, a dormant lane
 that thins and dims behind the one you are in, and two fronts that are both clips: a pen near the
@@ -659,6 +659,24 @@ everything is line, so a rule about fill cannot separate anything. Its replaceme
 the Corruption's own reading, and it gets better rather than worse: a front that eats the line
 away is the same mark the mechanic is, and RL.6 turns it from a filter on the frame into the
 line fraying into particles.
+
+### Easing curves come from the standard library, with one exception
+
+`core:math/ease` (the whole Penner set). `core/ease.odin` was deleted in RL.7 once two of its
+three curves turned out to be the library's to within 1e-7 and to have no callers at all.
+
+- **`ease.ease` and the individual curves are pure and `contextless`**, so they may be used
+  anywhere, simulation included.
+- **The `flux` tween may not.** It allocates a map and a dynamic array and it runs on a wall
+  clock, so it is presentation only — inside a simulation step it would break replay and score
+  validation.
+- **The exception is the flip's whip**, and it is not a tidy-up waiting to happen. Our curve is
+  Penner's easeOutBack; the library's `back_out` is AHEasing's, and they are different functions:
+  measured over the flip's half turn, ours overshoots by 18 degrees peaking at t=0.57 and
+  `back_out` by 68 peaking at t=0.47 — an overshoot in the middle of the journey rather than an
+  impulse at the end of it, which is exactly the version a playtest already threw out. It lives
+  in `render/player.odin` as `whip_ease` because it is not a generic curve, it is the shape of
+  this game's central gesture. Swapping it is a game feel decision, not a cleanup.
 
 ### Save data and determinism
 

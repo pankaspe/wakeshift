@@ -68,8 +68,7 @@ pool vero (R5) e l'economia (R6).
 **La Linea** di Cavandoli. La fase che la porta a schermo è la **RL**, ed è in corso: va prima
 della R5 perché cambia cos'*è* un pattern.
 
-**Prossima**: la RL.7 — le curve, cioè adottare `core:math/ease` e cancellare `core/ease.odin`.
-Con la RL.1÷RL.6 fatte **non c'è più niente di pieno a schermo tranne il fondo** e i due fronti
+**Prossima**: la RL.8 — la parallasse. Con la RL.1÷RL.7 fatte **non c'è più niente di pieno a schermo tranne il fondo** e i due fronti
 sono entrambi ritagli: a destra la penna scrive, a sinistra la linea si sfilaccia in polvere.
 Restano due task di rifinitura (RL.7 curve, RL.8 parallasse) e poi il playtest della fase, la
 RL.9 — che adesso ha una domanda in più da rispondere: **lo shader della Corruzione va cancellato
@@ -443,7 +442,7 @@ livello applicato allo schermo, è un posto dove la linea ha smesso di esserci.
 | RL.4 ✅ | **Il glow cresce verso l'Onirico**, e la corsia dormiente si assottiglia. Qui si decide anche se le due linee stanno bene entrambe piene: La Linea ne ha una, noi ne abbiamo due, e due tratti paralleli identici leggono come un tubo invece che come un orizzonte | Sonnet |
 | RL.5 ✅ | **Il mondo si disegna a destra**: un fronte di disegno speculare a quello della Corruzione, con il pennino che lo marca. Una volta fatta la RL.2 è **un ritaglio, non un'animazione per ostacolo** — ed è il motivo per cui le due idee stanno nella stessa fase | **Opus** |
 | RL.6 ✅ | **La Corruzione diventa un segno**: `fx/particles.odin` anticipato dalla R7, pool fisso pre-allocato, e la linea che si sfilaccia dietro. Poi si decide la sorte di `fx/corruption.odin`: la mia proposta è provare prima con le sole particelle e tenere lo shader spento ma non cancellato, perché la scelta di andare a nero è venuta da un playtest e va disfatta con un altro playtest, non a tavolino | **Opus** |
-| RL.7 | **Le curve**: adottare `core:math/ease` della libreria standard (tutto il set Penner) e cancellare `core/ease.odin`. `ease.ease` è una funzione pura e può stare ovunque; il tween `flux` alloca e va a orologio, quindi **solo presentazione** o salta il determinismo — replay e validazione del punteggio | Sonnet |
+| RL.7 ✅ | **Le curve**: adottare `core:math/ease` della libreria standard (tutto il set Penner) e cancellare `core/ease.odin`. `ease.ease` è una funzione pura e può stare ovunque; il tween `flux` alloca e va a orologio, quindi **solo presentazione** o salta il determinismo — replay e validazione del punteggio | Sonnet |
 | RL.8 | **Parallasse**: linee più sottili, più fioche e più lente dietro. Anticipata dalla R7, e con questa direzione costa un decimo | Sonnet |
 | RL.9 ⚑ | Playtest: il mondo si legge in due secondi, il fondo non dà fastidio, il flip si sente come un evento, e il personaggio a 45 px si vede | — |
 
@@ -896,6 +895,49 @@ zona morta legge come "non c'è ancora niente" invece che come "qui è finito", 
 riga. Poi: se la polvere è troppa o troppo poca, se va nella direzione giusta (indietro e *fuori*
 dal corridoio, per non attraversare mai la parte di schermo dove si gioca), e se crescere con la
 pressione si sente.
+
+---
+
+#### RL.7 ✅ — Le curve (4 settembre 2026)
+
+`core/ease.odin` è cancellato e la libreria standard è adottata — **ma non del tutto, e la
+ragione è misurata**.
+
+Due delle tre curve erano identiche a quelle di `core:math/ease`: `ease_out_quad` contro
+`quadratic_out` e `ease_in_out_quad` contro `quadratic_in_out` divergono di **1e-7**, cioè rumore
+di virgola mobile. Non avevano nemmeno un chiamante. Via.
+
+**La terza no, e sarebbe stato un cambio di feel travestito da pulizia.** `ease_out_back` è
+l'easeOutBack di Penner; il `back_out` della libreria è quello di AHEasing, ed è una curva
+diversa. Misurato sul mezzo giro del flip:
+
+| | picco | dove | in gradi sul flip |
+|---|---|---|---|
+| la nostra | 1.100 | t=0.57 | **18°** di sfondamento |
+| `ease.back_out` | 1.379 | t=0.47 | **68°** |
+
+Lo scarto più largo fra le due è 0.33 a t=0.38. Cioè non è "un po' più elastica": è uno
+sfondamento **in mezzo al viaggio** invece che un impulso alla fine, che è esattamente la versione
+che un playtest ha già buttato via — *"un fronzolo messo sul movimento del giocatore non è
+decorazione, è attrito"*. Scambiarla è una decisione di game feel, non una pulizia, e non la
+prendo io a tavolino.
+
+Quindi la curva del flip **resta**, ma si sposta dove appartiene: dentro `render/player.odin`
+accanto al flip che modella, come `whip_ease` con la sua costante. Smette di essere "una curva
+condivisa" e diventa quello che è davvero, cioè *la forma del gesto centrale del gioco*, con i
+numeri qui sopra scritti nel commento perché la prossima persona non ci riprovi.
+
+**Verificato** (armatura usa e getta, cancellata): guidata la simulazione vera attraverso un flip
+completo, **9 passi**, confrontando `get_player_rotation` contro la formula che `core/ease.odin`
+conteneva prima di essere cancellata — **0.000000000 radianti** di scarto. E le due cancellate
+contro la libreria: 9e-8 e 1.2e-7.
+
+**La regola che resta scritta**: `ease.ease` e le funzioni singole sono pure e `contextless`,
+quindi possono stare ovunque, simulazione compresa. **Il tween `flux` no**: alloca (una mappa e un
+array dinamico) e gira su un orologio a muro, quindi è solo presentazione — usarlo dentro un passo
+di simulazione romperebbe replay e validazione del punteggio.
+
+Nessuno usa ancora `core:math/ease`: il primo chiamante vero sarà la RL.8.
 
 ---
 
