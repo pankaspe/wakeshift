@@ -2,14 +2,14 @@
 
 Operational rules for developing this project.
 
-- **What and why** → `docs/design_doc.md` (**v2.0**)
+- **What and why** → `docs/design_doc.md` (**v2.1**)
 - **What it looks like** → **`docs/inspiration/La_Linea.png`**. The art direction changed
   wholesale on 4 September 2026: out goes the Ori-like silhouette-and-light of
   `docs/sketch/sketch_3`, in comes **La Linea** — a filled background, one continuous stroke
   that *is* the world, a character who rises out of that stroke and returns to it. It is
   binding, it is summarised in `ROADMAP.md` under "La direzione artistica", and the phase that
-  puts it on screen is **RL**, which also carries the decisions taken. Section 10 of the design
-  doc still describes the old direction and is stale. `docs/` is deliberately **not tracked by
+  puts it on screen is **RL**, which also carries the decisions taken. Section 10 of the design doc is
+  the binding statement of it. `docs/` is deliberately **not tracked by
   git**: it is the author's working material and lives only on their disk.
 - **How, in what order, with which model** → `ROADMAP.md` (Italian; the user's working file)
 - **How we work** → this file
@@ -63,11 +63,11 @@ order before touching anything:
 1. **`ROADMAP.md`** — the phase list says what is done (✅) and what is next. Each phase lists
    numbered tasks with a recommended model. Respect the tagging: it is how the user budgets
    their plan.
-2. **`docs/design_doc.md` v2.0** — binding on *what* to build. `docs/sketch/` is binding on what
-   it *looks* like: **`sketch_3` governs everything**, game and screens alike, and
-   `spirito_foresta` the character. `sketch_1` and `sketch_2` are quarries, not references.
-   Everything is reachable with primitives plus palette plus bloom — the project has no
-   external art assets and is not getting any.
+2. **`docs/design_doc.md` v2.1** — binding on *what* to build, and its **section 10** is binding
+   on what it *looks* like: **La Linea** (`docs/inspiration/La_Linea.png`). The sketches under
+   `docs/sketch/` governed for one day and no longer bind anything — do not read them as
+   references. Everything is reachable with primitives plus palette plus bloom; the project has
+   no external art assets and is not getting any, and now it needs fewer.
 3. The rest of this file — architecture rules and conventions.
 
 **The art direction is La Linea, and what that changes.** The simulation does not change at
@@ -92,7 +92,8 @@ the second channel that says where you are going (pillar 6). The world also **dr
 the right** as the Corruption eats it on the left — two mirrored fronts — and the draw front may
 never move far enough left to steal warning time (pillar 3).
 
-**Where the project stands.** The design was rewritten on 4 September 2026 (v1.3 → v2.0), and
+**Where the project stands.** The design was rewritten on 4 September 2026 (v1.3 → v2.0, then v2.1 for the art
+direction), and
 **R1 through R4 are built** (R4 awaits its playtest): two lanes, one gesture, a cube that
 *blocks* rather than kills in six forms, a Corruption front advancing from the left that eats
 the ground a mistake costs you, a track whose corridor undulates and pinches, and the Sentinel —
