@@ -58,10 +58,13 @@ non muoversi era la risposta giusta quasi sempre.
 
 ## Stato attuale
 
-**Fatte R1, R2 e R3.** Il gioco adesso *è* quello del documento nel suo cuore: due corsie, un
-gesto, il cubo che blocca invece di uccidere, la Corruzione che avanza da sinistra mangiando il
-terreno che perdi, e un corridoio che ondeggia e si strozza. Mancano la Sentinella e le varianti
-del cubo (R4), il pool vero (R5) e l'economia (R6).
+**Fatte R1, R2 e R3, playtest compresi.** Il gioco adesso *è* quello del documento nel suo
+cuore: due corsie, un gesto, il cubo che blocca invece di uccidere, la Corruzione che avanza da
+sinistra mangiando il terreno che perdi, e un corridoio che ondeggia e si strozza. Mancano la
+Sentinella e le varianti del cubo (R4), il pool vero (R5) e l'economia (R6).
+
+**Prossima**: R4. E lì va ripreso anche il punto 3 delle note del playtest R2.6 — il contatto
+col cubo — perché è il momento in cui il cubo smette di essere una forma sola.
 
 **Cosa sopravvive intatto e non va toccato**: tutto `platform/` (finestra, display,
 salvataggio, cifratura, percorsi); `fx/bloom`; `render/stroke` e `render/glow`; i menu e le
@@ -129,7 +132,7 @@ segnata nel gioco a tre stati era segnata in un altro gioco.
 
 ---
 
-### ✅ Fase R2 — Il tira e molla (manca solo il playtest R2.6 ⚑)
+### ✅ Fase R2 — Il tira e molla
 
 La scommessa centrale del documento, costruita. **Il cubo non uccide più: blocca.** Mentre sei
 fermo contro la sua faccia il mondo continua a scorrere, tu vieni trascinato indietro, e la
@@ -259,7 +262,7 @@ gradienti rompe le bande senza toccare i valori medi di una virgola, quindi senz
 solo pixel rispetto alla soglia del bright pass. Sta nella **R7**, insieme al resto della resa,
 a meno che a schermo dia più fastidio di quanto dia adesso.
 
-### 3. Le collisioni col cubo e con le trappole — **da rivedere**
+### 3. Le collisioni col cubo e con le trappole — **da rivedere nella R4**
 
 Segnalata la sensazione che il contatto col cubo e con gli altri pericoli vada guardato meglio.
 Non è ancora un difetto identificato, e ha senso riguardarlo **dopo la R4**, quando il cubo avrà
@@ -270,7 +273,7 @@ cui "tocca" può arrivare prima di quanto l'occhio si aspetti.
 
 ---
 
-### ✅ Fase R3 — Il tracciato (manca solo il playtest R3.4 ⚑)
+### ✅ Fase R3 — Il tracciato
 
 Il mondo ha smesso di essere una striscia dritta. `core/terrain.odin` è diventato
 `core/track.odin`, e il tracciato è **due numeri messi a fotogrammi chiave nel tempo**: la
