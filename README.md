@@ -1,21 +1,36 @@
 # Wake Shift
 
-A one-button reflex arcade game about being suspended between two worlds — written in
-[Odin](https://odin-lang.org/) with [raylib](https://www.raylib.com/), no engine.
+A one-button reflex arcade game about running through a dream that is going out behind you —
+written in [Odin](https://odin-lang.org/) with [raylib](https://www.raylib.com/), no engine.
 
-![Version](https://img.shields.io/badge/version-0.3.0--alpha-blue)
+![Version](https://img.shields.io/badge/version-0.6.0--alpha-blue)
+![Design](https://img.shields.io/badge/design-v2.0-purple)
 ![Language](https://img.shields.io/badge/Odin-dev--2026--07-blue)
 ![Library](https://img.shields.io/badge/raylib-5.5-green)
-![Status](https://img.shields.io/badge/status-playable%20alpha-orange)
+![Status](https://img.shields.io/badge/status-rewrite%20in%20progress-orange)
 
 You run forward automatically. One key flips gravity, throwing you between the floor
-(**the Real world**) and the ceiling (**the Dream**). Every obstacle lives in exactly one
-of them, so the only question you ever have to answer is *where should I be right now?* —
-asked faster and faster until you get it wrong.
+(**the Real world**) and the ceiling (**the Dream**). Behind you, from the left, the
+**Corruption** eats the colour out of the world and keeps coming.
 
-Hold the key instead of tapping it and you stop halfway, suspended in the **Limen**: the
-threshold where the score runs fastest and you cannot stay long. One key, two gestures,
-three places to be.
+The twist is what happens when you get it wrong. A cube does not kill you — it **stops** you,
+and while you are pinned against it the Corruption closes the distance. **A mistake costs
+ground, not the run.** The gap in the floor kills, and the Sentinel that hangs in the corridor
+kills anyone crossing it; everything else just makes you pay. You die when the payments add up.
+
+---
+
+> ### Status: mid-rewrite
+>
+> The design was rewritten from scratch on 4 September 2026 after the previous version was
+> measured and found wanting: across 200 simulated runs that **never touched the key**, 161
+> survived the whole first difficulty tier, and for **86% of the time** there was nothing on
+> screen that could kill you in any position. It was structural, not a tuning problem — the
+> level generator's own fairness contract guaranteed you started each pattern in the safe lane,
+> so standing still was almost always the right answer.
+>
+> What is described below is the design being built toward. The playable build still contains
+> the previous version's three-state gameplay; the rewrite is tracked in `ROADMAP.md`.
 
 ---
 
@@ -23,74 +38,65 @@ three places to be.
 
 | Key | Action |
 | --- | --- |
-| `SPACE` | Tap to flip · **hold to stop halfway**, suspended in the Limen |
+| `SPACE` | Change lane |
 | `ESC` | Pause / back |
 | `↑` `↓` | Navigate menus |
 | `←` `→` | Change a setting |
 | `ENTER` | Confirm / retry |
 | `F11` | Toggle fullscreen |
 
+One key, one gesture. There is no jump, no second action, and there never will be.
+
 ---
 
 ## How it plays
 
-**One question, three answers.** *Where should I be right now?* — the floor, the ceiling,
-or the threshold between them. Never more than three, and the difficulty is entirely in
-seeing the answer coming and committing in time.
+**One question, two answers.** *Which lane?* — the floor or the ceiling. The difficulty is
+entirely in seeing the answer coming and committing in time.
 
-**A flip is a journey, and holding stops it halfway.** That single sentence is the whole
-control scheme, and the code says it literally: holding freezes the journey's own clock at
-its midpoint, releasing resumes it, and the journey always finishes where it was already
-going. Nothing anywhere has to remember which wall you came from.
+**A mistake costs ground, not the run.** This is the whole design in one line. Only two things
+kill outright; everything else takes distance from you, and distance is all you have. It also
+means the game is finally allowed to threaten **both** lanes at once — a mirrored pair of cubes
+has no escape, only a choice about which price to pay. A design where every obstacle is lethal
+can never do that, because two lethal lanes is an unsolvable pattern.
 
-**Risk is where the points are.** 10 points per second on the floor, 25 on the ceiling, 40
-in the Limen — which is also the only one that costs something to stay in.
+**The health bar is the screen.** The Corruption is a front advancing from the left, and the
+gap between it and your character is exactly how much room you have left to make mistakes in.
+No bar, no number, nothing to learn — you can read the state of the run from a thumbnail.
 
-**Lucidity is one resource with two faces.** It is earned by getting out of the way *late*
-— when an obstacle arrives in the lane you had just left — and spent staying suspended,
-while simultaneously being the score multiplier. So the third state asks a question no
-amount of reflex answers: bank the multiplier, or burn it to stand where the score runs
-fastest?
+**Three dangers, three verbs.** The cube says *do not be here, or you pay*. The gap says *do
+not be here*. The Sentinel — a beam across the middle of the corridor, harmless to anyone
+standing on a lane — says *do not move right now*, which is the only question in the game that
+is about what you are doing rather than where you are. Every pair of them makes a different
+dilemma.
 
-**Presence and absence are different rules, not different pictures.** A block kills
-whoever touches it. A chasm is the floor failing to be there, so it kills only whoever is
-still standing on it — which means being mid-flip, suspended, or on the ceiling all answer
-it equally. One asks "move, now"; the other asks "do not be down here for this stretch".
+**The world is a track, not a backdrop.** Two lanes described by a spine and a span: move the
+spine and the world undulates, move the span and the corridor tightens around you. The lanes
+are derived from those two numbers, so they can never disagree with each other.
 
-**Obstacles anticipate, they never react.** Nothing reads the player's position: an
-obstacle that adapts feels stolen even when it is survivable. What makes one feel
-intelligent is being authored to expect the obvious answer — the lane you would flee into
-closing half a second later, a threat that is a bluff and retracts before it arrives, a
-patroller sweeping the whole column on a cycle you can read but not out-react.
+**The level is written in time, not pixels.** Obstacles are authored as "arrives 1.8 seconds
+into this pattern", and screen position is derived each frame from the current scroll speed.
+Speeding the game up never desynchronises a hand-authored pattern — which matters more than
+usual here, because speed is something the *player* buys mid-run.
 
-**The level is written in time, not pixels.** Obstacles are authored as "arrives 1.8
-seconds into this pattern", and their screen position is derived each frame from the
-current scroll speed. Speeding the game up never desynchronises a hand-authored pattern.
+**Speed is a purchase, not a curve.** Since obstacles are events in time, scroll speed does not
+change your reaction window at all — it changes how long you get to *look*. So it is not the
+difficulty curve. Instead you spend collected fragments on it at a **Gate**: two doors, one per
+lane, bought by choosing which one to run through. Faster means more depth per second, and it
+also means every mistake costs more and the hard patterns arrive sooner.
 
-**Patterns chain on what they leave behind.** Each one declares the set of places it is
-fair to start from and the set it can leave you in, and the generator only ever picks a
-next pattern that accepts all of them — because it has to commit before knowing which
-answer you took. Some patterns have two correct answers that end at opposite walls.
-
-**Difficulty is three things, and speed is the smallest.** Since obstacles are events in
-time, scroll speed does not change your reaction window at all — it changes how long you
-get to *look*. What actually tightens is the empty air between patterns and which patterns
-get drawn: at the deepest tier a breather is roughly one in ten rather than eight in
-thirteen.
-
-**The two worlds converge as you descend.** Palette and bloom both interpolate on the same
-two variables — where you are, and how deep the run has gone — so past about thirty
-seconds the Real and the Dream start washing toward the same overexposed threshold. The
-colour you were reading the game by fades exactly as the speed peaks. Position and type of
-motion carry you from there, which is why they were never allowed to be redundant with
-colour.
+**Colour has two systems and they never collide.** Depth moves the hue — the two worlds
+converge toward one washed-out palette as a run gets deeper, so the colour you were reading the
+game by fades exactly as it gets hardest. Corruption moves the saturation, and it moves through
+space rather than time: the colour dies from the left, behind the front. Position and type of
+motion carry you from there, which is why they were never allowed to be redundant with colour.
 
 ---
 
 ## Building and running
 
-You need the [Odin compiler](https://odin-lang.org/docs/install/) on your `PATH`. raylib
-ships with Odin as a vendor library — there is nothing else to install.
+You need the [Odin compiler](https://odin-lang.org/docs/install/) on your `PATH`. raylib ships
+with Odin as a vendor library — there is nothing else to install.
 
 ```bash
 odin run src                        # build and play
@@ -98,11 +104,30 @@ odin build src -out:build/wakeshift
 odin check src                      # type-check only, fast
 ```
 
-The build target is the `src` directory, not `.` — `main.odin` lives inside it alongside
-the package directories. Tested on Linux; Windows and macOS should work but are untested.
+The build target is the `src` directory, not `.` — `main.odin` lives inside it alongside the
+package directories. Tested on Linux; Windows and macOS should work but are untested.
 
 Progress and settings go to your OS user data directory, never next to the executable
 (`$XDG_DATA_HOME/wake-shift/save.dat` on Linux). Delete that file to reset.
+
+---
+
+## Under the hood
+
+**The simulation is deterministic, and that is a product feature rather than tidiness.** Seeded
+generation, input recorded as data, and a fixed 60 Hz timestep mean a run is reproducible from
+its seed and its input log alone. Every personal best is stored with the manifest that
+reproduces it, which is what makes server-side leaderboard validation, replays and ghosts
+possible later without changing anything.
+
+**Saves are sealed, and the README will not oversell it.** The payload is CBOR sealed with
+ChaCha20-Poly1305, and a file that fails to authenticate is rejected and reset rather than
+trusted. But the key ships inside the binary, so this is a deterrent against editing a save in
+a text editor — not security. The real defence is replaying the manifest on a server.
+
+**Everything is drawn from primitives.** There are no art assets in this repository and there
+will not be any. The whole look is one drawing primitive — a neon polyline with a bright core
+and an additive halo — plus a palette and a real frame-wide bloom pass.
 
 ---
 
@@ -111,9 +136,9 @@ Progress and settings go to your OS user data directory, never next to the execu
 Built by [@pankaspe](https://github.com/pankaspe) as an exercise in learning Odin, with
 development assistance from Claude.
 
-Gravity-flip is a well-worn subgenre (G-Switch, Gravity Guy and many others). The mechanic
-is not what makes this one different; the world, the third state and the visual identity
-are expected to do that work.
+Gravity-flip is a well-worn subgenre (G-Switch, Gravity Guy and many others). The mechanic is
+not what makes this one different; the Corruption at your back, and the fact that a mistake
+takes ground instead of ending the run, are expected to do that work.
 
 ## License
 
