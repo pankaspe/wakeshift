@@ -99,10 +99,10 @@ v2.1 for the art direction), and **R1 through R4 are built and playtested**: two
 gesture, a cube that *blocks* rather than kills in six forms, a Corruption front advancing from
 the left that eats the ground a mistake costs you, a track whose corridor undulates and pinches,
 and the Sentinel — so all three dangers and all three verbs are on screen. **Phase RL is in
-progress**: RL.1 and RL.2 are done, so the background *and* the world are the new ones — a field
-whose colour is the world, and two unfilled strokes that are the floor and the ceiling with the
-cubes welded into them. The one thing left of the old style is the character, still a filled
-silhouette until RL.3. Still missing: the real pattern pool (R5), fragments and the Gate (R6).
+progress**: RL.1, RL.2 and RL.3 are done, so **nothing on screen is filled but the background** —
+a field whose colour is the world, two unfilled strokes that are the floor and the ceiling with
+the cubes welded into them, and a character made of the same mark, heavier and whiter. Still
+missing: the real pattern pool (R5), fragments and the Gate (R6).
 
 Why it was rewritten, measured rather than guessed: 200 simulated runs that never touched the
 key, **161 survived the whole first tier**, median death at 35 s; **86% of the time** nothing on
@@ -405,6 +405,13 @@ all established by reading pixels back:
   256 against a measured worst case around fifty. The same class of silent failure as the winding
   above: check a new kind of stroke by reading the pixels back, not by looking at it.
 
+Since RL.3 it draws the character too, and one shape was worth building properly: the bulb is the
+outline of the **union** of two overlapping circles, not two circle outlines on top of each
+other, because the arcs would cross inside a head that is five pixels wide. Which half of each
+circle to keep is decided by **probing the midpoint**, not by deriving it — the derivation turns
+on which intersection point the radical construction produced first, and both answers are a
+closed loop, so getting it backwards is silent.
+
 It is written to know nothing about the game. That matters because of an open question: `ui` may
 not import `render`, so the menus cannot reach the stroke as things stand. Either `ui` gains
 that import (the graph stays acyclic) or `stroke.odin` and `glow.odin` move into a package of
@@ -416,10 +423,16 @@ The figure is authored as fractions of the player's box (`render/player.odin`), 
 of that box is the ground. Two rules follow, and both are the difference between a character
 that rests on the floor and one that floats or sinks:
 
-- **The visible figure fills the box, not the joints.** The rim is drawn as a fattened
-  silhouette reaching `PLAYER_RIM_THICKNESS` past the body, so a foot joint sits that much plus
-  half a limb inside the box — 0.409, not 0.5. A shape whose edge falls exactly on the box's
-  bottom lights the pixel row *before* it, which is what contact looks like in a readback.
+- **The visible figure fills the box, not the joints.** How much the drawing reaches past the
+  feet joint depends on how it is drawn, so since RL.3 the joint's position *derives* from that
+  rather than being a number someone keeps in step: `PLAYER_FOOT_REACH` is half a stroke inside
+  the box, `PLAYER_LEG_STRETCH` is what the leg is multiplied by to get there, and
+  `PLAYER_STRIDE_LENGTH` is stretched by the same factor because the run cycle is tuned on the
+  ratio between what the feet cover and what the ground does — miss that and the character
+  skates. It used to be a hand-written 0.409, against a silhouette plus a 2.4 px rim; a stroke
+  reaches only half its own width, which would have left the figure 2.2 px in the air. A shape
+  whose edge falls exactly on the box's bottom lights the pixel row *before* it, which is what
+  contact looks like in a readback.
 - **Only the feet touch anything.** Hanging from the ceiling is half a turn plus a mirror, which
   is a vertical flip, so the feet are at the *top* of the box there and whatever grows out of the
   crown points into open air in both worlds. That is why the sprout may overhang the box and the
@@ -583,11 +596,17 @@ line fraying into particles.
   just probably neutral.
 - **No hardcoded colours outside `core/palette.odin`.** Every colour is sampled from the palette
   system. A colour literal anywhere else is a bug, including in `ui/`.
-- **Nothing in the world is filled.** Since RL.2 the only filled surfaces on screen are the
-  background field and the character, and RL.3 takes the character. `palette.silhouette` has one
-  consumer left (`render/player.odin`); when that goes, so may the field. What tells the worlds
-  apart is the colour *behind* the line, never the line — inverting a mark between worlds reads
-  as two different things rather than as one thing in two places.
+- **Nothing is filled but the background.** Since RL.3 the field is the only filled surface in
+  the game and `palette.silhouette` has no consumer left at all (kept for now — deleting a
+  palette field is easier than resurrecting one). What tells the worlds apart is the colour
+  *behind* the line, never the line: the character is drawn out of the **neutral** palette on
+  purpose, because a mark that changes colour between the worlds is the mild version of the
+  mistake that inverting body and rim was.
+- **The weight hierarchy is a rule, and it lives in the arithmetic.** Character, then the live
+  lane, then the dormant lane, then the parallax — thickest and whitest first (Design Doc,
+  section 10). `render/player.odin`'s weights are *multiples of* `TERRAIN_STROKE_THICKNESS`
+  rather than numbers of their own, so tuning the world cannot silently invert the order. Do the
+  same for anything new that joins the ladder.
 - **No hardcoded pixel timings in patterns.** Patterns are time offsets; positions are derived at
   runtime from elapsed time and scroll speed.
 
@@ -683,6 +702,11 @@ Tracked here so they are not rediscovered. Each is scheduled in `ROADMAP.md`.
 - Menus, HUD and the options screen take their colours from the palette but still use raylib's
   default bitmap font. Everything drawn from primitives is crisp at native resolution and only
   the text is not (phase R7).
+- **A primitive halo under something that used to be opaque is a trap.** The character's aura —
+  a 60 px disc of the world's light on the hip — worked only for as long as a filled body covered
+  its middle; RL.3 removed the body and the first readback found the inside of the figure lit to
+  255 against an outline of 255, which is no drawing at all. Deleted, and the flip's flash moved
+  onto the character's own stroke. Expect the same wherever a fill is replaced by a line.
 - There are two glows: the real frame-wide bloom in `fx/bloom.odin`, and the stacked additive
   primitives in `render/glow.odin` that predate it — `render/stroke.odin` builds its halo out of
   the second, sharing `glow_layer_alpha` so a stroke and a plain halo agree. The second was a

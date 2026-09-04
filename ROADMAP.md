@@ -68,11 +68,12 @@ pool vero (R5) e l'economia (R6).
 **La Linea** di Cavandoli. La fase che la porta a schermo è la **RL**, ed è in corso: va prima
 della R5 perché cambia cos'*è* un pattern.
 
-**Prossima**: la RL.3 — il personaggio diventa una continuazione della linea. Con la RL.1 e la
-RL.2 fatte, il mondo a schermo è già tutto La Linea: un fondo che cambia colore e due tratti
-continui che *sono* il pavimento e il soffitto, con i cubi dentro di essi. L'unica cosa rimasta
-del vecchio stile è **il personaggio**, che è ancora una sagoma piena — ed è esattamente il punto
-in cui il lavoro si complica, non si semplifica (vedi i rischi).
+**Prossima**: la RL.4 — il glow cresce verso l'Onirico e la corsia dormiente si assottiglia. Con
+la RL.1, la RL.2 e la RL.3 fatte **non c'è più niente di pieno a schermo tranne il fondo**: un
+campo che cambia colore, due tratti continui che sono il pavimento e il soffitto con i cubi
+dentro, e un personaggio fatto dello stesso segno, più spesso e più bianco. La gerarchia dei pesi
+del documento è a posto per i primi due gradini; la RL.4 fa il terzo (la corsia dormiente) e la
+RL.8 il quarto (la parallasse).
 
 **Cosa sopravvive intatto e non va toccato**: tutto `platform/` (finestra, display,
 salvataggio, cifratura, percorsi); `fx/bloom`; `render/stroke` e `render/glow`; i menu e le
@@ -438,7 +439,7 @@ livello applicato allo schermo, è un posto dove la linea ha smesso di esserci.
 |---|---|---|
 | RL.1 ✅ | **Il fondo diventa il mondo**: due fondi con vignettatura, uno per mondo, e una miscela che *insegue* `world_t` con il suo ritardo invece di seguirlo. Presentazione pura: il valore ritardato vive in `main` accanto a `display_time` e non tocca mai la simulazione | **Opus** |
 | RL.2 ✅ | **Il tratto è il mondo**: `render/terrain.odin` ridisegna le due corsie come polilinee continue senza riempimento, e gli ostacoli entrano **dentro** la stessa polilinea invece di essere disegnati sopra. `render/obstacle.odin` si svuota | **Opus** |
-| RL.3 | **Il personaggio è una continuazione della linea**: contorno aperto al posto della sagoma piena, con il tratto più pesante e il nucleo più bianco del mondo attorno. Il sistema di pose resta intero — cambia solo l'ultimo passaggio | **Opus** |
+| RL.3 ✅ | **Il personaggio è una continuazione della linea**: contorno aperto al posto della sagoma piena, con il tratto più pesante e il nucleo più bianco del mondo attorno. Il sistema di pose resta intero — cambia solo l'ultimo passaggio | **Opus** |
 | RL.4 | **Il glow cresce verso l'Onirico**, e la corsia dormiente si assottiglia. Qui si decide anche se le due linee stanno bene entrambe piene: La Linea ne ha una, noi ne abbiamo due, e due tratti paralleli identici leggono come un tubo invece che come un orizzonte | Sonnet |
 | RL.5 | **Il mondo si disegna a destra**: un fronte di disegno speculare a quello della Corruzione, con il pennino che lo marca. Una volta fatta la RL.2 è **un ritaglio, non un'animazione per ostacolo** — ed è il motivo per cui le due idee stanno nella stessa fase | **Opus** |
 | RL.6 | **La Corruzione diventa un segno**: `fx/particles.odin` anticipato dalla R7, pool fisso pre-allocato, e la linea che si sfilaccia dietro. Poi si decide la sorte di `fx/corruption.odin`: la mia proposta è provare prima con le sole particelle e tenere lo shader spento ma non cancellato, perché la scelta di andare a nero è venuta da un playtest e va disfatta con un altro playtest, non a tavolino | **Opus** |
@@ -589,6 +590,90 @@ alza* (è il rischio numero due della fase, ed è una domanda a cui i pixel non 
 Sentinella vuota legge ancora come una cosa sola invece che come due corsie in più, se lo Stack
 senza cuciture dice ancora "peggio", e quanto pesante deve essere il tratto del mondo — perché la
 RL.3 deve fare il personaggio **più pesante di questo**, e quindi questo numero fissa il tetto.
+
+---
+
+#### RL.3 ✅ — Il personaggio è una continuazione della linea (4 settembre 2026)
+
+Il riempimento è finito. Il personaggio si disegnava due volte — una sagoma ingrassata nella luce
+del mondo per fare il bordo, poi la stessa sagoma a peso vero nel colore silhouette sopra — e
+adesso è **una passata sola**: ogni osso è un tratto, e il bulbo è un tratto chiuso attorno al
+profilo dell'unione dei suoi due cerchi. Nove segni e un occhio, e nessuno è pieno.
+
+**La gerarchia dei pesi è aritmetica, non memoria.** Il documento dice che il personaggio è *il
+tratto più spesso e il nucleo più bianco dello schermo*, sopra la corsia viva. Quindi i pesi qui
+sono **multipli di `TERRAIN_STROKE_THICKNESS`** invece che numeri propri: si tara il tratto del
+mondo e il personaggio gli resta sopra per costruzione, e nessuno dei due può scavalcare l'altro
+per distrazione. Limbi 1.55, spina 1.90, bulbo 1.85, stelo 1.15, foglie 1.35, nucleo 0.62 contro
+lo 0.30 del mondo.
+
+**Il segno non cambia mondo.** Il personaggio è disegnato dalla palette **neutra**, non da quella
+corrente: sezione 10, *"il personaggio è lo stesso segno in entrambi i mondi; quello che cambia è
+cosa ha dietro e quanto brilla, mai il suo profilo"*. Converge ancora con la profondità, perché
+tutte le palette lo fanno. Il vecchio codice invertiva corpo e bordo fra i mondi e leggeva come
+due personaggi diversi; un segno che cambia tinta è la versione mite dello stesso errore.
+
+**L'aura è stata cancellata.** Era un disco di 60 px della luce del mondo centrato sull'anca, e
+funzionava solo finché un corpo opaco ci stava sopra a coprirne il centro. Tolto il corpo, la
+prima misura l'ha trovata a illuminare *l'interno* della figura: bulbo 255 dentro e 255 sul
+bordo, cioè nessun contrasto. È il caso dell'alone doppio che `CLAUDE.md` risolve sempre allo
+stesso modo — si toglie quello primitivo. Il **flash del flip** non è andato perso: è passato
+sull'alone del tratto stesso, quindi adesso è la linea del personaggio a divampare a metà giro
+invece di un disco attorno a lui, cavalcando lo stesso `sin(whip * PI)` dello stiramento.
+
+**Il piede torna a terra da solo.** La regola "la figura visibile riempie la scatola" reggeva su
+un numero scritto a mano: la sagoma più il bordo arrivavano a 0.091 unità oltre la giuntura del
+piede, quindi la giuntura stava a 0.409. Un tratto arriva solo a metà del proprio spessore, cioè
+0.042, e la figura sarebbe rimasta **2.2 px in aria**. Invece di riscrivere il numero l'ho reso
+derivato: `PLAYER_FOOT_REACH` è 0.5 meno mezzo tratto, `PLAYER_LEG_STRETCH` è quanto va allungata
+la gamba per arrivarci (1.15), e **`PLAYER_STRIDE_LENGTH` è allungato dello stesso fattore**,
+perché la falcata era tarata sul rapporto fra quanto coprono i piedi e quanto scorre il mondo —
+altrimenti il personaggio pattina. Tutto scende da `PLAYER_STROKE_WEIGHT`: si cambia il peso e la
+figura resta piantata con la cadenza giusta.
+
+**Il bulbo.** Due contorni di cerchio sovrapposti mostrerebbero gli archi incrociarsi *dentro* la
+testa, e l'interno della testa è l'unico posto di un disegno al tratto che non può permettersi un
+segno di troppo — sono cinque pixel. Quindi è costruito come il profilo dell'**unione**: gli
+estremi dei due archi sono le intersezioni dei cerchi, e quale dei due archi tenere si decide
+**sondando il punto medio** invece di ricavarlo da un segno che è facile prendere al contrario e
+silenzioso quando lo fai, dato che entrambe le risposte sono un anello chiuso.
+
+**Misurato** (armatura usa e getta, cancellata):
+
+- Il profilo del bulbo, a tre inclinazioni diverse dello stelo: 28 punti, **ogni punto su uno dei
+  due cerchi e mai dentro l'altro** (immersione più profonda: 0.000000), passo più lungo 0.059
+  contro un raggio di 0.170 — cioè un anello, non una figura con una corda in mezzo.
+- Contatto col terreno: fondo della scatola 530, **riga accesa più bassa 530**. Appeso al
+  soffitto: cima della scatola 190, riga accesa più alta 189. Entrambi i versi toccano.
+- Il personaggio **inchiostra il 21.2%** della propria scatola: è un disegno, non una macchia.
+- Colonna verticale attraverso il bulbo **in un frame vero, con fondo e bloom**:
+  `123 255×8 198 184 169 186 189 196 255×9` — l'anello satura, il vuoto sta fra 169 e 198, il
+  campo accanto è 62. Il buco sopravvive al bloom, ma illuminato: legge come un bulbo che brilla
+  con un centro più scuro, non come un anello nero. Se non basta, le manopole sono
+  `PLAYER_HEAD_WEIGHT` (anello più sottile = buco più grande) e `PLAYER_STROKE_GLOW`.
+- Gerarchia in un frame vero: **personaggio 255, linea del pavimento 239**. Il personaggio è la
+  cosa più bianca dello schermo, come chiede il documento.
+- Il segno è `[228, 250, 255]` su entrambe le corsie — verificato, non assunto, perché è
+  esattamente il posto dove una modifica futura tornerebbe a prendere `palettes.current`.
+
+**Ricadute**:
+
+- Sparite `PLAYER_RIM_THICKNESS`, `PLAYER_TORSO_THICKNESS`, `PLAYER_LIMB_THICKNESS`,
+  `PLAYER_SPROUT_THICKNESS`, `PLAYER_SPROUT_TIP_THICKNESS`, `PLAYER_LEAF_THICKNESS`,
+  `PLAYER_GLOW_RADIUS`, `PLAYER_GLOW_STRENGTH`. Erano tutte spessori di riempimento.
+- `core.Palette.silhouette` **non ha più nessun consumatore** in tutto il gioco. Non l'ho
+  cancellato: è una decisione da prendere in `core/palette.odin` guardando se la RL.6 o i
+  Frammenti lo rivogliono, e cancellare un campo di palette è più facile che riesumarlo.
+- L'occhio resta l'unica cosa del personaggio che prende il colore del mondo corrente
+  (`accent`). È un punto solo ed è il secondo canale voluto; se anche quello deve diventare
+  neutro è una riga.
+
+**Cosa tocca a te giudicare**: se a 45 px la figura si legge — è **il** rischio della fase e i
+pixel non ci rispondono; se il bulbo illuminato dentro va bene o vuole più buco; se il tratto è
+troppo pesante o troppo leggero (`PLAYER_STROKE_WEIGHT`, che tira dietro gamba e falcata); e se
+il divampare del flip si sente adesso che è sulla linea invece che in un disco. Se non basta, la
+correzione che il documento ha già messo in conto è **ingrandire il personaggio**, ed è una
+decisione tua, non mia.
 
 ---
 

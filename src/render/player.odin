@@ -1,10 +1,11 @@
 /*
 * Player Render
-* The character: the Sprout, a dark silhouette with a bulb head, a small
-* body, four limbs and a sprout growing out of its crown, built entirely
-* from thick lines and circles (Design Doc, section 12 — "a body, two
-* poses"). No sprite, no texture; the sense of quality is meant to come
-* from the math of the movement, not from the detail of the shapes.
+* The character: the Sprout, a bulb head, a small body, four limbs and a
+* sprout growing out of its crown — since phase RL.3 drawn entirely as
+* open strokes, the same mark the world is made of (Design Doc, section
+* 10 — "il tratto"). No sprite, no texture; the sense of quality is meant
+* to come from the math of the movement, not from the detail of the
+* shapes.
 *
 * The proportions come from docs/sketch/spirito_foresta.jpeg (T7.5.3) and
 * they are what makes it read as a sprout rather than as a small person:
@@ -24,11 +25,29 @@
 *   the animation the joint angles for this instant: the run cycle, and
 *                 the drift that replaces it as the Dream takes over
 *
-* The silhouette rule (Design Doc, section 12): the body is the same dark
-* shape in all three states, and only the *light* changes world. The old
-* code inverted body and rim between worlds — a light body in the Real
-* world, a dark one in the Dream — which read as two different
-* characters. That is fixed here.
+* THE CHARACTER IS A CONTINUATION OF THE LINE
+*
+* Nothing here is filled any more. The figure used to be drawn twice — a
+* fattened shape in the world's light to make a rim, then the same shape
+* at true weight in the silhouette colour on top — and phase RL.3
+* replaced both passes with one: every bone is a stroke, and the bulb is
+* a closed stroke around the outline of the two circles that make it.
+*
+* The weight hierarchy is a rule and not a taste (Design Doc, section
+* 10): the character is **the thickest stroke and the whitest core on
+* screen**, above the live lane, which is above the dormant one, which is
+* above the parallax. That is why the weights here are multiples of the
+* world's own stroke rather than numbers of their own — tune
+* TERRAIN_STROKE_THICKNESS and the character stays above it by
+* construction.
+*
+* The mark itself does not change world. It is drawn out of the *neutral*
+* palette, and what changes between the Real and the Dream is what is
+* behind it and what is gathered around it (Design Doc, section 10: "il
+* personaggio è lo stesso segno in entrambi i mondi"). The old code
+* inverted body and rim between worlds — a light body in the Real world,
+* a dark one in the Dream — which read as two different characters; a
+* mark that changes colour is a milder version of the same mistake.
 *
 * There are two poses, and they are layers over one figure rather than
 * two animations. Each is a 0..1 quantity the pose so far is lerped
@@ -69,12 +88,19 @@ import rl "vendor:raylib/v55"
 // flip from having to know about each other.
 
 // The vertical layout rule, and it is not cosmetic: the *visible* figure
-// — the silhouette plus the lit rim drawn around it — has to fill the
-// 45 px box exactly, because since T7.5.1 the bottom of that box is the
-// ground the character stands on. The rim reaches PLAYER_RIM_THICKNESS
-// past the silhouette, so the feet joint sits that much plus half a limb
-// inside the box: 0.409 rather than 0.5. Getting it wrong is precisely
-// what "the character floats" and "the character sinks" look like.
+// has to reach the bottom of the 45 px box exactly, because since T7.5.1
+// the bottom of that box is the ground the character stands on. Getting
+// it wrong is precisely what "the character floats" and "the character
+// sinks" look like.
+//
+// RL.3 changed the arithmetic and, rather than restate a number that
+// would go stale the moment the stroke is tuned, made it derive. A
+// silhouette plus its rim reached 1.7 + 2.4 px past the feet joint,
+// which is why the joint used to sit at 0.409; a stroke
+// reaches only half its own width, so the joint has to sit lower. The leg
+// is stretched to put it there (PLAYER_LEG_STRETCH), and the run cycle's
+// stride is stretched with it so the feet keep covering exactly as much
+// ground as the world does.
 //
 // The feet are the only part that touches anything. Hanging from the
 // ceiling is half a turn plus a mirror, which is a vertical flip, so the
@@ -94,15 +120,16 @@ PLAYER_HEAD_LOBE_RADIUS :: 0.110
 
 PLAYER_NECK :: rl.Vector2{0.030, -0.060}
 PLAYER_SHOULDER :: rl.Vector2{0.020, -0.020}
-PLAYER_HIP :: rl.Vector2{-0.015, 0.134}
+PLAYER_HIP_Y :: 0.134
+PLAYER_HIP :: rl.Vector2{-0.015, PLAYER_HIP_Y}
 
-PLAYER_THIGH_LENGTH :: 0.145
-PLAYER_SHIN_LENGTH :: 0.130
+// The leg as authored, before it is stretched to put the feet on the
+// ground. The proportions are these two numbers; where they end up is
+// PLAYER_LEG_STRETCH's business.
+PLAYER_THIGH_BASE :: 0.145
+PLAYER_SHIN_BASE :: 0.130
 PLAYER_UPPER_ARM_LENGTH :: 0.105
 PLAYER_FOREARM_LENGTH :: 0.095
-
-PLAYER_TORSO_THICKNESS :: 0.165
-PLAYER_LIMB_THICKNESS :: 0.075
 
 // --- The sprout on the crown ---
 //
@@ -114,8 +141,6 @@ PLAYER_LIMB_THICKNESS :: 0.075
 PLAYER_SPROUT_BASE :: rl.Vector2{0.075, -0.335} // on the crown, a little forward
 PLAYER_SPROUT_STEM :: 0.075
 PLAYER_SPROUT_TIP :: 0.045
-PLAYER_SPROUT_THICKNESS :: 0.050
-PLAYER_SPROUT_TIP_THICKNESS :: 0.038
 
 // Radians forward of straight up, at rest. The stem leans a little and
 // the tip leans more, which is the curve the sheet draws.
@@ -123,7 +148,6 @@ PLAYER_SPROUT_CURVE_STEM :: 0.16
 PLAYER_SPROUT_CURVE_TIP :: 0.42
 
 PLAYER_LEAF_LENGTH :: 0.090
-PLAYER_LEAF_THICKNESS :: 0.058
 PLAYER_LEAF_SPREAD :: 1.15 // radians either side of the tip, from the joint
 
 // How far back the sprout is looking, in seconds. Everything that moves
@@ -155,7 +179,9 @@ PLAYER_SPROUT_TIP_FOLLOW :: 1.6 // the tip lags more than the stem does
 // which is the character skating. This keeps the ratio between what the
 // feet cover and what the ground does where it was: small legs, quick
 // steps.
-PLAYER_STRIDE_LENGTH :: 50
+// Stretched with the leg, so the ratio survives whatever the stroke's
+// weight turns out to be.
+PLAYER_STRIDE_LENGTH :: 50 * PLAYER_LEG_STRETCH
 
 PLAYER_LEG_SWING :: 0.62 // radians the thigh swings either side of vertical
 PLAYER_KNEE_BASE :: 0.18 // knees are never locked straight
@@ -193,12 +219,64 @@ STRETCH_AMOUNT :: 0.16 // vertical stretch at the peak of a flip
 SETTLE_DURATION :: 0.22 // length of the post-landing squash bounce
 SETTLE_SQUASH_AMOUNT :: 0.28
 
+// --- The mark ---
+//
+// Weights as multiples of the world's own stroke, because the hierarchy
+// is the rule and the absolute number is not: the character is the
+// thickest line on screen and the world is the second thickest, and
+// saying so in the arithmetic means tuning one cannot silently invert the
+// other (Design Doc, section 10).
+
+PLAYER_STROKE_WEIGHT :: 1.55 // limbs: the character's own weight
+PLAYER_TORSO_WEIGHT :: 1.90 // the spine, a shade heavier again
+PLAYER_HEAD_WEIGHT :: 1.85 // the bulb's outline
+PLAYER_SPROUT_WEIGHT :: 1.15 // the stem, which is the lightest thing on the body
+PLAYER_LEAF_WEIGHT :: 1.35
+PLAYER_SPROUT_TAPER :: 0.72 // the stem thins toward the tip
+
+// The whitest core on screen, against the world's 0.30. It is the second
+// half of the hierarchy: heavier *and* brighter, or a thick line in the
+// same value as the ground is just a thick line.
+PLAYER_CORE_LIGHT :: 0.62
+
+// Kept well under the terrain's, and reaching less far, because the
+// figure is nine overlapping strokes whose halos add — and because the
+// bulb is fifteen pixels across, so a halo that reaches eight of them
+// floods the one part of the character that has to stay hollow.
+//
+// This is the character's whole light now. RL.3 deleted the aura that
+// used to be drawn under it: a 60 px disc of the world's light centred on
+// the hip, which worked only for as long as an opaque body sat on top of
+// it and covered the middle. With the body gone it lit the inside of the
+// figure, which is the doubled-halo case CLAUDE.md answers the same way
+// every time — remove the primitive one.
+PLAYER_STROKE_GLOW :: 0.22
+PLAYER_STROKE_SPREAD :: 2.6
+
+// Extra halo at the peak of a flip. It rides the same sin(whip * PI) the
+// stretch does, so the character flares as it turns and is back to itself
+// by the time it lands — and it flares on its *own* line now rather than
+// inside a disc around it.
+PLAYER_FLIP_GLOW_BOOST :: 0.22
+
+// How many segments each of the bulb's two arcs is tessellated into.
+PLAYER_HEAD_ARC_STEPS :: 14
+
+// Where the feet joint has to sit for the drawn figure to end exactly on
+// the bottom of its box: half the character's own stroke inside it.
+PLAYER_FOOT_REACH ::
+	0.5 - (TERRAIN_STROKE_THICKNESS * PLAYER_STROKE_WEIGHT * 0.5) / f32(game.PLAYER_SIZE)
+
+// What the leg has to be multiplied by to reach it, thigh and shin
+// keeping their proportion to each other.
+PLAYER_LEG_STRETCH ::
+	(PLAYER_FOOT_REACH - PLAYER_HIP_Y) / (PLAYER_THIGH_BASE + PLAYER_SHIN_BASE)
+
+PLAYER_THIGH_LENGTH :: PLAYER_THIGH_BASE * PLAYER_LEG_STRETCH
+PLAYER_SHIN_LENGTH :: PLAYER_SHIN_BASE * PLAYER_LEG_STRETCH
+
 // --- Light ---
 
-PLAYER_RIM_THICKNESS :: 2.4 // how far the lit edge sticks out past the body
-PLAYER_GLOW_RADIUS :: 1.35 // multiples of the box size
-PLAYER_GLOW_STRENGTH :: 0.20
-PLAYER_FLIP_GLOW_BOOST :: 0.35 // extra glow at the peak of a flip
 // One eye, not two (art direction, T7.5.3). More readable at 45 px, and
 // it has no axis of symmetry to keep honest when the figure mirrors
 // halfway through a turn. It is the character's own light: the body is
@@ -343,6 +421,7 @@ pose_point :: proc(pose: PlayerPose, local: rl.Vector2) -> rl.Vector2 {
 
 // A limb segment's far end, given an angle measured from straight down
 // and turning toward the front.
+
 @(private)
 limb_end :: proc(from: rl.Vector2, angle, length: f32) -> rl.Vector2 {
 	return rl.Vector2{from.x + math.sin(angle) * length, from.y + math.cos(angle) * length}
@@ -375,6 +454,7 @@ player_body_offset :: proc(stride, time, world_t: f32) -> rl.Vector2 {
 // The far end of a sprout bone, measured from straight *up* and turning
 // toward the front — the direction a sprout grows, rather than the
 // direction a limb hangs. Same helper underneath, half a turn away.
+
 @(private)
 sprout_end :: proc(from: rl.Vector2, angle, length: f32) -> rl.Vector2 {
 	return limb_end(from, math.PI - angle, length)
@@ -456,58 +536,189 @@ new_player_figure :: proc(stride, time, world_t, whip, sprout_lean: f32) -> Play
 	return figure
 }
 
-// Draws every bone as a thick line with rounded ends, at the given
-// thickness in local units. Called twice: once fat in the world's light
-// to make the rim, once at true weight in the silhouette color on top.
+// One of the character's strokes.
+//
+// The colour is the *neutral* palette's, never the current world's: the
+// character is the same mark wherever it stands, and only what is behind
+// it and gathered around it changes (Design Doc, section 10). It still
+// converges with depth, because every palette in the set does.
+
 @(private)
-draw_player_bones :: proc(
+player_stroke :: proc(palette: core.Palette, weight, flare: f32) -> Stroke {
+	line := new_stroke(palette.light, TERRAIN_STROKE_THICKNESS * weight)
+	line.glow = PLAYER_STROKE_GLOW + PLAYER_FLIP_GLOW_BOOST * flare
+	line.spread = PLAYER_STROKE_SPREAD
+	line.core_light = PLAYER_CORE_LIGHT
+	return line
+}
+
+// A polyline of local joints, through the pose and onto the screen.
+
+@(private)
+draw_player_bone :: proc(
+	pose: PlayerPose,
+	locals: []rl.Vector2,
+	stroke: Stroke,
+	scratch: ^[dynamic]rl.Vector2,
+) {
+	clear(scratch)
+	for local in locals {
+		append(scratch, pose_point(pose, local))
+	}
+	draw_stroke(scratch[:], stroke)
+}
+
+// One circle's arc between two points on it, taking whichever of the two
+// arcs lies *outside* the other circle.
+//
+// Which one that is is decided by probing the midpoint rather than by
+// deriving it, because the derivation turns on which of the two
+// intersection points came out of the radical construction first — a sign
+// that is easy to get backwards and silent when you do, since both
+// answers are a closed loop. Probing asks the question the shape actually
+// poses. It runs in the figure's own frame, before the pose, so the
+// mirror cannot reach it.
+//
+// The arc is emitted from `from` up to but not including `to`, so two of
+// these chain into a closed loop with no doubled vertex at the join.
+
+@(private)
+append_head_arc :: proc(
+	out: ^[dynamic]rl.Vector2,
+	pose: PlayerPose,
+	centre: rl.Vector2,
+	radius: f32,
+	from, to: rl.Vector2,
+	other_centre: rl.Vector2,
+	other_radius: f32,
+) {
+	on_circle :: proc(centre: rl.Vector2, radius, angle: f32) -> rl.Vector2 {
+		return centre + rl.Vector2{math.cos(angle) * radius, math.sin(angle) * radius}
+	}
+
+	start := math.atan2(from.y - centre.y, from.x - centre.x)
+	end := math.atan2(to.y - centre.y, to.x - centre.x)
+	sweep := end - start
+	for sweep <= 0 {
+		sweep += 2 * math.PI
+	}
+
+	probe := on_circle(centre, radius, start + sweep * 0.5)
+	away := probe - other_centre
+	if math.sqrt(away.x * away.x + away.y * away.y) < other_radius {
+		// The wrong half: the same two points, the other way round.
+		sweep -= 2 * math.PI
+	}
+
+	for i in 0 ..< PLAYER_HEAD_ARC_STEPS {
+		angle := start + sweep * f32(i) / f32(PLAYER_HEAD_ARC_STEPS)
+		append(out, pose_point(pose, on_circle(centre, radius, angle)))
+	}
+}
+
+// The bulb, as one closed line: the outline of the union of the head
+// circle and the lobe that tapers it onto the shoulders.
+//
+// Two overlapping circle outlines would show the arcs crossing inside the
+// head, and the inside of the head is the one place a line drawing cannot
+// afford a stray mark — it is four pixels across at this size.
+
+@(private)
+build_head_outline :: proc(pose: PlayerPose, figure: PlayerFigure, out: ^[dynamic]rl.Vector2) {
+	clear(out)
+
+	head := figure.head
+	lobe := PLAYER_HEAD_LOBE_CENTER + (figure.head - PLAYER_HEAD_CENTER)
+	r1 := f32(PLAYER_HEAD_RADIUS)
+	r2 := f32(PLAYER_HEAD_LOBE_RADIUS)
+
+	delta := lobe - head
+	d := math.sqrt(delta.x * delta.x + delta.y * delta.y)
+
+	// The two circles move together, so this cannot happen with the
+	// authored numbers — but the arithmetic below divides by d, and a
+	// plain ring is the right answer if anyone ever changes them.
+	if d < 1e-6 || d >= r1 + r2 || d <= abs(r1 - r2) {
+		steps := PLAYER_HEAD_ARC_STEPS * 2
+		for i in 0 ..< steps {
+			angle := f32(i) / f32(steps) * 2 * math.PI
+			append(
+				out,
+				pose_point(pose, head + rl.Vector2{math.cos(angle) * r1, math.sin(angle) * r1}),
+			)
+		}
+		return
+	}
+
+	// Where the two circles cross: the standard radical-line construction.
+	a := (d * d + r1 * r1 - r2 * r2) / (2 * d)
+	h := math.sqrt(max(r1 * r1 - a * a, 0))
+	direction := delta / d
+	normal := rl.Vector2{-direction.y, direction.x}
+	base := head + direction * a
+
+	first := base + normal * h
+	second := base - normal * h
+
+	append_head_arc(out, pose, head, r1, first, second, lobe, r2)
+	append_head_arc(out, pose, lobe, r2, second, first, head, r1)
+}
+
+// The whole figure, as strokes. Nine marks and an eye, and not one of
+// them is filled.
+//
+// Each limb is its own stroke rather than one polyline through the hip:
+// two legs welded into a single mark would lay the ribbon over itself
+// wherever they are nearly parallel — which the whip pose makes them —
+// and additive geometry that overlaps itself adds twice
+// (render/stroke.odin). Overlapping only at the joints is a bead where a
+// joint is, which is what a joint looks like.
+
+@(private)
+draw_player_marks :: proc(
 	pose: PlayerPose,
 	figure: PlayerFigure,
-	extra_thickness: f32,
-	color: rl.Color,
+	palette: core.Palette,
+	flare: f32,
 ) {
-	limb := PLAYER_LIMB_THICKNESS * pose.unit + extra_thickness
-	torso := PLAYER_TORSO_THICKNESS * pose.unit + extra_thickness
-	stem := PLAYER_SPROUT_THICKNESS * pose.unit + extra_thickness
-	stem_tip := PLAYER_SPROUT_TIP_THICKNESS * pose.unit + extra_thickness
-	leaf := PLAYER_LEAF_THICKNESS * pose.unit + extra_thickness
-	head_radius := PLAYER_HEAD_RADIUS * pose.unit + extra_thickness * 0.5
-	lobe_radius := PLAYER_HEAD_LOBE_RADIUS * pose.unit + extra_thickness * 0.5
+	scratch := make([dynamic]rl.Vector2, 0, 64, context.temp_allocator)
 
-	bone :: proc(pose: PlayerPose, a, b: rl.Vector2, thickness: f32, color: rl.Color) {
-		start := pose_point(pose, a)
-		end := pose_point(pose, b)
-		rl.DrawLineEx(start, end, thickness, color)
-		// Round the joints: a capsule instead of a bare rectangle, so
-		// limbs bend without opening a notch at the elbow or knee.
-		rl.DrawCircleV(start, thickness * 0.5, color)
-		rl.DrawCircleV(end, thickness * 0.5, color)
-	}
+	limb := player_stroke(palette, PLAYER_STROKE_WEIGHT, flare)
+	torso := player_stroke(palette, PLAYER_TORSO_WEIGHT, flare)
+
+	// The spine first and underneath: it is the heaviest mark, and the
+	// limbs read as growing out of it rather than as crossing it.
+	spine := [3]rl.Vector2{figure.hip, figure.shoulder, figure.neck}
+	draw_player_bone(pose, spine[:], torso, &scratch)
 
 	for side in 0 ..< 2 {
-		bone(pose, figure.hip, figure.knees[side], limb, color)
-		bone(pose, figure.knees[side], figure.feet[side], limb, color)
-		bone(pose, figure.shoulder, figure.elbows[side], limb, color)
-		bone(pose, figure.elbows[side], figure.hands[side], limb, color)
+		leg := [3]rl.Vector2{figure.feet[side], figure.knees[side], figure.hip}
+		arm := [3]rl.Vector2{figure.hands[side], figure.elbows[side], figure.shoulder}
+		draw_player_bone(pose, leg[:], limb, &scratch)
+		draw_player_bone(pose, arm[:], limb, &scratch)
 	}
 
-	bone(pose, figure.shoulder, figure.hip, torso, color)
-	bone(pose, figure.neck, figure.shoulder, limb, color)
+	// The sprout is one tapering mark from the crown to the tip, which is
+	// what the taper was built for; the leaves are two short heavier ones
+	// off the joint. It is part of the figure, not a decoration laid over
+	// it, so it is the same colour at a lighter weight.
+	stem := player_stroke(palette, PLAYER_SPROUT_WEIGHT, flare)
+	stem.taper = PLAYER_SPROUT_TAPER
+	sprout := [3]rl.Vector2{figure.sprout_base, figure.sprout_joint, figure.sprout_tip}
+	draw_player_bone(pose, sprout[:], stem, &scratch)
 
-	// The sprout, drawn with the body and in the body's colour: it is part
-	// of the silhouette, not a decoration laid over it. A leaf is a short
-	// fat bone — a capsule is already a leaf at this size, and it gets the
-	// lit rim for free like everything else.
-	bone(pose, figure.sprout_base, figure.sprout_joint, stem, color)
-	bone(pose, figure.sprout_joint, figure.sprout_tip, stem_tip, color)
+	leaf := player_stroke(palette, PLAYER_LEAF_WEIGHT, flare)
 	for leaf_end in figure.leaves {
-		bone(pose, figure.sprout_joint, leaf_end, leaf, color)
+		blade := [2]rl.Vector2{figure.sprout_joint, leaf_end}
+		draw_player_bone(pose, blade[:], leaf, &scratch)
 	}
 
-	// The bulb: the big circle plus the lobe that tapers it onto the
-	// shoulders, so the head ends in a body rather than on a neck.
-	rl.DrawCircleV(pose_point(pose, figure.head), head_radius, color)
-	rl.DrawCircleV(pose_point(pose, PLAYER_HEAD_LOBE_CENTER + (figure.head - PLAYER_HEAD_CENTER)), lobe_radius, color)
+	// The bulb last, so its core is the crispest thing on the character.
+	outline := make([dynamic]rl.Vector2, 0, PLAYER_HEAD_ARC_STEPS * 2, context.temp_allocator)
+	build_head_outline(pose, figure, &outline)
+	bulb := player_stroke(palette, PLAYER_HEAD_WEIGHT, flare)
+	bulb.closed = true
+	draw_stroke(outline[:], bulb)
 }
 
 draw_player :: proc(player: game.Player, world: game.World, palettes: core.PaletteSet) {
@@ -568,24 +779,11 @@ draw_player :: proc(player: game.Player, world: game.World, palettes: core.Palet
 		sprout_lean = lean,
 	)
 
-	// The aura: the world's light gathered around the body, brightest at
-	// the peak of a flip. The body itself never takes a world's color —
-	// only what is around it does (Design Doc, section 12).
-	// Brightest at the peak of the turn.
-	glow_strength: f32 = PLAYER_GLOW_STRENGTH
-	glow_strength += PLAYER_FLIP_GLOW_BOOST * whip
-	draw_glow_circle(
-		pose_point(pose, figure.hip),
-		player.size.y * PLAYER_GLOW_RADIUS,
-		palettes.current.light,
-		glow_strength,
-	)
-
-	// Rim first, body over it: only the edges of the fatter silhouette
-	// survive, which is a lit outline for the price of drawing the figure
-	// twice.
-	draw_player_bones(pose, figure, PLAYER_RIM_THICKNESS * 2, palettes.current.light)
-	draw_player_bones(pose, figure, 0, palettes.current.silhouette)
+	// One pass, and the mark does not change world: the neutral palette's
+	// light is the character wherever it stands (Design Doc, section 10).
+	// What changes between the two worlds is the field behind it and how
+	// much it burns — never its profile and never its colour.
+	draw_player_marks(pose, figure, palettes.neutral, whip)
 
 	draw_player_eye(pose, figure, palettes.current.accent)
 }
@@ -598,6 +796,7 @@ draw_player :: proc(player: game.Player, world: game.World, palettes: core.Palet
 // primitives. Authored in local space, so it follows the mirror and the
 // rotation with no special case — and being single, it has no symmetry
 // to break when the figure turns over.
+
 @(private)
 draw_player_eye :: proc(
 	pose: PlayerPose,
