@@ -1,20 +1,63 @@
 /*
 * Background
-* The first layer of the scene: the two worlds seen at once, Dream above
-* and Real below, meeting in a band of horizon at the middle (Design Doc,
-* section 12 — "the blending").
+* The one filled surface in the whole game (Design Doc, section 10 — "il
+* quadro"): a field of colour with a vignette, and nothing else. Every
+* other mark on screen is a stroke drawn on top of it.
 *
-* What changes as the player moves is not *which* world is on screen but
-* which one is alive: the half being flown toward saturates and lights
-* up, the other dims toward the neutral palette without ever
-* disappearing. That is the whole reason the flip reads as a crossing
-* rather than a toggle.
+* THE FIELD IS THE WORLD
 *
-* The horizon sits at the middle of the screen, which is the midpoint of
-* every flip: the character crosses its own horizon on the way over.
+* Phase RL replaced the old sky — Dream above, Real below, a lit horizon
+* between them — with a single field whose colour *is* the world the
+* player is in. That is decision 1 of the art direction: the two worlds
+* are told apart by the colour behind the line, never by the line itself,
+* so the stroke reads as "the world" rather than as "a thing that
+* changes", and a flip becomes an event across the whole screen instead
+* of a bright band in the middle of it.
 *
-* Parallax silhouettes — the actual scenery — are roadmap phase 10. This
-* is the sky they will stand in front of.
+* The horizon went with the split, and so did its glow: with the field
+* changing colour wholesale there is nothing left for a band of light in
+* the middle of the screen to say that the field is not already saying
+* louder.
+*
+* THE FIELD LAGS, AND THAT IS THE POINT
+*
+* A flip lasts 0.16 s and a burst is three of them back to back. A field
+* that followed world_t literally would strobe, so it chases instead, on
+* a time constant of its own (BACKGROUND_LAG). During a burst it sits
+* somewhere in the middle rather than slamming between the two worlds,
+* and a single deliberate flip reads as a slow wash across the frame.
+*
+* The chased value is **presentation only**: it is advanced from the
+* frame clock in main, next to display_time, and never reaches the
+* simulation. Two consequences worth knowing:
+*
+*   - The background can be Dream-coloured while the player is lit by the
+*     Real world's bloom, and vice versa. That is why every `near` in
+*     core/palette.odin is now under the *lowest* bloom threshold there
+*     is rather than under its own world's — see the comment there.
+*   - It is not a state and does not need to be reset between runs. It
+*     simply arrives, a second late, wherever the player already is.
+*
+* THE VIGNETTE IS A SCREEN FIXTURE
+*
+* It does not ride the corridor's spine the way the old sky did. That
+* rule existed because a horizon nailed to the screen while the world
+* slid up and down underneath it read as two pictures; a vignette is not
+* part of the world's geometry but of the lens looking at it, so it stays
+* where the lens is. Its job (decision 3) is to push the eye to the
+* middle, where the game is played, and to keep the field under the
+* stroke in value, contrast and detail everywhere else.
+*
+* It is baked once into a small mask texture rather than assembled from
+* gradient rectangles every frame. Two half-screen linear gradients meet
+* at a slope discontinuity, and a kink in a ramp this shallow is a Mach
+* band; a mask lets the falloff be a real smoothstep with no kink
+* anywhere, and costs one 256x144 texture.
+*
+* The edges go *darker than* the palette's own `deep`, which is legal in
+* the direction the bloom does not care about, and buys the gradient
+* three times the levels it used to have to spend — see fx/dither.odin
+* for the other half of that fight.
 */
 package render
 
@@ -22,103 +65,121 @@ import "../core"
 import "core:math"
 import rl "vendor:raylib/v55"
 
-// Where the two worlds hand over, as offsets from the corridor's spine
-// rather than as fixed screen rows.
+// How long the field takes to catch up with the player, as the time
+// constant of an exponential chase: it covers 63% of the remaining
+// distance in this many seconds, 95% in three times it.
 //
-// They used to be fixed, back when the two lanes were pinned to the edges
-// of the screen. Since R3 the corridor moves, and a sky nailed to the
-// screen while the world it belongs to slides up and down underneath it
-// reads as two pictures rather than one — the horizon would cut across
-// the Real lane on a high stretch and float above the Dream lane on a low
-// one. So the whole sky rides the spine, and the horizon lands where the
-// middle of a flip does.
-BACKGROUND_DREAM_OFFSET :: -core.SCREEN_HEIGHT / 5 // 144 above the spine
-BACKGROUND_REAL_OFFSET :: core.SCREEN_HEIGHT / 5 // 144 below it
+// At 0.45 a single flip (0.16 s) moves the field about a quarter of the
+// way while the character is still crossing, and the wash finishes about
+// a second after they land. Three flips in a burst leave it near the
+// middle, which is the whole reason it exists.
+BACKGROUND_LAG :: 0.45
 
-// The horizon is never quite still: a slow brightening and dimming, so
-// that even a paused frame does not look like a static image. Period in
-// seconds.
-HORIZON_BREATH_PERIOD :: 7.0
+// The vignette mask. Small on purpose: it is stretched over the canvas
+// with bilinear filtering, and at 5x the interpolation error is well
+// under one 8-bit level of the field it is fading.
+VIGNETTE_MASK_WIDTH :: 256
+VIGNETTE_MASK_HEIGHT :: 144
 
-// How far the horizon glow reaches above and below the line, and how
-// bright it gets: a floor it always has, plus what it gains when the
-// player is near the middle, plus what it gains as the two worlds
-// converge and the threshold takes over the picture.
-HORIZON_GLOW_REACH :: 90
-HORIZON_GLOW_BASE :: 0.06
-HORIZON_GLOW_CROSSING :: 0.22
-HORIZON_GLOW_DEPTH :: 0.12
-
-// Draws the sky of both worlds.
+// The falloff, in units where 1.0 is half the screen's height.
 //
-// time drives only the horizon's breathing, so it can be run time during
-// a run and wall time on a menu without either looking wrong. spine is
-// where the corridor's centre currently sits: the middle of the screen on
-// a menu, and whatever the track says during a run.
-draw_background :: proc(palettes: core.PaletteSet, time: f32, spine: f32) {
-	horizon := clamp(spine, 0, core.SCREEN_HEIGHT)
-	dream_edge := i32(max(horizon + BACKGROUND_DREAM_OFFSET, 0))
-	real_edge := i32(min(horizon + BACKGROUND_REAL_OFFSET, core.SCREEN_HEIGHT))
-	horizon_y := i32(horizon)
+// The horizontal axis is squashed so the bright region is a wide band
+// rather than a circle: the corridor runs the full width of the screen
+// and the whole of it has to stay readable, while there is nothing above
+// or below it that needs to be looked at.
+VIGNETTE_X_SCALE :: 0.72
+VIGNETTE_INNER :: 0.20 // flat and bright inside this radius
+VIGNETTE_OUTER :: 1.25 // fully dark by here, which the corners reach
 
-	dream := core.dormant_palette(palettes.dream, palettes.neutral, palettes.dream_alive)
-	real := core.dormant_palette(palettes.real, palettes.neutral, palettes.real_alive)
+// How far past `deep` the edges go, as a fraction darkened toward black.
+// The bloom only constrains how *bright* a filled surface may be, so this
+// direction is free — and spending it buys levels: 48 of them across the
+// vertical falloff against the 13 the old sky had.
+VIGNETTE_DEPTH :: 0.55
 
-	breath := (math.sin(time / HORIZON_BREATH_PERIOD * 2 * math.PI) + 1) * 0.5
+// The field is never quite still, so a paused frame does not look like a
+// static image. It breathes the vignette's strength and not its colour:
+// a couple of levels at the edges, nothing at all in the middle.
+BACKGROUND_BREATH_PERIOD :: 7.0
+BACKGROUND_BREATH_RANGE :: 0.05
 
-	// The horizon itself: the neutral palette's own background, warmed by whichever
-	// world is currently alive. Warmed only slightly — the threshold is
-	// washed out by definition, and it is the one part of the screen that
-	// must not take a side.
-	horizon_color := core.lerp_color(palettes.neutral.deep, palettes.neutral.near, 0.35 + 0.25 * breath)
-	horizon_color = core.lerp_color(horizon_color, palettes.current.light, 0.10)
+// The mask, built once at startup. Held by main and passed in, the same
+// way fx holds its buffers: render/ owns no globals.
+Background :: struct {
+	vignette: rl.Texture2D,
+}
 
-	// Four vertical gradients: edge -> deep on each side, deep -> horizon
-	// on each side. The near colors sit at the screen edges, where the
-	// terrain is, and the deep ones recede toward the middle.
-	rl.DrawRectangleGradientV(0, 0, core.SCREEN_WIDTH, dream_edge, dream.near, dream.deep)
-	rl.DrawRectangleGradientV(
+new_background :: proc() -> Background {
+	pixels: [VIGNETTE_MASK_WIDTH * VIGNETTE_MASK_HEIGHT]rl.Color
+
+	for y in 0 ..< VIGNETTE_MASK_HEIGHT {
+		dy := (f32(y) + 0.5) / VIGNETTE_MASK_HEIGHT * 2 - 1
+		for x in 0 ..< VIGNETTE_MASK_WIDTH {
+			dx := ((f32(x) + 0.5) / VIGNETTE_MASK_WIDTH * 2 - 1) * VIGNETTE_X_SCALE
+			radius := math.sqrt(dx * dx + dy * dy)
+			amount := math.smoothstep(f32(VIGNETTE_INNER), f32(VIGNETTE_OUTER), radius)
+
+			// White with the falloff in alpha: drawn over the field it
+			// tints to the edge colour, so one texture serves whatever
+			// pair of colours the current world happens to be.
+			pixels[y * VIGNETTE_MASK_WIDTH + x] = rl.Color{255, 255, 255, u8(amount * 255 + 0.5)}
+		}
+	}
+
+	image := rl.Image {
+		data    = raw_data(pixels[:]),
+		width   = VIGNETTE_MASK_WIDTH,
+		height  = VIGNETTE_MASK_HEIGHT,
+		mipmaps = 1,
+		format  = .UNCOMPRESSED_R8G8B8A8,
+	}
+
+	texture := rl.LoadTextureFromImage(image)
+	rl.SetTextureFilter(texture, .BILINEAR)
+	return Background{vignette = texture}
+}
+
+destroy_background :: proc(background: Background) {
+	rl.UnloadTexture(background.vignette)
+}
+
+// One step of the field's chase toward where the player actually is.
+// Framerate independent: the same wall time produces the same result
+// whatever the frame rate, which a plain lerp per frame would not.
+chase_background_t :: proc(current: f32, target: f32, dt: f32) -> f32 {
+	if dt <= 0 {
+		return current
+	}
+	k := 1 - math.exp(-dt / BACKGROUND_LAG)
+	return current + (target - current) * k
+}
+
+// Fills the frame with the world the player is arriving in.
+//
+// background_t is the *chased* position, not the player's own — see the
+// file header. time is wall time and drives nothing but the breathing.
+draw_background :: proc(
+	background: Background,
+	palettes: core.PaletteSet,
+	background_t: f32,
+	time: f32,
+) {
+	// The same two-segment blend the palette itself uses, so the field
+	// passes through the neutral world instead of averaging past it.
+	field := core.sample_palette(palettes, background_t)
+
+	breath := (math.sin(time / BACKGROUND_BREATH_PERIOD * 2 * math.PI) + 1) * 0.5
+	strength := 1 - BACKGROUND_BREATH_RANGE + BACKGROUND_BREATH_RANGE * breath
+
+	rl.DrawRectangle(0, 0, core.SCREEN_WIDTH, core.SCREEN_HEIGHT, field.near)
+
+	edge := core.dim_color(field.deep, VIGNETTE_DEPTH)
+	rl.DrawTexturePro(
+		background.vignette,
+		rl.Rectangle{0, 0, VIGNETTE_MASK_WIDTH, VIGNETTE_MASK_HEIGHT},
+		rl.Rectangle{0, 0, core.SCREEN_WIDTH, core.SCREEN_HEIGHT},
+		rl.Vector2{0, 0},
 		0,
-		dream_edge,
-		core.SCREEN_WIDTH,
-		horizon_y - dream_edge,
-		dream.deep,
-		horizon_color,
-	)
-	rl.DrawRectangleGradientV(
-		0,
-		horizon_y,
-		core.SCREEN_WIDTH,
-		real_edge - horizon_y,
-		horizon_color,
-		real.deep,
-	)
-	rl.DrawRectangleGradientV(
-		0,
-		real_edge,
-		core.SCREEN_WIDTH,
-		core.SCREEN_HEIGHT - real_edge,
-		real.deep,
-		real.near,
-	)
-
-	// How close the player is to the threshold, 1 at the exact middle.
-	// The horizon lights up as it is crossed, which is the flip's single
-	// biggest visual event and costs one number to produce.
-	crossing := 1 - abs(palettes.world_t - 0.5) * 2
-
-	strength :=
-		HORIZON_GLOW_BASE +
-		HORIZON_GLOW_CROSSING * crossing * crossing +
-		HORIZON_GLOW_DEPTH * palettes.depth_t
-	strength *= 0.75 + 0.25 * breath
-
-	draw_glow_band(
-		horizon,
-		HORIZON_GLOW_REACH,
-		0,
-		core.SCREEN_WIDTH,
-		palettes.current.light,
-		strength,
+		core.with_alpha(edge, strength),
 	)
 }

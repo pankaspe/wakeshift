@@ -39,16 +39,19 @@ import rl "vendor:raylib/v55"
 // fills all five, so any drawing code can ask for "the light color"
 // without knowing which world is currently alive.
 Palette :: struct {
-	deep:       rl.Color, // far background, at the horizon
-	near:       rl.Color, // near background, at the floor/ceiling edge
+	deep:       rl.Color, // the field where the vignette takes over, at the edges
+	near:       rl.Color, // the field at its brightest, in the middle of the screen
 	silhouette: rl.Color, // every solid body: player, obstacles, terrain
 	light:      rl.Color, // rim light and glow
 	accent:     rl.Color, // the one thing allowed to shout
 }
 
-// The three palettes, sampled from the art direction (`docs/sketch/
-// sketch_3.jpeg`) rather than invented: teal and cyan below, violet and
-// lavender above, and a blazing white-cyan threshold between them.
+// The three palettes: teal and cyan for the Real world, violet and
+// lavender for the Dream, and a blazing white-cyan neutral between them.
+// The hues were sampled from the art direction that governed on 3-4
+// September 2026 (`docs/sketch/sketch_3.jpeg`) and outlived it — what
+// phase RL changed is what the two background roles *mean* on screen, not
+// which colours they are.
 //
 // **They are darker than the sketch on purpose, and only in value.** The
 // hue and the saturation are the sketch's; the brightness is not. The
@@ -61,15 +64,24 @@ Palette :: struct {
 // where it belongs here: in `light` and `accent`, which are what the
 // bloom is supposed to find.
 //
-// Every background value below is kept under the *lowest* threshold it
-// can ever meet, not merely under its own world's. That distinction was
-// found by measuring rather than by reading: the bloom settings are
-// interpolated on world_t, so a player halfway through a flip is lit by
-// the neutral palette's threshold of 0.30 while the floor at the bottom
-// of the screen is still drawn in the Real palette. The first version of
+// Every background value below is kept under the *lowest* threshold there
+// is — the neutral palette's 0.30 — and not merely under its own world's.
+// That distinction was found by measuring rather than by reading: the
+// bloom settings are interpolated on world_t, so a player halfway through
+// a flip is lit by the neutral threshold while the floor at the bottom of
+// the screen is still drawn in the Real palette. The first version of
 // this table put real.near at 0.369, which is comfortably under Real's
 // own 0.50 and blooms at 20% every time the character crosses the middle.
 // The margins are arithmetic, not opinion — see ROADMAP.md, "La palette".
+//
+// Phase RL made that rule absolute rather than a precaution. The
+// background is now the whole screen and it *lags* the player's position
+// by half a second (render/background.odin), so any world's background can
+// be on screen under any world's bloom threshold — the two are no longer
+// even approximately in step. All three `near` values therefore land on
+// the same 76/255 = 0.298: the brightest a filled surface is allowed to
+// be anywhere in this game. Getting it wrong used to cost one halo too
+// many; with a filled background it costs haze over the entire frame.
 //
 // The other reason the sketch reads lighter than this will is that its
 // brightness is mostly *drawn*: clouds, aurora, plants, all of it hollow
@@ -95,7 +107,7 @@ REAL_PALETTE :: Palette {
 // the entire late game.
 NEUTRAL_PALETTE :: Palette {
 	deep       = rl.Color{0x23, 0x2B, 0x3E, 255}, // 0.243
-	near       = rl.Color{0x33, 0x3D, 0x54, 255}, // 0.329: a whisper over 0.30, deliberately
+	near       = rl.Color{0x2E, 0x37, 0x4C, 255}, // 0.298, like every other near
 	silhouette = rl.Color{0x07, 0x08, 0x10, 255},
 	light      = rl.Color{0xE4, 0xFA, 0xFF, 255},
 	accent     = rl.Color{0xF2, 0xFD, 0xFF, 255},
@@ -110,7 +122,7 @@ NEUTRAL_PALETTE :: Palette {
 // sketches never contained.
 DREAM_PALETTE :: Palette {
 	deep       = rl.Color{0x2C, 0x1F, 0x42, 255}, // 0.259
-	near       = rl.Color{0x3A, 0x24, 0x50, 255}, // 0.314, under Dream's 0.38
+	near       = rl.Color{0x37, 0x22, 0x4C, 255}, // 0.298: under the *neutral* 0.30, not just Dream's 0.38
 	silhouette = rl.Color{0x0A, 0x06, 0x14, 255},
 	light      = rl.Color{0xB7, 0x9B, 0xF7, 255},
 	accent     = rl.Color{0xFF, 0x9F, 0xE2, 255},
@@ -238,19 +250,4 @@ new_palette_set :: proc(world_t: f32, depth_t: f32) -> PaletteSet {
 	}
 	set.current = sample_palette(set, set.world_t)
 	return set
-}
-
-// The palette of a world that is currently the *other* one: its
-// background and its light fade toward the neutral palette, its silhouette does
-// not. Silhouettes stay solid black-ish in every world on purpose — they
-// are how the player reads shapes, and readability outranks mood
-// (pillar 2).
-dormant_palette :: proc(palette: Palette, neutral: Palette, alive: f32) -> Palette {
-	fade := (1 - clamp(alive, 0, 1)) * DORMANT_FADE
-	faded := palette
-	faded.deep = lerp_color(palette.deep, neutral.deep, fade)
-	faded.near = lerp_color(palette.near, neutral.deep, fade)
-	faded.light = lerp_color(palette.light, neutral.deep, fade)
-	faded.accent = lerp_color(palette.accent, neutral.light, fade)
-	return faded
 }

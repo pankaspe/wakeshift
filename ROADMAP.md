@@ -58,25 +58,23 @@ non muoversi era la risposta giusta quasi sempre.
 
 ## Stato attuale
 
-**Fatte R1, R2 e R3, playtest compresi; la R4 è costruita e aspetta il suo.** Il gioco adesso
-*è* quello del documento nel suo cuore: due corsie, un gesto, il cubo che blocca invece di
-uccidere in sei forme, la Corruzione che avanza da sinistra mangiando il terreno che perdi, un
-corridoio che ondeggia e si strozza, e la Sentinella — quindi tutti e tre i pericoli e tutti e
-tre i verbi sono a schermo. Mancano il pool vero (R5) e l'economia (R6).
+**Fatte R1, R2, R3 e R4, playtest compresi.** Il gioco adesso *è* quello del documento nel suo
+cuore: due corsie, un gesto, il cubo che blocca invece di uccidere in sei forme, la Corruzione
+che avanza da sinistra mangiando il terreno che perdi, un corridoio che ondeggia e si strozza, e
+la Sentinella — quindi tutti e tre i pericoli e tutti e tre i verbi sono a schermo. Mancano il
+pool vero (R5) e l'economia (R6).
 
 **Il 4 settembre 2026 la direzione artistica è cambiata da capo**: via lo stile Ori, dentro
-**La Linea** di Cavandoli. La fase che la porta a schermo è la **RL**, e va fatta prima della
-R5 perché cambia cos'*è* un pattern.
+**La Linea** di Cavandoli. La fase che la porta a schermo è la **RL**, ed è in corso: va prima
+della R5 perché cambia cos'*è* un pattern.
 
-**Prossima**: il playtest della R4 (R4.6), poi la RL. Il playtest della R4 va fatto **adesso e
-sulle meccaniche** — se i tre pericoli fanno domande diverse — e non sull'aspetto, che sta per
-essere buttato: come si legge la coppia a specchio si rigiudica dopo la RL. Il punto 3 delle
-note del playtest R2.6 — il contatto col cubo — è arrivato a scadenza insieme al resto.
+**Prossima**: la RL.2 — il tratto diventa il mondo. La RL.1 è fatta e il fondo è già quello
+nuovo, quindi da qui in avanti quello che si giudica a schermo è **la linea sopra un fondo che
+funziona**, non più il vecchio silhouette-e-luce.
 
 **Cosa sopravvive intatto e non va toccato**: tutto `platform/` (finestra, display,
 salvataggio, cifratura, percorsi); `fx/bloom`; `render/stroke` e `render/glow`; i menu e le
-opzioni; il timestep fisso, il recorder e il manifesto; l'asse saturazione della palette
-costruito nella T8.1.
+opzioni; il timestep fisso, il recorder e il manifesto.
 
 ---
 
@@ -245,7 +243,7 @@ bordo `[228,250,255]` **identico bit per bit** prima e dopo, e il lato pulito in
 `desaturate_color`, `desaturate_palette` e `PaletteSet.corruption_t`. Non lo guidava più niente
 e non deve: una palette che vale per tutto lo schermo non può esprimere un confine.
 
-### 2. Il banding nei gradienti — **diagnosticato, non ancora risolto**
+### 2. Il banding nei gradienti — ✅ **fatta nella RL.1**
 
 Le sfumature dello sfondo mostrano bande orizzontali visibili. Non è un caso e non si risolve
 ritoccando i colori — **è una conseguenza diretta del vincolo sul bloom**.
@@ -264,12 +262,17 @@ mandare il cielo dentro il bloom. Il prezzo è che un gradiente di fondo ha solo
 una banda ogni **33 px**. Alzare il contrasto dei fondi risolverebbe il banding e romperebbe il
 margine sul bloom: sono la stessa decisione vista da due lati.
 
-**La soluzione è il dithering**, non il colore: un rumore ordinato di ±1 livello applicato ai
-gradienti rompe le bande senza toccare i valori medi di una virgola, quindi senza spostare un
-solo pixel rispetto alla soglia del bright pass. Sta nella **R7**, insieme al resto della resa,
-a meno che a schermo dia più fastidio di quanto dia adesso.
+**La soluzione è il dithering**, non il colore. Anticipata dalla R7 alla RL.1, perché con La
+Linea il fondo diventa tutta la superficie dello schermo e un difetto del fondo smette di essere
+un difetto di un angolo: `fx/dither.odin`, un livello di rumore sul frame finito, alla
+risoluzione vera, dopo il bloom e prima della Corruzione. I numeri e il limite onesto di quel
+che compra stanno nella RL.1.
 
-### 3. Le collisioni col cubo e con le trappole — **da rivedere nella R4**
+La RL.1 ha anche cambiato il termine del problema: portando i bordi della vignettatura **più
+scuri di `deep`** — direzione che il bloom non vincola — la rampa del fondo è passata da 13
+livelli a **41**. Metà del banding è sparita così, senza toccare il margine sul bright pass.
+
+### 3. Le collisioni col cubo e con le trappole — ✅ **chiusa con la R4**
 
 Segnalata la sensazione che il contatto col cubo e con gli altri pericoli vada guardato meglio.
 Non è ancora un difetto identificato, e ha senso riguardarlo **dopo la R4**, quando il cubo avrà
@@ -277,6 +280,10 @@ le sue varianti (pila, piramide, fluttuante, a specchio) e la Sentinella esister
 il contatto con l'unica forma che esiste vorrebbe dire rifarlo fra due fasi. Da tenere d'occhio
 nel frattempo: il cubo è un rettangolo pieno e la sagoma del personaggio no, quindi il momento in
 cui "tocca" può arrivare prima di quanto l'occhio si aspetti.
+
+**Chiusa il 4 settembre 2026**: la R4 è stata giocata con tutte e sei le forme del cubo e con la
+Sentinella, ed è passata senza correzioni richieste. Se il contatto torna a dare fastidio quando
+il cubo smette di essere un rettangolo e diventa un gradino nella linea, si riapre nella RL.2.
 
 ---
 
@@ -336,76 +343,26 @@ non una svista.
 
 ---
 
-### Fase R4 — I tre pericoli — **costruita, in attesa del playtest**
+### ✅ Fase R4 — I tre pericoli
 
-**Obiettivo**: tutta la varietà da tre elementi e tre verbi. *Il cubo costa, il buco uccide, la
-Sentinella vieta di muoversi.*
+Tutta la varietà da tre elementi e tre verbi: *il cubo costa, il buco uccide, la Sentinella
+vieta di muoversi*. Il cubo è **una primitiva in sei taglie** (`CubeForm`), e meccanicamente
+conta solo la larghezza — pila e piramide costano quanto sono larghe e l'altezza è retorica, il
+che è un pregio: si leggono come *peggio* a colpo d'occhio costando uguale. La Sentinella occupa
+il 42% dello spessore attorno alla spina ed è disegnata con la palette **neutra**, perché non è
+di nessuno dei due mondi. Il buco era già come lo chiede il documento dalla R2.
 
-| Task | Descrizione | Modello | |
-|---|---|---|---|
-| R4.1 | Le varianti del cubo: singolo di lato n, pila, piramide, **cubo a specchio** (su entrambe le corsie — legale, perché non uccide) | Sonnet | ✅ |
-| R4.2 | Il cubo fluttuante dell'Onirico: sale e scende, a volte blocca e a volte ci passi sotto. L'unico ostacolo di tempismo del set | **Opus** | ✅ |
-| R4.3 | Il **buco**, largo, con bordi netti e pozzo scuro sul pavimento e bordi sfumati con bagliore sul soffitto | Sonnet | ✅ già fatto in R2/R3 |
-| R4.4 | La **Sentinella**: raggio nella fascia centrale del corridoio, letale per chi attraversa e innocuo per chi sta fermo su una corsia | **Opus** | ✅ |
-| R4.5 | La validazione automatica della regola di equità: nessun istante con entrambe le corsie letali, nessuna Sentinella sopra un buco | **Opus** | ✅ |
-| R4.6 ⚑ | Playtest: i tre elementi si combinano in domande diverse, e il cubo a specchio si legge come una scelta e non come un bug | — | ⚑ tocca a te |
+**Playtest passato il 4 settembre 2026**, senza correzioni richieste. Le due cose che erano state
+lasciate al giudizio restano come sono: la coppia a specchio costa 4 px di pista (un contrattempo,
+non un prezzo — la manopola è `PLAYER_RECOVERY_RATIO` ed è taratura da R5.3), e il corpo che
+attraversa la scatola per uscirne è il prezzo inevitabile della regola "un cubo ti trattiene, non
+ti trascina".
 
-**Cos'è stato costruito.** Il cubo è **una primitiva in sei taglie** (`CubeForm`): standard,
-piccolo, largo, pila, piramide, fluttuante. Meccanicamente conta solo la larghezza — e, sul
-fluttuante, se la scatola è nella fascia del corpo — quindi pila e piramide costano quanto sono
-larghe e l'altezza è retorica. È un pregio: si leggono come *peggio* a colpo d'occhio costando
-uguale. La Sentinella occupa il 42% dello spessore attorno alla spina, cavalca la spina per
-tutta la sua lunghezza, ed è disegnata con la palette **neutra**: non è di nessuno dei due
-mondi. Il buco era già come lo chiede il documento dalla R2, e non l'ho toccato.
-
-**Tre cose che la simulazione rigiocata ha detto e che il ragionamento a tavolino non aveva
-visto** (arnese usa-e-getta sulla simulazione vera, poi cancellato):
-
-1. **Il cubo ti trattiene, non ti trascina.** Chi atterra su una corsia già occupata sta *dietro*
-   alla faccia del cubo di un intero flip, e il vecchio aggancio lo avrebbe strappato indietro in
-   un solo passo — un teletrasporto visibile, e la ragione per cui una coppia a specchio sarebbe
-   stata inescapabile: cancellava esattamente il terreno che il flip aveva guadagnato. Adesso la
-   perdita in un passo è tetto allo scorrimento del mondo. Ne cadono fuori due cose: `velocity_x`
-   non può mai scendere sotto `-scroll_speed`, quindi l'aritmetica della profondità non ha più
-   bisogno di un clamp; e la coppia a specchio **finisce**, perché ogni flip avanza di
-   `flip_clearance` e prima o poi si passa.
-2. **La larghezza di un cubo isolato non costa niente.** Qualunque sia, la risposta è un flip
-   sulla corsia libera. La larghezza diventa un prezzo solo dove una corsia libera non c'è —
-   cioè nella coppia a specchio, e in nessun altro posto. Piccolo e largo stanno nel set per
-   l'occhio, non per la mano, ed è un mestiere legittimo.
-3. **Un cubo dentro il raggio della Sentinella è una trappola, non un prezzo.** Chi è incastrato
-   è fermo *nel mondo*, e nel mondo c'è anche il raggio: quindi il raggio non gli passa mai
-   sopra, e il flip che lo libererebbe è l'unica cosa che il raggio uccide. Resta lì finché la
-   Corruzione arriva, che è l'unica morte che il pilastro 7 vieta. Il validatore adesso lo
-   rifiuta. La combinazione che il documento vuole va costruita al contrario: **il raggio ti
-   tiene sulla corsia che hai scelto e il cubo ti aspetta lì l'istante in cui il divieto cade**,
-   il che lascia esattamente una finestra da un flip.
-
-**Misurato**
-
-| | |
-|---|---|
-| un flip guadagna, contro qualcosa di fermo nel mondo | 28.5 px a 270 px/s, 39.1 a 370 |
-| coppia a specchio standard, martellando il tasto | libero in **0.33 s** e 3 flip a 270; 0.20 s e 2 flip a 370 |
-| ... quanto costa in pista | **4 px** a 270, 6 px a 370 — un contrattempo, non un prezzo |
-| ... e restando fermi | non se ne esce mai: 310 passi bloccati, 1395 px mangiati |
-| corpo dentro la scatola mentre ci si passa | fino a **45 px, l'83%** di un cubo standard, per ~3 fotogrammi |
-| cubo isolato, qualunque forma | 1 flip, 4 px, identico da 27 a 162 px di larghezza |
-| Sentinella | fermi su una corsia qualsiasi: vivi. Attraversando: morti |
-| Sentinella + cubo, uscendo appena il divieto cade | lo si schiva del tutto, 0 px |
-| ... uscendo 0.25 s tardi | 6 passi incastrato, **27 px** — contro i 150 di pista minima |
-| perdita massima in un singolo passo | 6.1667 px contro uno scorrimento di 6.1667 → **mai di più** |
-| 180 s di generatore vero | 107 ostacoli, tutte e sei le forme presenti, picco 19 fotogrammi su 64 |
-| rilettura dei pixel, un fotogramma con tutto dentro | tutte e sette le forme disegnano; la piramide copre il 67% del suo rettangolo, che è (1+2+3)/9 |
-
-**Le due cose da giudicare al playtest, che io non posso giudicare**
-
-- **La coppia a specchio costa quasi niente** (4 px). Martellando si è a mezz'aria dieci passi su
-  undici, e a mezz'aria niente su una corsia ti tocca. Se deve costare di più la manopola è
-  `PLAYER_RECOVERY_RATIO`, ed è taratura da R5.3, non un bug.
-- **Mentre ci si passa attraverso, il corpo è dentro la scatola.** È il prezzo inevitabile della
-  regola qui sopra: per uscirne bisogna finire oltre, e l'unica strada è attraverso. Se si legge
-  come *incastrato* va bene; se si legge come *fantasma*, la correzione è di design e la decidi tu.
+Le tre regole che la simulazione rigiocata ha stabilito — il cubo trattiene e non trascina, la
+larghezza di un cubo isolato non costa niente, un cubo dentro il raggio della Sentinella è una
+trappola e il validatore lo rifiuta — sono in `CLAUDE.md`, sezione "The three dangers, three
+verbs", con i numeri. La combinazione Sentinella + cubo si costruisce al contrario: **il raggio
+ti tiene sulla corsia che hai scelto e il cubo ti aspetta lì l'istante in cui il divieto cade**.
 
 ---
 
@@ -477,7 +434,7 @@ livello applicato allo schermo, è un posto dove la linea ha smesso di esserci.
 
 | Task | Descrizione | Modello |
 |---|---|---|
-| RL.1 | **Il fondo diventa il mondo**: due fondi con vignettatura, uno per mondo, e una miscela che *insegue* `world_t` con il suo ritardo invece di seguirlo. Presentazione pura: il valore ritardato vive in `main` accanto a `display_time` e non tocca mai la simulazione | **Opus** |
+| RL.1 ✅ | **Il fondo diventa il mondo**: due fondi con vignettatura, uno per mondo, e una miscela che *insegue* `world_t` con il suo ritardo invece di seguirlo. Presentazione pura: il valore ritardato vive in `main` accanto a `display_time` e non tocca mai la simulazione | **Opus** |
 | RL.2 | **Il tratto è il mondo**: `render/terrain.odin` ridisegna le due corsie come polilinee continue senza riempimento, e gli ostacoli entrano **dentro** la stessa polilinea invece di essere disegnati sopra. `render/obstacle.odin` si svuota | **Opus** |
 | RL.3 | **Il personaggio è una continuazione della linea**: contorno aperto al posto della sagoma piena, con il tratto più pesante e il nucleo più bianco del mondo attorno. Il sistema di pose resta intero — cambia solo l'ultimo passaggio | **Opus** |
 | RL.4 | **Il glow cresce verso l'Onirico**, e la corsia dormiente si assottiglia. Qui si decide anche se le due linee stanno bene entrambe piene: La Linea ne ha una, noi ne abbiamo due, e due tratti paralleli identici leggono come un tubo invece che come un orizzonte | Sonnet |
@@ -486,6 +443,70 @@ livello applicato allo schermo, è un posto dove la linea ha smesso di esserci.
 | RL.7 | **Le curve**: adottare `core:math/ease` della libreria standard (tutto il set Penner) e cancellare `core/ease.odin`. `ease.ease` è una funzione pura e può stare ovunque; il tween `flux` alloca e va a orologio, quindi **solo presentazione** o salta il determinismo — replay e validazione del punteggio | Sonnet |
 | RL.8 | **Parallasse**: linee più sottili, più fioche e più lente dietro. Anticipata dalla R7, e con questa direzione costa un decimo | Sonnet |
 | RL.9 ⚑ | Playtest: il mondo si legge in due secondi, il fondo non dà fastidio, il flip si sente come un evento, e il personaggio a 45 px si vede | — |
+
+#### RL.1 ✅ — Il fondo è il mondo (4 settembre 2026)
+
+Il cielo a due metà con l'orizzonte illuminato è sparito. Al suo posto c'è **un campo solo**, il
+cui colore *è* il mondo in cui sei, con una vignettatura fissa allo schermo. L'orizzonte se n'è
+andato insieme alla divisione, ed è giusto così: con il campo che cambia colore per intero, una
+fascia di luce in mezzo allo schermo non ha più niente da dire che il campo non stia già dicendo
+più forte.
+
+**Il ritardo.** `render.chase_background_t`, costante di tempo 0.45 s, avanzato in `main` accanto
+a `display_time` — presentazione pura, non entra mai in un passo di simulazione. Misurato: un
+flip singolo (0.167 s) sposta il campo del **31%** e finisce il lavaggio circa un secondo dopo
+l'atterraggio; **sei flip di fila** lo lasciano dentro `[0.21, 0.53]`, cioè fermo a metà strada,
+che è esattamente la ragione per cui esiste. Identico a 30, 60 e 240 fps fino alla quinta cifra.
+
+**Due conseguenze che non avevo previsto, e che hanno cambiato altro codice.**
+
+1. **Il vincolo sul bloom è diventato assoluto.** Con il fondo che insegue, qualunque mondo può
+   stare a schermo sotto la soglia di qualunque altro: le due cose non sono più nemmeno
+   approssimativamente in fase. Quindi *tutti* i `near` della palette stanno adesso sotto la
+   soglia più bassa che esiste (0.30, il neutro) e non sotto quella del proprio mondo.
+   `neutral.near` era 0.329 e `dream.near` 0.314; entrambi portati a 76/255 = **0.298**, dov'era
+   già `real.near`. Verificato spazzando tutto lo spazio (world_t, depth_t): il valore pieno più
+   chiaro del gioco è 0.2980.
+2. **I bordi possono andare più scuri di `deep`.** Il bloom vincola solo quanto una superficie
+   piena può essere *chiara*, quindi la direzione scura è gratis — e spenderla compra livelli: la
+   rampa della vignettatura ne ha **41** contro i 13 del vecchio cielo.
+
+**Il banding**, che con un fondo pieno smetteva di essere un dettaglio rimandabile.
+`fx/dither.odin`: un livello di rumore sul frame finito, alla risoluzione vera, **dopo il bloom e
+prima della Corruzione**. Misurato: il 49.5% dei pixel alzato di esattamente un livello e nessuno
+di più, la banda piatta più larga della rampa da 16 px a 8, scarto di media +0.495 di livello.
+L'ordine non è un gusto: un pixel di fondo alzato di uno finisce a 0.302, cioè **appena sopra**
+la soglia più bassa del bloom, quindi eseguirlo prima gli regalerebbe metà del fondo.
+
+E detto onestamente, perché la parola "dithering" promette più di quanto questo mantenga: il
+dithering vero perturba **prima** della quantizzazione, e quando un passaggio riesce a leggere il
+frame la quantizzazione è già avvenuta. Questo non toglie il gradino fra due bande, ne seppellisce
+la riga dritta sotto un rumore della stessa ampiezza. Se a schermo non basta, la correzione vera è
+disegnare il fondo con uno shader che ditherizza prima di scrivere — ed è una decisione da
+prendere guardandolo, non qui.
+
+**La vignettatura è fissa allo schermo**, non cavalca la spina come faceva il cielo. Quella regola
+esisteva perché un orizzonte inchiodato allo schermo mentre il mondo gli scorreva sotto leggeva
+come due immagini; una vignettatura non è geometria del mondo ma dell'obiettivo che lo guarda, e
+sta dove sta l'obiettivo. È cotta una volta in una maschera 256x144, perché due gradienti lineari
+a mezzo schermo si incontrano con una discontinuità di pendenza, e una piega in una rampa così
+poco contrastata è una banda di Mach.
+
+Numeri, mondo Reale, canale blu: centro **76**, bordo laterale 53, bordo alto e basso 36, angoli
+29. Il corridoio a spessore neutro (spina ±170) sta fra 68 e 44. Rampa monotona, zero inversioni.
+
+**Cosa tocca a te giudicare**: quanto è forte la vignettatura (`VIGNETTE_DEPTH`, oggi 0.55),
+quanto è largo il centro chiaro (`VIGNETTE_X_SCALE`, 0.72), se 0.45 s è il ritardo giusto
+(`BACKGROUND_LAG`), e se il banding si vede ancora. Il resto della scena è ancora quello vecchio:
+il tratto arriva con la RL.2.
+
+**Ricaduta**: `core.dormant_palette` non aveva più chiamanti ed è stata cancellata — la palette
+del mondo dormiente serviva al cielo a due metà e a nient'altro; `render/terrain.odin` e
+`render/obstacle.odin` leggono `real_alive`/`dream_alive` per conto loro.
+`game.get_track_at_anchor` è rimasta senza chiamanti ma resta: è un accessore legittimo dello
+stato del mondo, e la RL.5 lo vorrà.
+
+---
 
 #### I rischi che segnalo adesso
 
@@ -509,12 +530,10 @@ livello applicato allo schermo, è un posto dove la linea ha smesso di esserci.
 Particelle (intera), Scenografia (intera), e la parte della UI che riguarda lo stile. Alla R7
 restano audio, game feel, il font vero e il Referto Onirico.
 
-#### Cosa va aggiornato in `docs/`
+#### Cosa va aggiornato in `docs/` — ✅ fatto
 
-La sezione 10 del documento di design (*Identità visiva*) e i riferimenti a `docs/sketch/`
-descrivono una direzione che non è più quella. Il documento è tuo: dimmi se lo riscrivo io o se
-preferisci farlo, ma va fatto **prima** della R5, per la stessa ragione per cui va fatta prima
-la RL.
+La sezione 10 del documento di design (*Identità visiva*) è stata riscritta su La Linea nella
+v2.1, e gli sketch non vanno più riletti come vincolanti.
 
 ---
 
@@ -603,7 +622,7 @@ che gli sketch non hanno mai contenuto.
 | ruolo | Reale (sotto) | Neutra (l'orizzonte) | Onirico (sopra) |
 |---|---|---|---|
 | `deep` | `#16323F` | `#232B3E` | `#2C1F42` |
-| `near` | `#1A3E4C` | `#333D54` | `#3A2450` |
+| `near` | `#1A3E4C` | `#2E374C` | `#37224C` |
 | `silhouette` | `#050C11` | `#070810` | `#0A0614` |
 | `light` | `#5FE0F0` ciano | `#E4FAFF` bianco-ciano | `#B79BF7` lavanda |
 | `accent` | `#8CF5B8` verde | `#F2FDFF` | `#FF9FE2` rosa |
@@ -624,19 +643,22 @@ neutra (0.30) mentre il pavimento in fondo allo schermo è ancora disegnato nell
 Reale**. La prima versione della tabella aveva `real.near` a 0.369 — tranquillamente sotto lo
 0.50 del Reale — e fioriva al 20% ogni volta che il personaggio attraversava il centro. Adesso
 ogni fondo sta sotto la soglia *più bassa che può incontrare*, non solo sotto la propria. Il
-caso peggiore residuo è `neutral.near` a 0.087, ed è voluto: un soffio sui bordi dello schermo
-quando la convergenza prende il sopravvento.
+La RL.1 ha poi reso quel vincolo **assoluto** invece che prudenziale. Da quando il fondo insegue
+la posizione del personaggio con un ritardo suo, i due non sono più nemmeno approssimativamente
+in fase: qualunque mondo può essere a schermo sotto la soglia di qualunque altro. Tutti e tre i
+`near` stanno adesso sullo stesso valore, 76/255 = **0.298** — `neutral.near` era 0.329 e
+`dream.near` 0.314 — e il contributo del fondo al bright pass è zero in ogni punto dello spazio
+`world_t` × `depth_t`.
 
-**Cosa manca ancora, e non è la palette.** Lo sketch resta più chiaro di così perché la sua
-luminosità è in gran parte *disegnata*: nuvole, aurore, piante, tutto contorno luminoso vuoto.
-Quella è scenografia, ed è la **R7**. Nello stesso ordine di idee, nello sketch le piattaforme
-sono rettangoli **cavi** con un tratto al neon, mentre da noi il terreno è una massa piena con
-il bordo illuminato: è un cambio di disegno, non di colore, e sta nella **R3** insieme al resto
-del tracciato.
+**Le tinte sono sopravvissute al cambio di direzione, i ruoli no.** La Linea non ha rimesso in
+discussione quali colori siano i due mondi, ma ha cambiato cosa `deep` e `near` *sono* sullo
+schermo: non più il cielo lontano e il cielo vicino alle due corsie, ma il campo al centro
+(`near`) e il campo dove la vignettatura prende il sopravvento (`deep`). Stessi valori, altro
+mestiere.
 
-**Due assi del colore, da non far collidere mai**: la **tinta** si muove con la profondità (i
-due mondi convergono), la **saturazione** con la Corruzione (e si muove nello spazio, da
-sinistra).
+**Un asse del colore solo**: la **tinta**, che si muove con la profondità mentre i due mondi
+convergono verso il neutro. La Corruzione non ne ha uno e non deve riprenderselo — è un
+*posto*, non un livello (nota 1 del playtest R2.6).
 
 ---
 

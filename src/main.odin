@@ -116,6 +116,18 @@ main :: proc() {
 	corruption_fx := fx.new_corruption()
 	defer fx.destroy_corruption(corruption_fx)
 
+	// One level of noise over the finished frame, between the bloom and
+	// the Corruption (fx/dither.odin). The background is the whole screen
+	// now, so the banding in its gradients stopped being a detail.
+	dither := fx.new_dither()
+	defer fx.destroy_dither(dither)
+
+	// The vignette mask the background is drawn through, baked once
+	// (render/background.odin). render/ owns no globals, so main holds it
+	// the same way it holds the bloom's buffers.
+	background := render.new_background()
+	defer render.destroy_background(background)
+
 	// build the cumulative per-tier pattern pools, then catch any
 	// pattern-authoring mistakes immediately at startup — for every tier,
 	// not just the base one
@@ -206,6 +218,14 @@ main :: proc() {
 	// it and must never be confused with world.elapsed_time, which is the
 	// simulation's own clock and advances in fixed steps.
 	display_time: f32 = 0
+
+	// Where the *background* thinks the player is, which is not quite
+	// where they are: it chases world_t on a lag of its own so a burst of
+	// flips washes the screen instead of strobing it
+	// (render/background.odin). Presentation only, like display_time —
+	// it is advanced from the frame clock and never enters a step. Starts
+	// between the two worlds, which is where the menu's drift lives.
+	background_t: f32 = 0.5
 
 	// Simulation input waiting for a step to consume it. Needed because a
 	// frame and a step are no longer the same thing: a frame that runs no
@@ -489,19 +509,13 @@ main :: proc() {
 
 		rl.ClearBackground(palettes.neutral.deep)
 
-		// The sky rides the corridor, so it is one picture with the world
-		// rather than a backdrop the world slides across. A menu has no
-		// track, so it sits at the middle of the screen.
-		background_spine := f32(core.TRACK_SPINE_DEFAULT)
-		if showing_run {
-			spine, _ := game.get_track_at_anchor(world)
-			background_spine = spine
-		}
-		render.draw_background(
-			palettes,
-			showing_run ? world.elapsed_time : display_time,
-			background_spine,
-		)
+		// The field is the world (Design Doc, section 10), and it arrives
+		// about a second after the player does. Chased here rather than
+		// inside the draw because it is state that has to survive the
+		// frame, and it is advanced from the frame clock — the same wall
+		// time display_time is made of, never a simulation step.
+		background_t = render.chase_background_t(background_t, palettes.world_t, frame_time)
+		render.draw_background(background, palettes, background_t, display_time)
 
 		switch game_state {
 		case .MainMenu:
@@ -553,6 +567,12 @@ main :: proc() {
 		// It reads the same two variables the palette does, so the bloom
 		// and the colors describe one world rather than two.
 		fx.apply_bloom(&bloom, disp.render_target, fx.bloom_for_world(palettes.world_t, palettes.depth_t))
+
+		// After the bloom, because a lifted field pixel lands just *over*
+		// the lowest bloom threshold and the bright pass must never see
+		// one; and before the Corruption, so the void behind the front
+		// stays a black with nothing scattered in it (fx/dither.odin).
+		fx.apply_dither(dither, disp.render_target)
 
 		// After the bloom, so a lit edge's halo greys along with the edge
 		// that threw it. The front is given as a fraction of the frame,

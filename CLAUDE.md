@@ -26,8 +26,9 @@ player the **Corruption** advances from the left, and the distance between the t
 health bar there is. **A mistake costs ground, not the run**: a cube blocks rather than kills,
 and while you are pinned the Corruption gains. Obstacles and track alike are authored as
 *events in time*, never as pixel positions, so scroll speed can change without redrawing a
-single pattern. The visual identity is silhouette-and-light: dark shapes, coloured rim light,
-bloom, and a palette that blends continuously between the two worlds.
+single pattern. The visual identity is **La Linea**: a filled, vignetted field that *is* the
+world you are in, one continuous glowing stroke drawn on it, and nothing else — the field
+changes colour with the world, the stroke never does.
 
 ---
 
@@ -88,16 +89,18 @@ systems" complication below rather than working around it. Four decisions are al
 bind the phase: **the background changes, never the stroke**; the blend **lags** `world_t` by
 half a second or so, because a flip is 0.16 s and three in a row would strobe; the background
 never competes with the line for attention; and the line's **glow grows toward Dream**, which is
-the second channel that says where you are going (pillar 6). The world also **draws itself on
+the second channel that says where you are going (pillar 6). The first three are built (RL.1);
+the fourth is RL.4. The world also **draws itself on
 the right** as the Corruption eats it on the left — two mirrored fronts — and the draw front may
 never move far enough left to steal warning time (pillar 3).
 
 **Where the project stands.** The design was rewritten on 4 September 2026 (v1.3 → v2.0, then
-v2.1 for the art direction), and **R1 through R4 are built** (R4 awaits its playtest): two lanes, one gesture, a cube that
-*blocks* rather than kills in six forms, a Corruption front advancing from the left that eats
-the ground a mistake costs you, a track whose corridor undulates and pinches, and the Sentinel —
-so all three dangers and all three verbs are on screen. Still missing: the real pattern pool
-(R5), fragments and the Gate (R6).
+v2.1 for the art direction), and **R1 through R4 are built and playtested**: two lanes, one
+gesture, a cube that *blocks* rather than kills in six forms, a Corruption front advancing from
+the left that eats the ground a mistake costs you, a track whose corridor undulates and pinches,
+and the Sentinel — so all three dangers and all three verbs are on screen. **Phase RL is in
+progress**: RL.1 is done, so the background is already the new one and the rest of the scene is
+not. Still missing: the real pattern pool (R5), fragments and the Gate (R6).
 
 Why it was rewritten, measured rather than guessed: 200 simulated runs that never touched the
 key, **161 survived the whole first tier**, median death at 35 s; **86% of the time** nothing on
@@ -135,8 +138,10 @@ render target turns "does the bloom look right" into arithmetic: draw the frame 
 with the effect and once without, and compare per-row brightness. That is how phase 4
 established that the composite is not upside down and that the Real world's bloom was invisible
 before it was retuned. Give a readback test an *asymmetric* subject — the first version used the
-game's own frame, whose brightest band is the horizon, which sits exactly where a flip is
-undetectable.
+game's own frame, whose brightest band was the horizon, which sat exactly where a flip is
+undetectable. And say what the number you print actually measures: RL.1's first banding check
+reported the widest flat run down the field as 97 px, which turned out to be the vignette's
+deliberately flat middle rather than a band at all.
 
 Build a throwaway as a package *inside* `src/` — `src/scratch_check/`,
 `odin build src/scratch_check -out:<scratchpad>/sc` — not in the scratchpad, because the
@@ -182,7 +187,7 @@ render    ← core, game
 ui        ← core, game
 main      ← everything
 
-fx        ← core          (bloom; particles join it in phase R7)
+fx        ← core          (bloom, dither; particles join it in phase RL.6)
 audio     ← core, game    (phase R7, not created yet)
 ```
 
@@ -232,9 +237,11 @@ coherence is a property of the representation rather than a rule someone has to 
 - **The flip's duration is constant in time whatever the span is.** The corridor changes width;
   the gesture must not, or it stops being a reflex. Measured at 0.167 s across spans of 250, 340
   and 430, crossing 205, 295 and 385 px respectively.
-- **The sky rides the spine** (`render/background.odin`). A sky nailed to the screen while the
-  world slides underneath it reads as two pictures, with the horizon cutting across the Real lane
-  on a high stretch.
+- **The sky used to ride the spine**, and phase RL deleted the sky. The rule it came from is
+  still true and still worth knowing, because it will come up again for anything the world
+  contains: a *world* element nailed to the screen while the world slides underneath it reads as
+  two pictures. What replaced the sky — a vignette — is not a world element but a property of the
+  lens looking at it, so it stays screen-fixed on purpose (`render/background.odin`).
 
 **Patterns author the track** (`Pattern.track`), on the same clock and in the same file as the
 obstacles: the corridor sagging or pinching *is* content, and authoring it elsewhere would let
@@ -449,8 +456,17 @@ gameplay, layout or render code knows what monitor it is on.
   change. Never assume a window call has taken effect on the line after it.
 - Presentation may read a wall clock (`display_time` in `main`, accumulated from the same single
   `rl.GetFrameTime()` call) for things that are drawn but not simulated — the menu's drift
-  between worlds, the horizon's breathing. It must never reach the simulation, which advances
+  between worlds, the field's breathing. It must never reach the simulation, which advances
   only in whole `core.FIXED_TIMESTEP` steps out of the accumulator.
+- **Presentation may also hold state, and `background_t` is the first of it.** The background is
+  one field whose colour *is* the world you are in, and it **chases** `world_t` on a 0.45 s time
+  constant rather than following it (`render.chase_background_t`), because a flip is 0.16 s and
+  a burst of three would strobe a full-screen colour. It lives in `main` next to `display_time`,
+  is advanced from the frame clock, and is not run state — it needs no reset, it simply arrives
+  a second after the player does. The rule that keeps this safe is the one above: a presentation
+  value may be *derived from* the simulation and may never be *read by* it. Measured: one flip
+  moves it 31%, six back to back leave it inside [0.21, 0.53], and 30/60/240 fps agree to five
+  decimals.
 - **Post-processing runs on the finished frame, between the canvas closing and the blit.**
   `fx.apply_bloom` reads the render target and composites back into it in place, so `platform`
   never learns that bloom exists and `fx` never learns that a game does. The order in `main` is:
@@ -498,11 +514,13 @@ had been forbidden. Worth remembering as a shape of mistake: a rule invented to 
 apart had made one of them unable to do its job, when what actually kept them apart was that one
 is global and the other is a boundary.
 
-The art direction leans on the same split. The chosen style (`sketch_3`) is uniform and soft by
-design, so what keeps danger from dissolving into the scenery is **scenery is line, danger is
-mass**: hollow lit outlines behind, filled dark silhouettes with a lit rim in front, and
-fragments as solid light — the third case. A front that goes to full black is literally line
-becoming mass, which makes the visual rule and the mechanic the same rule.
+The art direction leant on the same split, and one half of that has since been replaced.
+*Scenery is line, danger is mass* belonged to `sketch_3` and died with it — under La Linea
+everything is line, so a rule about fill cannot separate anything. Its replacement is geometric:
+**the world curves, the danger corners** (see the top of this file). What survives untouched is
+the Corruption's own reading, and it gets better rather than worse: a front that eats the line
+away is the same mark the mechanic is, and RL.6 turns it from a filter on the frame into the
+line fraying into particles.
 
 ### Save data and determinism
 
@@ -656,10 +674,18 @@ Tracked here so they are not rediscovered. Each is scheduled in `ROADMAP.md`.
 - Bloom is LDR: the frame is an RGBA8 texture, so "bright" means "near white", and the thresholds
   in `fx/bloom.odin` are tuned against **what reaches the frame**, not against the palette. A rim
   drawn at 0.7 alpha over a dark background lands near 0.66, not at the 0.91 its colour names.
-  The same trap in reverse governs the palette: **a background value must clear the lowest
-  threshold it can ever meet, not its own world's.** Bloom settings interpolate on `world_t`, so
-  a player halfway through a flip is lit by the neutral threshold (0.30) while the floor is still
-  drawn in the Real palette — which is how `real.near` at 0.369 came to bloom at 20% on every
-  crossing while sitting comfortably under Real's own 0.50.
+  The same trap in reverse governs the palette, and since RL.1 it is not a precaution but a hard
+  ceiling: **no filled surface may exceed 0.298**, the lowest bloom threshold there is minus half
+  a level. It used to be phrased as "the lowest threshold it can ever meet", which was already
+  subtle — bloom settings interpolate on `world_t`, so a player halfway through a flip is lit by
+  the neutral threshold (0.30) while the floor is still drawn in the Real palette, which is how
+  `real.near` at 0.369 came to bloom at 20% on every crossing while sitting comfortably under
+  Real's own 0.50. Now that the background lags the player by half a second, *any* world's field
+  can be on screen under *any* world's threshold, so all three `near` values sit on 76/255. The
+  dark direction is unconstrained, and the vignette spends it.
+- The dither (`fx/dither.odin`) masks banding, it does not remove it. Real dithering perturbs a
+  value before quantisation and no pass that reads the finished frame can do that — the step
+  between two bands is still there, buried under noise of the same amplitude. If it is not
+  enough on screen, the real fix is drawing the field in a shader that dithers before it writes.
 - Recorded run manifests are saved but never played back — there is no replay or ghost in the
   game yet, only the data needed for one.
