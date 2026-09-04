@@ -1,48 +1,68 @@
 /*
 * Corruption
-* The colour dying from the left, as a post-process on the finished frame.
+* The world being eaten from the left, as a post-process on the finished
+* frame.
 *
-* It has to be a post-process rather than a palette value, and the reason
-* is worth stating because the palette *does* have a corruption axis. That
-* axis takes a scalar: one number for the whole picture. The Corruption is
-* not a level, it is a **place** — the colour is dead to the left of a
-* boundary and alive to its right — and the only stage that knows what x a
-* pixel is at is the one that has the finished pixels.
+* It has to be a post-process, because the Corruption is not a level, it
+* is a **place**: the world is gone to the left of a boundary and whole to
+* its right, and the only stage that knows what x a pixel is at is the one
+* holding the finished pixels.
 *
-* What the scalar axis in core/palette.odin buys, then, is not the effect
-* but the *rule*: collapse a colour to its own luma, so the colour dies
-* and the light does not. The shader below is the same arithmetic with the
-* same Rec. 709 weights, and the two must stay in step — an equal-weight
-* average here would make the corrupted side change exposure as well as
-* hue, which is the one thing the two-axis split exists to prevent.
+* IT GOES TO BLACK, NOT TO GREY (playtest R2.6)
 *
-* Runs **after** the bloom, deliberately. The halo of a lit edge is part
-* of the picture, so the boundary has to grey it along with everything
-* else; running before would leave a coloured bloom hanging over a grey
-* world at exactly the seam the player is meant to be reading. Bloom
-* itself is untouched by any of this, which is the promise: what the
-* Corruption takes is the colour, never the light.
+* The first version drained each pixel to its own luma, on the design's
+* original rule that the Corruption owns saturation while depth owns hue,
+* and that form and brightness survive. Built and looked at, the dead
+* zone was too faint to read — precisely because the one axis that would
+* have made it legible had been forbidden.
+*
+* So it takes everything. Behind the front there is not a washed-out
+* version of what was there, there is nothing: the Corruption eats the
+* world rather than draining it (Design Doc, section 5, revised).
+*
+* It does not put the two colour systems back into collision, which is
+* what the original rule was protecting. Convergence with depth is
+* **global** and moves the hue; this is **spatial**. They never contend
+* for the same pixel — to the right of the front depth is in charge, to
+* the left there is nothing left to be in charge of.
+*
+* And it makes the art rule and the mechanic the same rule, which the
+* halfway version never quite did: *scenery is line, danger is mass*, and
+* a front that goes to full black is literally line becoming mass.
+*
+* THE RAMP SITS BEHIND THE FRONT, NOT ACROSS IT
+*
+* This mattered the moment grey became black. The boundary's lit edge is
+* drawn in the world (render/corruption.odin) at exactly front_x, and a
+* ramp centred on the front would eat the one mark that says where the
+* front *is* — the picture would go dark with nothing to read the edge of.
+* So the fade runs from front - softness up to the front itself: the lip
+* is untouched, and the void deepens behind it.
+*
+* Runs **after** the bloom, deliberately: a lit edge's halo is part of the
+* picture and has to be eaten along with the edge that threw it. Bloom
+* itself is untouched by any of this.
 *
 * Two blits, because a shader cannot read and write the same texture: the
-* frame is desaturated into a scratch buffer and copied straight back.
+* frame is consumed into a scratch buffer and copied straight back.
 */
 package fx
 
 import rl "vendor:raylib/v55"
 
-// How wide the ramp back to full colour is, as a fraction of the frame's
-// width. The boundary is soft on purpose — a hard edge reads as a wall,
-// which is the mechanic the design explicitly rejected, while a gradient
-// reads as something spreading.
+// How far behind the front the world takes to go fully dark, as a
+// fraction of the frame's width. Soft on purpose: a hard edge reads as a
+// wall, which is the mechanic the design explicitly rejected, while a
+// gradient reads as something spreading.
 CORRUPTION_SOFTNESS :: 0.11
 
 @(private)
-DESATURATE_SOURCE :: `#version 330
+VOID_PASS_SOURCE :: `#version 330
 in vec2 fragTexCoord;
 uniform sampler2D texture0;
 
-// Where the boundary sits, 0..1 across the frame, and how far to its
-// right the colour takes to come fully back.
+// Where the boundary sits, 0..1 across the frame, and how far *behind*
+// it the world takes to go fully dark.
 uniform float front;
 uniform float softness;
 
@@ -51,15 +71,12 @@ out vec4 finalColor;
 void main() {
 	vec4 texel = texture(texture0, fragTexCoord);
 
-	// 1 everywhere left of the front, easing to 0 over the ramp.
-	float amount = 1.0 - smoothstep(front, front + softness, fragTexCoord.x);
+	// 0 at the front itself, rising to 1 a softness behind it. Anchored on
+	// the front rather than straddling it, so the lit edge drawn at
+	// exactly front_x survives to say where the boundary is.
+	float amount = 1.0 - smoothstep(front - softness, front, fragTexCoord.x);
 
-	// Rec. 709 luma, matching core.desaturate_color exactly. An
-	// equal-weight average would collapse a saturated blue to a grey far
-	// brighter than it looked: only the colour is meant to die here.
-	float luma = dot(texel.rgb, vec3(0.2126, 0.7152, 0.0722));
-
-	finalColor = vec4(mix(texel.rgb, vec3(luma), amount), texel.a);
+	finalColor = vec4(texel.rgb * (1.0 - amount), texel.a);
 }
 `
 
@@ -81,7 +98,7 @@ Corruption :: struct {
 
 new_corruption :: proc() -> Corruption {
 	corruption := Corruption{}
-	corruption.shader = rl.LoadShaderFromMemory(nil, DESATURATE_SOURCE)
+	corruption.shader = rl.LoadShaderFromMemory(nil, VOID_PASS_SOURCE)
 	if !rl.IsShaderValid(corruption.shader) {
 		return corruption // enabled stays false
 	}
@@ -110,7 +127,7 @@ rebuild_scratch :: proc(corruption: ^Corruption, width, height: i32) {
 	corruption.source_height = height
 }
 
-// Drains the colour out of everything left of `front`, in place.
+// Eats everything behind `front`, in place.
 //
 // `front` is 0..1 across the frame, so this knows nothing about the
 // game's coordinate space, its canvas size, or what is doing the

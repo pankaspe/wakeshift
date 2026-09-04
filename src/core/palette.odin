@@ -12,16 +12,14 @@
 *            one, until the two worlds stop being told apart by color
 *            (the "convergence", Design Doc section 12). Position and
 *            type of motion are what carry the player from there on.
-*   corruption_t  how far the run has let its Lucidity run out: 0 while
-*            there is fuel in the tank, 1 when it is empty and the world
-*            has gone out (roadmap T8.1).
 *
-* The last two both change the color of everything, so they are kept on
-* separate axes or the image stops agreeing with itself: **depth_t moves
-* the hue, corruption moves the saturation**. Convergence walks Real and
-* Dream toward the neutral palette's hue; corruption drains what is left of the
-* color without touching how bright it is, because "the world went out"
-* has to stay distinguishable from "the two worlds became one".
+* There is no third variable here, and there deliberately is not. The
+* Corruption also changes the colour of everything, but it is a **place**
+* rather than a level — the world is gone to the left of a front and whole
+* to its right — so it cannot be a number a whole-screen palette carries.
+* It is applied to the finished frame instead (fx/corruption.odin). This
+* file briefly had a scalar corruption axis with the colour rule in it;
+* the rule went with it when the front started eating to black.
 *
 * Why this lives in core and not in render, against what CLAUDE.md said:
 * ui draws menus, the HUD and the options screen out of the same palette
@@ -180,40 +178,6 @@ lighten_color :: proc(color: rl.Color, amount: f32) -> rl.Color {
 	return result
 }
 
-// Drains the color out of a color without changing how bright it is —
-// the corruption axis (roadmap T8.1). `amount` is 0 for untouched and 1
-// for fully grey.
-//
-// The grey it collapses to is the color's *luma*, not the average of its
-// channels. An equal-weight average makes a saturated blue collapse to a
-// grey far brighter than it looked and a saturated yellow to one far
-// darker, which reads as the picture changing exposure. Only the color
-// is supposed to die here; the light is depth_t's business and DORMANT
-// fade's, and two systems must not both be reaching for brightness.
-desaturate_color :: proc(color: rl.Color, amount: f32) -> rl.Color {
-	k := clamp(amount, 0, 1)
-	if k <= 0 {
-		return color
-	}
-	luma := 0.2126 * f32(color.r) + 0.7152 * f32(color.g) + 0.0722 * f32(color.b)
-	return rl.Color {
-		u8(f32(color.r) + (luma - f32(color.r)) * k),
-		u8(f32(color.g) + (luma - f32(color.g)) * k),
-		u8(f32(color.b) + (luma - f32(color.b)) * k),
-		color.a,
-	}
-}
-
-desaturate_palette :: proc(p: Palette, amount: f32) -> Palette {
-	return Palette {
-		deep = desaturate_color(p.deep, amount),
-		near = desaturate_color(p.near, amount),
-		silhouette = desaturate_color(p.silhouette, amount),
-		light = desaturate_color(p.light, amount),
-		accent = desaturate_color(p.accent, amount),
-	}
-}
-
 lerp_palette :: proc(a, b: Palette, t: f32) -> Palette {
 	return Palette {
 		deep = lerp_color(a.deep, b.deep, t),
@@ -244,14 +208,6 @@ PaletteSet :: struct {
 	// at the neutral palette both are half alive, which is the point).
 	real_alive:  f32,
 	dream_alive: f32,
-
-	// How far the color has already been drained out of the three
-	// palettes above, 0..1. Kept on the set rather than applied and
-	// forgotten because anything that mixes its own color later — the
-	// HUD's flash, a glow, phase 8's pickups — has to be able to drain
-	// itself by the same amount, or it stays the one colored thing on a
-	// grey screen.
-	corruption_t: f32,
 }
 
 // Interpolates Real -> neutral over the lower half of world_t and
@@ -268,33 +224,18 @@ sample_palette :: proc(set: PaletteSet, world_t: f32) -> Palette {
 	return lerp_palette(set.neutral, set.dream, (t - 0.5) * 2)
 }
 
-// Corruption is applied *after* convergence and to all three palettes at
-// once, which is the order that keeps the two systems from arguing: the
-// hue is settled first, then whatever hue that turned out to be is what
-// drains away. Doing it the other way round would have the convergence
-// pulling a grey Real palette toward a coloured neutral one, and the world
-// would gain color as it went out.
-new_palette_set :: proc(world_t: f32, depth_t: f32, corruption_t: f32 = 0) -> PaletteSet {
+new_palette_set :: proc(world_t: f32, depth_t: f32) -> PaletteSet {
 	convergence := clamp(depth_t, 0, 1) * CONVERGENCE_MAX
-	corruption := clamp(corruption_t, 0, 1)
 
 	set := PaletteSet {
-		real         = lerp_palette(REAL_PALETTE, NEUTRAL_PALETTE, convergence),
-		neutral        = NEUTRAL_PALETTE,
-		dream        = lerp_palette(DREAM_PALETTE, NEUTRAL_PALETTE, convergence),
-		world_t      = clamp(world_t, 0, 1),
-		depth_t      = clamp(depth_t, 0, 1),
-		real_alive   = 1 - clamp(world_t, 0, 1),
-		dream_alive  = clamp(world_t, 0, 1),
-		corruption_t = corruption,
+		real        = lerp_palette(REAL_PALETTE, NEUTRAL_PALETTE, convergence),
+		neutral     = NEUTRAL_PALETTE,
+		dream       = lerp_palette(DREAM_PALETTE, NEUTRAL_PALETTE, convergence),
+		world_t     = clamp(world_t, 0, 1),
+		depth_t     = clamp(depth_t, 0, 1),
+		real_alive  = 1 - clamp(world_t, 0, 1),
+		dream_alive = clamp(world_t, 0, 1),
 	}
-
-	if corruption > 0 {
-		set.real = desaturate_palette(set.real, corruption)
-		set.neutral = desaturate_palette(set.neutral, corruption)
-		set.dream = desaturate_palette(set.dream, corruption)
-	}
-
 	set.current = sample_palette(set, set.world_t)
 	return set
 }

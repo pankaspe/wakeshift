@@ -53,15 +53,14 @@ get_depth_t :: proc(world: game.World) -> f32 {
 // the two worlds, and the elapsed time converges them toward the neutral
 // palette.
 //
-// Corruption stays 0 here, and that is not an omission. The front is a
-// *place*, not a level: the colour dies to the left of it and lives to
-// the right, so it cannot be a number applied to a palette that the whole
-// screen shares. It is applied to the finished frame instead
-// (fx/corruption.odin), which is the only place that knows what x a pixel
-// is at. What the scalar axis in core/palette.odin buys is the colour
-// maths itself, verified once and reused by the shader.
+// The Corruption is absent from this on purpose. It is a *place*, not a
+// level — the world is gone to the left of a front and whole to its
+// right — so it cannot be a number applied to a palette the whole screen
+// shares. It is applied to the finished frame instead
+// (fx/corruption.odin), which is the only stage that knows what x a pixel
+// is at.
 new_scene_palette :: proc(player: game.Player, world: game.World) -> core.PaletteSet {
-	return core.new_palette_set(get_world_t(player, world), get_depth_t(world), 0)
+	return core.new_palette_set(get_world_t(player, world), get_depth_t(world))
 }
 
 // The palette for a screen with no run behind it (menus, options). It
@@ -71,10 +70,7 @@ new_scene_palette :: proc(player: game.Player, world: game.World) -> core.Palett
 MENU_DRIFT_PERIOD :: 14.0 // seconds for a full Real -> Dream -> Real cycle
 MENU_DRIFT_RANGE :: 0.42 // how far either side of the midpoint it travels
 
-// No corruption on a menu: there is no run behind it, and the first thing
-// anyone sees should be the world at full colour — it is the thing the
-// Corruption later takes away.
 new_menu_palette :: proc(display_time: f32) -> core.PaletteSet {
 	phase := display_time / MENU_DRIFT_PERIOD * 2 * math.PI
-	return core.new_palette_set(0.5 + MENU_DRIFT_RANGE * math.sin(phase), 0, 0)
+	return core.new_palette_set(0.5 + MENU_DRIFT_RANGE * math.sin(phase), 0)
 }

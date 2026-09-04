@@ -375,43 +375,46 @@ gameplay, layout or render code knows what monitor it is on.
 
 ### Colour has two systems, and they must not collide
 
-Two things change the colour of everything, so they are kept on separate axes or the image stops
-agreeing with itself: **depth moves the hue, Corruption moves the saturation.**
+Two things change the colour of everything, and they are kept apart by being different *kinds*
+of thing rather than by dividing the colour channels between them.
 
-- **Depth** washes both worlds toward the neutral palette as a run gets deeper, with palette and
-  bloom converging together on it — light and colour describe one world.
-- **Corruption** reads **spatially**: everything behind an advancing front from the left edge.
-  Not a bar — it has to be legible in two seconds, and it is also literally the health bar.
+- **Depth** is a level, and it is global. It washes both worlds toward the neutral palette as a
+  run gets deeper, with palette and bloom converging together on it — light and colour describe
+  one world. It moves the hue.
+- **The Corruption is a place**, not a level: the world is gone to the left of an advancing
+  front and whole to its right. It takes everything — colour, light, all of it, to full black.
 
-  **Decided at the R2.6 playtest, not yet built: the front goes to black, not to grey.** The
-  shipped shader still mixes toward the pixel's own luma, which was the design's first answer
-  and proved too faint to read. It becomes a mix toward `vec3(0.0)` — the Corruption eats the
-  world rather than draining it. Do not "fix" it back to grey; the note is in ROADMAP.md under
-  "Note dal playtest R2.6" and the design doc's section 5 has been rewritten. It does not break
-  the two-axis rule, because depth is global and this is spatial: they never contend for the
-  same pixel.
+They cannot collide because they never contend for the same pixel: to the right of the front
+depth is in charge, and to the left there is nothing left to be in charge of. This is why
+`core/palette.odin` has no corruption axis and must not grow one — a whole-screen palette cannot
+express a boundary, and the axis it briefly carried was deleted along with the grey.
 
-Three implementation rules, all load-bearing:
+Three rules the implementation established:
 
-- **Corruption is applied after convergence, to all palettes at once** (`core.new_palette_set`).
-  The other order would have the convergence pulling a grey Real palette toward a coloured
-  neutral one, and the world would *gain* colour as it went out.
-- **The grey it collapses to is the colour's luma, not the average of its channels.** An
-  equal-weight average makes a saturated blue collapse to a grey much brighter than it looked;
-  only the colour is supposed to die here, and brightness belongs to depth and to `DORMANT_FADE`.
-  Measured: the Dream light goes 185.3 → 185.0 luma with its chroma at zero.
-- **`corruption_t` stays on the `PaletteSet`** rather than being applied and forgotten, because
-  anything that mixes a colour of its own afterwards — a glow, the fragments — has to drain
-  itself by the same amount or it becomes the one coloured thing on a grey screen.
+- **It runs after the bloom** (`fx/corruption.odin`, called from `main`). A lit edge's halo is
+  part of the picture and has to be eaten along with the edge that threw it. Bloom itself is
+  untouched by any of this.
+- **The ramp sits behind the front, not across it.** The boundary's lit edge is drawn in the
+  world at exactly `front_x` (`render/corruption.odin`), and a ramp centred on the front would
+  eat the one mark that says where the front *is*. So the fade runs from `front - softness` up
+  to the front: measured, the edge comes back bit-identical and the void deepens behind it.
+- **The edge is drawn with primitives, not by the shader.** If the shader ever fails to compile
+  the frame keeps its colour and the game still runs — but a lethal front nobody can see would
+  be the one thing in this game that kills without showing the blow coming (pillar 3). That
+  fallback is the reason it is drawn at all, and the reason it must stay drawn.
 
-Bloom is deliberately *not* touched by corruption. Grey light still blooms, which is the whole
-point of the axis split.
+It went to black at the R2.6 playtest. The design's first answer was that the Corruption owned
+saturation while depth owned hue, and that form and brightness survived; built and looked at,
+the dead zone was too faint to read — precisely because the axis that would have made it legible
+had been forbidden. Worth remembering as a shape of mistake: a rule invented to keep two systems
+apart had made one of them unable to do its job, when what actually kept them apart was that one
+is global and the other is a boundary.
 
 The art direction leans on the same split. The chosen style (`sketch_3`) is uniform and soft by
 design, so what keeps danger from dissolving into the scenery is **scenery is line, danger is
 mass**: hollow lit outlines behind, filled dark silhouettes with a lit rim in front, and
-fragments as solid light — the third case. Corruption is what turns line into mass, which makes
-the visual rule and the mechanic the same rule.
+fragments as solid light — the third case. A front that goes to full black is literally line
+becoming mass, which makes the visual rule and the mechanic the same rule.
 
 ### Save data and determinism
 

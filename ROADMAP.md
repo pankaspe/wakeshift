@@ -204,7 +204,7 @@ documento (aggiungendo un filo di scurimento), non aggiungerlo di nascosto nello
 Verdetto del committente: **il tira e molla funziona**, si va avanti. Tre cose da portarsi
 dietro, in ordine di quanto sono già capite.
 
-### 1. La Corruzione diventa nera, non grigia — **decisa**
+### 1. La Corruzione diventa nera, non grigia — ✅ **fatta**
 
 Oggi il fronte scolora verso il grigio (la luma del pixel). Deve invece **mangiare tutto, fino
 al nero**: non è un mondo sbiadito, è un vuoto che avanza.
@@ -224,10 +224,16 @@ profondità, a sinistra non c'è più niente da comandare.
 che porta al nero pieno è letteralmente la linea che diventa massa, che è l'incastro fra
 meccanica e grafica che cercavamo.
 
-**Cosa cambia in pratica**: una riga di `fx/corruption.odin` (si mescola verso `vec3(0.0)`
-invece che verso la luma), più la nota in `CLAUDE.md`. Il bordo disegnato in
-`render/corruption.odin` diventa più importante, non meno: su nero pieno è l'unica cosa che dice
-*dov'è* il confine.
+**Non era una riga sola, e il motivo è istruttivo.** Il bordo illuminato è disegnato nel mondo
+*esattamente* su `front_x`, e la rampa com'era — centrata sul fronte — con il nero se lo sarebbe
+mangiato: lo schermo si sarebbe scurito senza più niente che dicesse dove fosse arrivato. Adesso
+la sfumatura va da `front - softness` **fino al fronte**, quindi il labbro resta intatto e il
+vuoto si approfondisce dietro di esso. Rilettura dei pixel: nero puro `[0,0,0]` a sinistra, il
+bordo `[228,250,255]` **identico bit per bit** prima e dopo, e il lato pulito intatto.
+
+**Ricaduta**: l'asse scalare della corruzione in `core/palette.odin` è stato **cancellato** —
+`desaturate_color`, `desaturate_palette` e `PaletteSet.corruption_t`. Non lo guidava più niente
+e non deve: una palette che vale per tutto lo schermo non può esprimere un confine.
 
 ### 2. Il banding nei gradienti — **diagnosticato, non ancora risolto**
 
