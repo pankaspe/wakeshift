@@ -68,9 +68,8 @@ pool vero (R5) e l'economia (R6).
 **La Linea** di Cavandoli. La fase che la porta a schermo è la **RL**, ed è in corso: va prima
 della R5 perché cambia cos'*è* un pattern.
 
-**Prossima**: la RL.9, il playtest della fase — più **il rifacimento del personaggio**, deciso
-guardando lo screenshot: a 45 px la figura a stecchi legge come un groviglio e non come qualcuno.
-Diventa **una figura con la veste**, un contorno solo. Con la RL.1÷RL.8 fatte **non c'è più niente di pieno a schermo tranne il fondo** e i due fronti
+**Prossima**: la **RL.9, il playtest della fase**. Con la RL.1÷RL.8 fatte e il personaggio
+rifatto, **non c'è più niente di pieno a schermo tranne il fondo** e i due fronti
 sono entrambi ritagli: a destra la penna scrive, a sinistra la linea si sfilaccia in polvere.
 Restano due task di rifinitura (RL.7 curve, RL.8 parallasse) e poi il playtest della fase, la
 RL.9 — che adesso ha una domanda in più da rispondere: **lo shader della Corruzione va cancellato
@@ -993,13 +992,85 @@ per far tornare la nota.
 
 ---
 
+#### Il personaggio rifatto — la figura con la veste (5 settembre 2026)
+
+**Deciso guardando uno screenshot tuo**, non a tavolino: a 45 px la figura a stecchi non leggeva
+come qualcuno, leggeva come un groviglio. Nove segni in quarantacinque pixel non hanno dove
+stare, ed era il rischio numero uno della fase.
+
+La veste **cancella il problema invece di tararlo**: con le braccia e le gambe dentro il tessuto
+c'è **un contorno solo**, e un contorno è una sagoma, che è la cosa che si legge a questa
+dimensione. Un segno chiuso invece di nove.
+
+**Tre elementi sono tutto quello che una figura di 45 px può portare**, quindi ne ha tre: un
+cappuccio a punta, una strozzatura sotto, e una campana che si allarga fino all'orlo. Letto
+d'un colpo è qualcuno con una veste, e non somiglia in niente all'omino di Cavandoli — cosa che
+conta, perché il suo personaggio è protetto e la riga è *"uno che lo ricorda, fatto del nostro
+tratto"*.
+
+**E curva, perché il pericolo fa angolo.** Ogni segmento del contorno è una curva con la sua
+inflessione: mai un tratto dritto, mai un angolo retto. Non è decorazione — *il mondo curva, il
+pericolo fa angolo* è la regola che tiene leggibile tutto il quadro, quindi una figura fatta di
+spigoli indosserebbe l'unica forma che significa "questo ti costa". È anche perché la veste è una
+campana e non un triangolo. Verificato: **l'angolo più acuto del contorno è 33°** (la punta del
+cappuccio), e non ce n'è nessuno vicino a 90.
+
+**Cosa è sopravvissuto intatto**, perché il valore stava lì e non nella sagoma: la posa e il suo
+specchio, la rotazione del flip con `whip_ease`, squash & stretch, il `body_offset`, e tutta la
+**macchina dell'inerzia** del Germoglio — il ritardo di 0.07 s, la scia sulla rotazione e sulla
+salita, il clamp. Era la parte migliore del vecchio personaggio e adesso muove il cappuccio
+invece del germoglio. Zero righe cambiate.
+
+**Cosa è cambiato nell'animazione**: senza gambe, è **l'orlo a fare il passo**. Un angolo si
+alza per volta e il punto più basso del tessuto scivola con lui, che è come si vede camminare
+sotto una veste; nell'Onirico gli stessi due numeri ondeggiano lenti invece di scattare. Il
+pilastro 6 regge: il *tipo* di movimento continua a dire in che mondo sei anche togliendo il
+colore.
+
+**Una catena si è sciolta da sola.** La RL.3 aveva derivato la lunghezza della gamba *e* la
+falcata dal peso del tratto, perché i piedi dovevano toccare terra **e** coprire tanto terreno
+quanto ne scorreva, o il personaggio pattinava. Il tessuto non pattina: sopravvive solo la prima
+metà della regola, che è un numero solo (`PLAYER_HEM_DEEP_Y`), e la falcata torna a essere una
+cadenza scelta a occhio.
+
+**Misurato** (armatura usa e getta, cancellata):
+
+- Il contorno è **40 punti, un segno chiuso**, e copre **44.6 px di una scatola da 45**.
+- Il punto più basso del tessuto sta esattamente sul `PLAYER_HEM_DEEP_Y` derivato, e a schermo il
+  **segno** finisce sul fondo della scatola (+0 sul pavimento, −1 appeso al soffitto). L'alone
+  sborda 4 px sotto: è luce, non il segno, e il segno è quello che poggia.
+- Profilo delle larghezze dall'alto: `0 → 14.9 px (tesa) → 12.3 (spalle) → 21.8 (orlo)`. Il
+  cappuccio è **clamorosamente più stretto dell'orlo**, che è il numero che decide se legge come
+  una figura o come un rombo: la prima versione li aveva uguali ed era una clessidra. Verificato
+  come vincolo, non a occhio.
+- Inchiostra il **36.2%** della propria scatola: è un disegno, non una macchia.
+
+**Due cose che l'armatura mi ha corretto e vale la pena ricordare**:
+
+1. **Il primo giro misurava il terreno e lo chiamava personaggio.** La linea della corsia sta
+   esattamente sul bordo della scatola, quindi lasciarla nel fotogramma faceva fallire il
+   controllo del contatto con un errore che non c'entrava niente. I fotogrammi di contatto adesso
+   disegnano solo il fondo e la figura.
+2. **Guardare un 45 px sfocato dal bloom non è guardare.** Ingrandito otto volte sembrava una "Σ"
+   con il contorno che si incrociava; disegnato grande, pulito e senza bloom era la forma giusta
+   fin dall'inizio, ed erano le **proporzioni** a essere sbagliate (tesa larga quanto l'orlo). Se
+   una forma va ispezionata, va disegnata alla dimensione in cui si vede, non ingrandita dopo.
+
+**Cosa tocca a te**: tutto il resto è gusto. Le manopole sono in testa a `render/player.odin` e
+sono geometriche — larghezza della tesa, delle spalle e dell'orlo, altezza e inclinazione del
+cappuccio, quanto si incurvano i tre pezzi (`PLAYER_BOW_*`), il passo dell'orlo. E resta aperta la
+domanda che il documento aveva già messo in conto: **45 px bastano?** Se no, la correzione è
+ingrandire il personaggio, ed è una decisione tua.
+
+---
+
 #### I rischi che segnalo adesso
 
-- **Il personaggio a 45 px fatto di tratto sottile.** Nel cartone lui riempie il fotogramma; da
-  noi è un ottavo dell'altezza dello schermo. È l'unico punto in cui il lavoro si *complica*
-  invece di semplificarsi, perché la sagoma piena era una stampella di leggibilità e la
-  togliamo. Mitigazioni nella RL.3, ma se non basta la correzione è ingrandire il personaggio,
-  ed è una decisione di design.
+- **Il personaggio a 45 px fatto di tratto sottile.** Si è avverato, ed è stato risolto: la
+  figura a stecchi della RL.3 leggeva come un groviglio, e il 5 settembre è diventata **una
+  figura con la veste** — un contorno solo invece di nove segni (vedi sopra). La domanda di
+  riserva resta comunque aperta e resta tua: **se 45 px non bastano, si ingrandisce il
+  personaggio.**
 - **Il gradino può leggersi come terreno.** Un cubo che diventa una gobba nella linea rischia di
   leggersi come "il suolo si alza" (innocuo) invece che come "cosa che costa". È esattamente ciò
   a cui risponde *il mondo curva, il pericolo fa angolo*, e va verificato leggendo i pixel, non

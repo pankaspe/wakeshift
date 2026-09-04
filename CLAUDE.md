@@ -101,7 +101,8 @@ the left that eats the ground a mistake costs you, a track whose corridor undula
 and the Sentinel — so all three dangers and all three verbs are on screen. **Phase RL is in
 progress**: RL.1 through RL.8 are done, so **nothing on screen is filled but the background** — a
 field whose colour is the world, two unfilled strokes that are the floor and the ceiling with the
-cubes welded into them, a character made of the same mark but heavier and whiter, a dormant lane
+cubes welded into them, a character made of the same mark but heavier and whiter — one closed contour, a robed
+figure under a hood — a dormant lane
 that thins and dims behind the one you are in, and two fronts that are both clips: a pen near the
 right edge writing the world, and the Corruption fraying it into dust on the left. Still missing:
 the real pattern pool (R5), fragments and the Gate (R6).
@@ -136,6 +137,14 @@ expensive to be wrong about. Two traps learned the hard way:
   occupancy *without a player* when the question is about what the generator puts on screen.
 - **Measure the thing, not a proxy for it.** "Is it too easy" became answerable only when it
   became "what fraction of the time is at least one lane lethal".
+
+**Two traps found the hard way while looking at a 45 px character.** A frame that contains the
+world will hand you the world's own line where you expected the thing you are measuring — the
+lane's stroke sits exactly on the player's box edge, so a contact check that leaves the terrain
+in measures the terrain and calls it the character. And **a bloomed 45 px shape magnified
+afterwards is not the shape**: it read as a self-crossing "Σ" until the same figure was drawn
+large, clean and without bloom, at which point the contour was fine and the *proportions* were
+the bug. Inspect a shape at the size it is drawn, not at the size it is displayed.
 
 **When the thing to verify is pixels, read the pixels back.** `rl.LoadImageFromTexture` on the
 render target turns "does the bloom look right" into arithmetic: draw the frame twice, once
@@ -423,22 +432,39 @@ not import `render`, so the menus cannot reach the stroke as things stand. Eithe
 that import (the graph stays acyclic) or `stroke.odin` and `glow.odin` move into a package of
 primitives below both. Keep this file free of `game` imports so that stays a file move.
 
-### The character stands in its box
+### The character is one closed contour
 
-The figure is authored as fractions of the player's box (`render/player.odin`), and the bottom
-of that box is the ground. Two rules follow, and both are the difference between a character
-that rests on the floor and one that floats or sinks:
+A small robed figure under a pointed hood (`render/player.odin`), authored as fractions of the
+player's box, and the bottom of that box is the ground.
 
-- **The visible figure fills the box, not the joints.** How much the drawing reaches past the
-  feet joint depends on how it is drawn, so since RL.3 the joint's position *derives* from that
-  rather than being a number someone keeps in step: `PLAYER_FOOT_REACH` is half a stroke inside
-  the box, `PLAYER_LEG_STRETCH` is what the leg is multiplied by to get there, and
-  `PLAYER_STRIDE_LENGTH` is stretched by the same factor because the run cycle is tuned on the
-  ratio between what the feet cover and what the ground does — miss that and the character
-  skates. It used to be a hand-written 0.409, against a silhouette plus a 2.4 px rim; a stroke
-  reaches only half its own width, which would have left the figure 2.2 px in the air. A shape
-  whose edge falls exactly on the box's bottom lights the pixel row *before* it, which is what
-  contact looks like in a readback.
+It was a stick figure with a bulb head, four limbs and a sprout until 5 September, and a
+playtest screenshot ended that: **nine marks in forty-five pixels have nowhere to be**, and on
+screen it read as a knot rather than as somebody. The robe deletes the problem instead of tuning
+it — with the limbs inside the cloth there is one contour, and a contour is a silhouette, which
+is the thing that reads at this size.
+
+- **A 45 px figure drawn with a 4.3 px pen cannot hold internal detail.** A notch narrower than
+  the pen is a notch the pen fills in, so nothing tries to draw a neck. What separates the head
+  from the body is the outline changing direction three times, and the whole read is **a cone on
+  a bell** — which lives entirely in the hat being clearly narrower than the hem. Make them equal
+  and you get an hourglass; the first version of this figure was one.
+- **It curves, because the danger corners.** Every segment is a bowed curve: never a straight run
+  and never a right angle. A figure built out of straight edges would be wearing the one shape
+  the whole picture reserves for "this costs you". Measured: the sharpest interior angle is 33°,
+  the hood's own point, and nothing is near 90.
+- **The visible figure fills the box, and the number that says so derives.** How far the drawing
+  reaches past its lowest anchor depends on how it is drawn, so `PLAYER_HEM_DEEP_Y` is half a
+  stroke inside the box rather than a constant someone keeps in step. RL.3 had a whole chain
+  hanging off this — the leg length *and* the stride were derived from it, because feet that
+  cover less ground than the world does are feet that skate. Cloth does not skate, so only the
+  first half survived. A shape whose edge falls exactly on the box's bottom lights the pixel row
+  *before* it, which is what contact looks like in a readback.
+- **The inertia machinery survived the redesign untouched**, because the value was there and not
+  in the silhouette: the 0.07 s lag, the trail against the turn and against the rise, the clamp.
+  It moves the hood now instead of the sprout, and not a line of it changed.
+- **With no legs, the hem takes the step.** One corner lifts at a time and the cloth's lowest
+  point slides with it; in the Dream the same two numbers undulate slowly instead. Pillar 6 still
+  holds — the *type* of motion says which world is live with the colour removed.
 - **Only the feet touch anything.** Hanging from the ceiling is half a turn plus a mirror, which
   is a vertical flip, so the feet are at the *top* of the box there and whatever grows out of the
   crown points into open air in both worlds. That is why the sprout may overhang the box and the
