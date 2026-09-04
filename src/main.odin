@@ -370,7 +370,13 @@ main :: proc() {
 				for obstacle in obstacles {
 					if game.check_player_obstacle_collision(player, obstacle, world) {
 						game_state = .GameOver
-						game.reset_lucidity(&lucidity)
+						// Deliberately *not* reset here any more. It used
+						// to be, back when nothing read Lucidity after the
+						// run ended; since T8.1 the palette does, and
+						// refilling the tank on the death frame would
+						// snap a corrupted world back to full colour on
+						// the very frame the player lost it. reset_run
+						// clears it before the next run either way.
 
 						// the run just ended: this is the one moment we check
 						// and persist a new personal best
@@ -491,7 +497,7 @@ main :: proc() {
 
 		palettes :=
 			showing_run \
-			? render.new_scene_palette(player, world) \
+			? render.new_scene_palette(player, world, lucidity) \
 			: render.new_menu_palette(display_time)
 
 		rl.ClearBackground(palettes.limen.deep)

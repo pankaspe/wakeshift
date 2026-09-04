@@ -50,9 +50,23 @@ get_depth_t :: proc(world: game.World) -> f32 {
 }
 
 // The palette of a live run: the player's height picks the blend, the
-// elapsed time converges the two worlds toward the Limen.
-new_scene_palette :: proc(player: game.Player, world: game.World) -> core.PaletteSet {
-	return core.new_palette_set(get_world_t(player, world), get_depth_t(world))
+// elapsed time converges the two worlds toward the Limen, and what is
+// left of the Lucidity decides how much colour any of it still has
+// (roadmap T8.1).
+//
+// Lucidity arrives by value like the other two, and for the same reason:
+// this is a pure reading of game state, so a replay that reproduces the
+// state reproduces the picture.
+new_scene_palette :: proc(
+	player: game.Player,
+	world: game.World,
+	lucidity: game.Lucidity,
+) -> core.PaletteSet {
+	return core.new_palette_set(
+		get_world_t(player, world),
+		get_depth_t(world),
+		game.get_corruption_t(lucidity),
+	)
 }
 
 // The palette for a screen with no run behind it (menus, options). It
@@ -62,7 +76,10 @@ new_scene_palette :: proc(player: game.Player, world: game.World) -> core.Palett
 MENU_DRIFT_PERIOD :: 14.0 // seconds for a full Real -> Dream -> Real cycle
 MENU_DRIFT_RANGE :: 0.42 // how far either side of the Limen it travels
 
+// No corruption on a menu: there is no run to have let its Lucidity run
+// out, and the first thing anyone sees should be the world at full
+// colour — it is the thing the Corruption later takes away.
 new_menu_palette :: proc(display_time: f32) -> core.PaletteSet {
 	phase := display_time / MENU_DRIFT_PERIOD * 2 * math.PI
-	return core.new_palette_set(0.5 + MENU_DRIFT_RANGE * math.sin(phase), 0)
+	return core.new_palette_set(0.5 + MENU_DRIFT_RANGE * math.sin(phase), 0, 0)
 }

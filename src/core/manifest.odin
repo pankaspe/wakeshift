@@ -42,7 +42,13 @@ package core
 //        itself lifting into a wall — with three patterns built on it, so
 //        the same seed draws a different sequence and meets something
 //        0.4.0 had no name for.
-GAME_VERSION :: "0.5.0-alpha"
+// 0.6.0: the Corruption. Lucidity starts a run full and falls on its own,
+//        so whether the Limen opens at a given tick now depends on how
+//        much the player has been earning all run rather than only on
+//        what they spent. The same input log therefore suspends in
+//        different places, and a 0.5.0 manifest replays into a different
+//        run here even though the level it meets is identical.
+GAME_VERSION :: "0.6.0-alpha"
 
 RunManifest :: struct {
 	game_version:  string,
