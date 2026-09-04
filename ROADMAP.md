@@ -68,9 +68,11 @@ pool vero (R5) e l'economia (R6).
 **La Linea** di Cavandoli. La fase che la porta a schermo è la **RL**, ed è in corso: va prima
 della R5 perché cambia cos'*è* un pattern.
 
-**Prossima**: la RL.2 — il tratto diventa il mondo. La RL.1 è fatta e il fondo è già quello
-nuovo, quindi da qui in avanti quello che si giudica a schermo è **la linea sopra un fondo che
-funziona**, non più il vecchio silhouette-e-luce.
+**Prossima**: la RL.3 — il personaggio diventa una continuazione della linea. Con la RL.1 e la
+RL.2 fatte, il mondo a schermo è già tutto La Linea: un fondo che cambia colore e due tratti
+continui che *sono* il pavimento e il soffitto, con i cubi dentro di essi. L'unica cosa rimasta
+del vecchio stile è **il personaggio**, che è ancora una sagoma piena — ed è esattamente il punto
+in cui il lavoro si complica, non si semplifica (vedi i rischi).
 
 **Cosa sopravvive intatto e non va toccato**: tutto `platform/` (finestra, display,
 salvataggio, cifratura, percorsi); `fx/bloom`; `render/stroke` e `render/glow`; i menu e le
@@ -435,7 +437,7 @@ livello applicato allo schermo, è un posto dove la linea ha smesso di esserci.
 | Task | Descrizione | Modello |
 |---|---|---|
 | RL.1 ✅ | **Il fondo diventa il mondo**: due fondi con vignettatura, uno per mondo, e una miscela che *insegue* `world_t` con il suo ritardo invece di seguirlo. Presentazione pura: il valore ritardato vive in `main` accanto a `display_time` e non tocca mai la simulazione | **Opus** |
-| RL.2 | **Il tratto è il mondo**: `render/terrain.odin` ridisegna le due corsie come polilinee continue senza riempimento, e gli ostacoli entrano **dentro** la stessa polilinea invece di essere disegnati sopra. `render/obstacle.odin` si svuota | **Opus** |
+| RL.2 ✅ | **Il tratto è il mondo**: `render/terrain.odin` ridisegna le due corsie come polilinee continue senza riempimento, e gli ostacoli entrano **dentro** la stessa polilinea invece di essere disegnati sopra. `render/obstacle.odin` si svuota | **Opus** |
 | RL.3 | **Il personaggio è una continuazione della linea**: contorno aperto al posto della sagoma piena, con il tratto più pesante e il nucleo più bianco del mondo attorno. Il sistema di pose resta intero — cambia solo l'ultimo passaggio | **Opus** |
 | RL.4 | **Il glow cresce verso l'Onirico**, e la corsia dormiente si assottiglia. Qui si decide anche se le due linee stanno bene entrambe piene: La Linea ne ha una, noi ne abbiamo due, e due tratti paralleli identici leggono come un tubo invece che come un orizzonte | Sonnet |
 | RL.5 | **Il mondo si disegna a destra**: un fronte di disegno speculare a quello della Corruzione, con il pennino che lo marca. Una volta fatta la RL.2 è **un ritaglio, non un'animazione per ostacolo** — ed è il motivo per cui le due idee stanno nella stessa fase | **Opus** |
@@ -505,6 +507,88 @@ del mondo dormiente serviva al cielo a due metà e a nient'altro; `render/terrai
 `render/obstacle.odin` leggono `real_alive`/`dream_alive` per conto loro.
 `game.get_track_at_anchor` è rimasta senza chiamanti ma resta: è un accessore legittimo dello
 stato del mondo, e la RL.5 lo vorrà.
+
+---
+
+#### RL.2 ✅ — Il tratto è il mondo (4 settembre 2026)
+
+Il riempimento è sparito da tutta la scena tranne il personaggio. Il pavimento e il soffitto sono
+**due polilinee sole**, una per corsia, disegnate con `render/stroke.odin`, e i cubi non stanno
+più *sopra* la linea: stanno **dentro** di essa. Un cubo è la linea che si alza di scatto, corre
+piatta e ritorna — due angoli retti nel terreno, un segno solo, nessuna cucitura che tradisca che
+è un oggetto. La piramide è la stessa cosa a gradini, e i gradini escono gratis dalla polilinea,
+esattamente come il rilievo del tracciato nella R3.
+
+**Il segno e la hitbox sono la stessa cosa**, per costruzione e non per accordo: il gradino legge
+la `get_obstacle_rect` dell'ostacolo, quindi il bordo alto disegnato *è* il bordo alto della
+collisione. Le due facce verticali cadono da sole, perché la polilinea mette due punti alla
+stessa x.
+
+**Il buco è la linea che si interrompe**, e adesso è letteralmente vero: la sagoma viene costruita
+intera su tutto lo schermo e *poi* tagliata ai bordi dei buchi, con i vertici interpolati
+esattamente sul taglio. Costruirla già a pezzi avrebbe fatto litigare un cubo a cavallo del bordo
+di un buco con il pezzo che lo contiene; costruirla intera rende quel caso un ritaglio.
+
+**I due lati continuano a rompersi in modo diverso**, e senza riempimento la differenza la porta
+solo quello che fa il tratto: il pavimento **gira verso il basso** dentro la frattura (altri due
+angoli retti — è un taglio, ed è letale), il soffitto **prosegue oltre il labbro e si assottiglia
+a zero** con una coda affusolata, e l'apertura si illumina. La regola "il pavimento si rompe, il
+soffitto si dissolve" è sopravvissuta al cambio di direzione senza una riga di riempimento.
+
+**La Sentinella perde la massa.** Resta la banda, perché la banda è la meccanica — stare su una
+corsia è sicuro, attraversare no — ma è disegnata come **un contorno chiuso** con due estremità
+squadrate più l'asse luminoso al centro. Vuota dentro: verificato leggendo i pixel, l'interno è
+esattamente 0.
+
+**`render/obstacle.odin` si è svuotato** come previsto. Da 260 righe con sei disegnatori di cubo a
+due soli segni, che sono esattamente i due pericoli che non appartengono a una superficie: il
+**cubo fluttuante** (l'unico che non poggia su niente, quindi il terreno non può saldarlo) e la
+**Sentinella** (che non ha corsia). Tutto il resto è terreno.
+
+**Cosa ho tolto e va guardato**: le cuciture interne dello **Stack**. Erano tre linee orizzontali
+dentro la sagoma che dicevano "sono tre cubi"; dentro un contorno vuoto leggerebbero come una
+scala a pioli, non come cubi impilati. Adesso lo Stack è un gradino stretto e alto. Meccanicamente
+non cambia niente (l'altezza è retorica, il prezzo è la larghezza), ma la retorica era il suo
+lavoro: se a schermo non legge più come *peggio* di un cubo standard, si rimette qualcosa.
+
+**Misurato** (armatura usa e getta, cancellata):
+
+- La polilinea del pavimento con quattro cubi sopra e un tracciato che ondeggia e si strozza:
+  **24 punti**, x mai all'indietro. Ogni forma di cubo dà **una** faccia verticale a sinistra,
+  **una** a destra e un tratto orizzontale alla quota esatta della sua scatola; la piramide dà
+  **3 pedate**. Il cubo fluttuante non lascia nessun gradino.
+- Un buco nel soffitto taglia la sagoma in **2 pezzi**, che iniziano e finiscono esattamente sui
+  bordi del buco, e ogni vertice di entrambi sta sulla superficie che il tracciato descrive
+  (scarto < 0.5 px).
+- Pixel riletti dal render target: la linea del pavimento c'è (picco 212), il cubo ha il bordo
+  alto acceso (212) e l'**interno a 0**, dentro il buco è **0** — la linea non attraversa il
+  proprio buco — e a 14 px sotto la superficie ai due labbri c'è **212**, cioè il pavimento gira
+  davvero verso il basso.
+- I contorni **chiusi** sono nuovi in questa fase ed erano il rischio silenzioso: un triangle
+  strip avvolto al contrario sparisce senza errori. Riletti: il cubo fluttuante ha tutti e
+  quattro i lati accesi (233), la Sentinella ha bordo alto, bordo basso, asse ed estremità
+  squadrata (204/204/224/204).
+
+**Ricadute**:
+
+- `STROKE_MAX_POINTS` da 128 a **256**. Una corsia è adesso la polilinea più lunga del gioco e
+  `build_stroke_ribs` tronca in silenzio, che vorrebbe dire una linea che finisce a mezz'aria. Il
+  caso peggiore misurato è sulla cinquantina, quindi il margine è abbondante di proposito.
+- `palette.silhouette` ha **un solo consumatore rimasto**, il personaggio. Quando la RL.3 lo
+  trasforma in contorno, il campo diventa candidato alla cancellazione da `core/palette.odin` — da
+  decidere lì, non qui.
+- Le manopole nuove stanno tutte in testa a `render/terrain.odin`: `TERRAIN_STROKE_THICKNESS`
+  (2.8), `TERRAIN_CORE_LIGHT` (0.30), `TERRAIN_GLOW_STRENGTH` (0.45), `TERRAIN_GLOW_SPREAD` (5.5)
+  e soprattutto `TERRAIN_RIM_DORMANT`, alzata da 0.30 a **0.45**: la corsia dormiente non ha più
+  una massa dietro, quindi quel numero *è* tutta la sua presenza. Se il mondo dormiente adesso
+  urla troppo, la correzione è lì — ma è anche esattamente la domanda che la RL.4 deve decidere
+  (la corsia dormiente si assottiglia invece di sbiadire?), quindi conviene guardarle insieme.
+
+**Cosa tocca a te giudicare**: se il gradino legge come *pericolo* invece che come *terreno che si
+alza* (è il rischio numero due della fase, ed è una domanda a cui i pixel non rispondono), se la
+Sentinella vuota legge ancora come una cosa sola invece che come due corsie in più, se lo Stack
+senza cuciture dice ancora "peggio", e quanto pesante deve essere il tratto del mondo — perché la
+RL.3 deve fare il personaggio **più pesante di questo**, e quindi questo numero fissa il tetto.
 
 ---
 

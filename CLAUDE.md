@@ -99,8 +99,10 @@ v2.1 for the art direction), and **R1 through R4 are built and playtested**: two
 gesture, a cube that *blocks* rather than kills in six forms, a Corruption front advancing from
 the left that eats the ground a mistake costs you, a track whose corridor undulates and pinches,
 and the Sentinel — so all three dangers and all three verbs are on screen. **Phase RL is in
-progress**: RL.1 is done, so the background is already the new one and the rest of the scene is
-not. Still missing: the real pattern pool (R5), fragments and the Gate (R6).
+progress**: RL.1 and RL.2 are done, so the background *and* the world are the new ones — a field
+whose colour is the world, and two unfilled strokes that are the floor and the ceiling with the
+cubes welded into them. The one thing left of the old style is the character, still a filled
+silhouette until RL.3. Still missing: the real pattern pool (R5), fragments and the Gate (R6).
 
 Why it was rewritten, measured rather than guessed: 200 simulated runs that never touched the
 key, **161 survived the whole first tier**, median death at 35 s; **86% of the time** nothing on
@@ -344,12 +346,19 @@ Three rules the implementation established, all found by replaying the simulatio
   period exists to forgive the flip started at the last possible instant against a hole — but
   against a Sentinel the flip *is* the mistake, so forgiving the first tenth of a second of
   every journey would hand a free crossing to exactly the player it is aimed at.
-- **The floor breaks, the ceiling dissolves.** Hard lit edges and a dark pit on one side; edges
-  fading out over tens of pixels and a faint glow on the other. Same cut, opposite reading.
-- **The track owns the holes.** `render/` is the only code that knows where its own surface is,
-  so it subtracts the void obstacles from the width of the screen and draws what is left one
-  span at a time. Drawing a gap as an object is what made it read as a box standing on the floor
-  for the whole of the prototype.
+- **The floor breaks, the ceiling dissolves.** It survived the loss of the fill in RL.2, carried
+  entirely by what the line does: the floor's stroke **turns down** into the break, which puts
+  two more right angles in it, and the ceiling's **runs on past the lip and tapers to nothing**
+  while the opening glows. Same cut, opposite reading.
+- **The track owns the holes, and since RL.2 it owns the cubes too.** `render/terrain.odin` is
+  the only code that knows where its own surface is. It builds each lane as **one polyline across
+  the whole screen** — cubes welded in as steps, read off the obstacle's own rectangle so the
+  mark and the hitbox are the same thing — and cuts the holes out of it afterwards, interpolating
+  a vertex exactly onto each edge. Building it already in pieces would make a cube straddling a
+  hole's edge disagree with the piece that contains it; building it whole makes that a clip.
+  Drawing a gap as an object is what made it read as a box standing on the floor for the whole of
+  the prototype, and drawing a cube as an object is what made it read as something *put there*
+  rather than as something the world did.
 
 ### The fairness rule — the only one there is
 
@@ -390,6 +399,11 @@ all established by reading pixels back:
 - **Joins are mitred and caps are tessellated into the ribbon**, never stamped on as circles.
   Additive geometry that overlaps itself adds twice, so a circle at each vertex is a bright bead
   at each vertex. A circle is used only where a mitre cannot exist.
+- **`STROKE_MAX_POINTS` is load-bearing, and it truncates in silence.** Since RL.2 a lane is one
+  mark spanning the whole screen, so the longest polyline in the game is the world itself; a
+  polyline over the cap would be a line that stops in mid air with nothing to say so. Raised to
+  256 against a measured worst case around fifty. The same class of silent failure as the winding
+  above: check a new kind of stroke by reading the pixels back, not by looking at it.
 
 It is written to know nothing about the game. That matters because of an open question: `ui` may
 not import `render`, so the menus cannot reach the stroke as things stand. Either `ui` gains
@@ -569,9 +583,11 @@ line fraying into particles.
   just probably neutral.
 - **No hardcoded colours outside `core/palette.odin`.** Every colour is sampled from the palette
   system. A colour literal anywhere else is a bug, including in `ui/`.
-- **The body is dark in both worlds; only the light changes.** Player, obstacles and track all
-  take `palette.silhouette`; what tells the worlds apart is the rim and the glow. Inverting a
-  silhouette between worlds reads as two different characters.
+- **Nothing in the world is filled.** Since RL.2 the only filled surfaces on screen are the
+  background field and the character, and RL.3 takes the character. `palette.silhouette` has one
+  consumer left (`render/player.odin`); when that goes, so may the field. What tells the worlds
+  apart is the colour *behind* the line, never the line — inverting a mark between worlds reads
+  as two different things rather than as one thing in two places.
 - **No hardcoded pixel timings in patterns.** Patterns are time offsets; positions are derived at
   runtime from elapsed time and scroll speed.
 
@@ -657,7 +673,9 @@ Tracked here so they are not rediscovered. Each is scheduled in `ROADMAP.md`.
 - **Working through a mirrored pair draws the body inside a box.** Up to 45 px, which is 83% of
   a standard cube, for about three frames of the encounter. It is the unavoidable price of the
   no-backwards rule above: the character has to end up past the box, and the only way through
-  is through. Whether it reads as *wedged* or as *phasing* is the R4.6 playtest's call.
+  is through. Whether it reads as *wedged* or as *phasing* is the R4.6 playtest's call — and RL.2
+  changed the picture without meaning to, because the box is now a hollow step in the ground
+  rather than a filled mass, so the body is inside an outline instead of behind one.
 - **The pool is still a placeholder**, now nineteen patterns over three obstacle types. The real
   pool is R5.2. The last measurement of the number that condemned v1.3 — how much of the time at
   least one lane is lethal — was 19.9%, against a Definition of Done that asks for over 40%, and

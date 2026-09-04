@@ -46,8 +46,15 @@ import rl "vendor:raylib/v55"
 
 // Longest polyline the primitive will draw. The geometry lives in fixed
 // storage rather than being allocated per call: a frame draws dozens of
-// strokes, and none of them is long.
-STROKE_MAX_POINTS :: 128
+// strokes, and most of them are short.
+//
+// One of them is not, since phase RL.2: a lane is a single mark running
+// the width of the screen, carrying a keyframe every few dozen pixels
+// and four more points for every cube welded into it. A polyline longer
+// than this is silently truncated, which would be a line that stops in
+// mid air, so the headroom is deliberate — a measured worst case is
+// around fifty.
+STROKE_MAX_POINTS :: 256
 
 // How many ribs a round end is tessellated into. Five is smooth at any
 // weight this game uses; the cost is five extra pairs of vertices.

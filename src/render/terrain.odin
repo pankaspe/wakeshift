@@ -1,72 +1,99 @@
 /*
 * Terrain
-* Draws the floor and the ceiling — and, since phase 6, the places where
-* they are not there.
+* Draws the two lanes — and, since phase RL, that is the whole of the
+* world. There is no fill any more: the floor and the ceiling are two
+* continuous strokes, and everything that stands on them is drawn *in*
+* them (Design Doc, section 10 — La Linea).
 *
-* It no longer decides where they are. Since phase 7.5 the profile lives
-* in core/terrain.odin, because the player and the obstacles stand on it:
-* this file draws the surface the simulation is already using, and the
-* two cannot drift apart because there is only one of them.
+* It does not decide where they are. Since phase 7.5 the profile lives in
+* core/track.odin, because the player and the obstacles stand on it: this
+* file draws the surface the simulation is already using, and the two
+* cannot drift apart because there is only one of them.
 *
-* A Gap is not an object standing on the ground: it is the ground failing
-* to exist. It was once drawn as a dark box sitting *on top of* the floor
-* line, which is why the design's central "full vs void" pairing never
-* landed — both worlds only ever showed the player things that appeared.
-* The terrain is the only code that knows where its own surface is, so
-* cutting the holes is its job, and draw_obstacle deliberately draws
-* nothing for them.
+* THE LINE IS THE WORLD, SO THE LINE CARRIES THE OBSTACLES
+*
+* Phase RL.2 moved the cube out of render/obstacle.odin and into this
+* polyline. A cube on a lane is no longer a box drawn over the ground: it
+* is the ground itself lifting away and coming back, one mark with two
+* right angles in it. That is the new readability rule doing its work —
+*
+*     the world curves, the danger corners
+*
+* — which is geometric rather than about fill, and is therefore the one
+* half of the old "scenery is line, danger is mass" that survived the
+* change of direction. The stack and the pyramid are the same step at a
+* different height and a different top profile; the pyramid's staircase
+* falls out of the polyline for free, exactly the way the track's own
+* relief does.
+*
+* The only cube this file does not draw is the floating one, because it
+* is the one cube that is not on the surface (render/obstacle.odin).
+*
+* A GAP IS THE LINE STOPPING
+*
+* It is the only discontinuity in the game, and that is now literally
+* true: the outline is cut at the hole's edges and drawn as separate
+* strokes. It was once a dark box sitting *on top of* the floor line,
+* which is why the design's "full vs void" pairing never landed.
+*
+* The two sides still break differently, and with no fill left the
+* difference is carried entirely by what the line does:
+*
+*   the floor  ends. The stroke turns down into the break, which puts two
+*              more right angles in it — a cut, and a lethal one.
+*   the ceiling dissolves. The stroke runs on past the lip and tapers to
+*              nothing, and the opening glows, because in the Dream world
+*              an absence is a way through rather than a fall (Design
+*              Doc, section 5).
 *
 * How the cutting works: the surface is a function of x, not a fixed list
-* of points, so a span of it can be drawn between any two arbitrary
-* x values. The void obstacles are turned into gaps in screen space, the
-* gaps are subtracted from the width of the screen, and what is left is
-* drawn one span at a time. Vertices land exactly on the gap edges, so a
-* hole is never snapped to the profile's 50px grid.
-*
-* The Step — the floor lifting into the lane — was drawn here too, and
-* went with the rest of the v1.x obstacle set (roadmap R1.3). What
-* survives it is the technique, because the track's own relief is built
-* the same way (R3): a piece of surface at a different height, with the
-* line running continuously up the vertical face and along the top. One
-* mark, one silhouette, and no seam to give it away — which is what makes
-* raised ground read as *the floor rising* rather than as a box on it.
-*
-* The two sides break differently, which is the whole point of them:
-*
-*   the floor  ends. A hard edge, a lit cross-section down each wall of
-*              the pit, and darkness under it. Concrete, and broken.
-*   the ceiling dissolves. Its edges fade out over some tens of pixels
-*              instead of stopping, and the gap glows faintly, because
-*              in the Dream world an absence is a way through rather
-*              than a fall (Design Doc, section 5).
+* of points, so the outline is built once across the whole screen and
+* then clipped to whatever the holes leave of it. Vertices land exactly
+* on the cut, so a hole is never snapped to a keyframe.
 */
 package render
 
 import "../core"
 import "../game"
-import "core:math"
 import "core:slice"
 import rl "vendor:raylib/v55"
 
-// The lit edge: how bright it is when its world is dormant, and how much
-// it gains once that world is the one being played in.
-TERRAIN_RIM_DORMANT :: 0.30
-TERRAIN_RIM_ALIVE :: 0.70
-TERRAIN_GLOW_STRENGTH :: 0.35
-TERRAIN_GLOW_SPREAD :: 5
+// The mark the world is drawn with. It used to be a rim light running
+// along the top of a filled mass; with the fill gone it *is* the mass, so
+// it carries more weight, more light and more halo than the rim did.
+TERRAIN_STROKE_THICKNESS :: 2.8
+TERRAIN_CORE_LIGHT :: 0.30
+TERRAIN_GLOW_STRENGTH :: 0.45
+TERRAIN_GLOW_SPREAD :: 5.5
+
+// How present the line is when its world is dormant, and how much it
+// gains once that world is the one being played in.
+//
+// The dormant floor is no longer backed by a silhouette, so this number
+// is the whole of its presence: it is the boundary between ground and
+// air, and losing it would cost readability (pillar 2) to buy mood.
+// Phase RL.4 decides whether the dormant lane should instead thin out.
+TERRAIN_RIM_DORMANT :: 0.45
+TERRAIN_RIM_ALIVE :: 0.85
 
 // How far past each screen edge the terrain is built, so a hole whose
 // edge is just off screen still cuts correctly. Comfortably more than one
 // profile entry at the fastest tier, which is 74 px wide.
 TERRAIN_MARGIN :: 100
 
-// How deep the lit cross-section of a broken floor runs, in pixels.
+// How far the broken floor turns down into the void, in pixels.
 CHASM_WALL_DEPTH :: 22
 
-// How far a dissolving ceiling edge fades, in pixels.
+// How far a dissolving ceiling edge runs on into the gap before it has
+// thinned away, and how little of the stroke is left at the far end.
 DREAM_HOLE_FADE :: 30
-DREAM_HOLE_FADE_STEP :: 3
+DREAM_HOLE_TAPER :: 0.05
 DREAM_HOLE_GLOW :: 0.30
+
+// Two points closer together than this are the same point. A clipped
+// outline can produce one when a cut lands exactly on a vertex, and a
+// zero-length segment gives the stroke a rib with no direction.
+TERRAIN_EPSILON :: 0.01
 
 // The surface height at any screen x, from the shared profile.
 //
@@ -78,19 +105,79 @@ terrain_surface_y :: proc(world: game.World, is_floor: bool, x: f32) -> f32 {
 	return game.get_surface_y(world, is_floor ? core.Lane.Real : core.Lane.Dream, x)
 }
 
-// A range of screen x at one height. lift is how far the floor is raised
-// over it, which is zero everywhere except on a step.
+// A range of screen x.
 Span :: struct {
 	start: f32,
 	end:   f32,
+}
+
+// One cube, as the piece of surface it replaces. The rect is the box the
+// collision uses, so the mark and the hitbox are the same thing by
+// construction rather than by agreement.
+@(private)
+Step :: struct {
+	start: f32,
+	end:   f32,
+	rect:  rl.Rectangle,
+	form:  game.CubeForm,
+}
+
+// Every cube standing on one lane, left to right and never overlapping.
+//
+// The floating cube is excluded: it is the one form that is not on the
+// surface, so it cannot be a step in it, and render/obstacle.odin keeps
+// it. An overlapping cube is dropped rather than merged, because the
+// outline walks x forward and cannot go back — authored patterns do not
+// produce one, and swallowing it is better than tearing the line.
+@(private)
+collect_steps :: proc(
+	world: game.World,
+	obstacles: []game.Obstacle,
+	lane: core.Lane,
+	allocator := context.temp_allocator,
+) -> [dynamic]Step {
+	found := make([dynamic]Step, 0, 8, allocator)
+
+	for obstacle in obstacles {
+		if obstacle.obstacle_type != .Cube || obstacle.lane != lane {
+			continue
+		}
+		if obstacle.cube == .Float {
+			continue
+		}
+		rect := game.get_obstacle_rect(obstacle, world)
+		if rect.width <= 0 {
+			continue
+		}
+		if rect.x + rect.width < -TERRAIN_MARGIN || rect.x > core.SCREEN_WIDTH + TERRAIN_MARGIN {
+			continue
+		}
+		append(
+			&found,
+			Step{start = rect.x, end = rect.x + rect.width, rect = rect, form = obstacle.cube},
+		)
+	}
+
+	slice.sort_by(found[:], proc(a, b: Step) -> bool {return a.start < b.start})
+
+	kept := make([dynamic]Step, 0, len(found), allocator)
+	cursor := f32(-1e9)
+	for step in found {
+		if step.start < cursor {
+			continue
+		}
+		append(&kept, step)
+		cursor = step.end
+	}
+	return kept
 }
 
 // Every stretch of one lane's surface that a hole has taken out of it, in
 // screen x, sorted and merged.
 //
 // Merging matters: two gaps that touch have no ground between them, and
-// drawing the zero-width span that separates them would put a lit rim
-// line down the middle of a hole.
+// drawing the zero-width piece that separates them would put a stroke
+// down the middle of a hole.
 collect_gap_spans :: proc(
 	world: game.World,
 	obstacles: []game.Obstacle,
@@ -126,41 +213,59 @@ collect_gap_spans :: proc(
 }
 
 // What is left of one side once the gaps are taken out of it.
-solid_spans :: proc(gaps: []Span, allocator := context.temp_allocator) -> [dynamic]Span {
+solid_spans :: proc(
+	gaps: []Span,
+	left, right: f32,
+	allocator := context.temp_allocator,
+) -> [dynamic]Span {
 	spans := make([dynamic]Span, 0, len(gaps) + 1, allocator)
 
-	cursor := f32(-TERRAIN_MARGIN)
+	cursor := left
 	for gap in gaps {
 		if gap.start > cursor {
 			append(&spans, Span{start = cursor, end = gap.start})
 		}
 		cursor = max(cursor, gap.end)
 	}
-	if cursor < core.SCREEN_WIDTH + TERRAIN_MARGIN {
-		append(&spans, Span{start = cursor, end = core.SCREEN_WIDTH + TERRAIN_MARGIN})
+	if cursor < right {
+		append(&spans, Span{start = cursor, end = right})
 	}
 	return spans
 }
 
-// The x positions to sample a span at: both ends, plus every profile
-// vertex inside it, so the drawn edge follows the same line the profile
-// describes.
-//
-// The vertices are the track's own keyframes, spaced in time rather than
-// in pixels, so how far apart they land on screen is the scroll speed —
-// the undulation stretches as a run gets faster (core/track.odin).
+// Appends a point unless it is the one already there. A cut landing
+// exactly on a vertex would otherwise hand the stroke a rib with no
+// direction to build its ribbon from.
 @(private)
-span_samples :: proc(
-	world: game.World,
-	span: Span,
-	allocator := context.temp_allocator,
-) -> [dynamic]f32 {
-	samples := make([dynamic]f32, 0, 32, allocator)
-	append(&samples, span.start)
+push_point :: proc(points: ^[dynamic]rl.Vector2, point: rl.Vector2) {
+	if len(points) > 0 {
+		last := points[len(points) - 1]
+		if abs(last.x - point.x) < TERRAIN_EPSILON && abs(last.y - point.y) < TERRAIN_EPSILON {
+			return
+		}
+	}
+	append(points, point)
+}
 
+// The surface between two x values, sampled at the track's own keyframes.
+//
+// The vertices are keyframes, spaced in time rather than in pixels, so
+// how far apart they land on screen is the scroll speed — the undulation
+// stretches as a run gets faster (core/track.odin). Nothing else is
+// needed, because the profile is linear between them.
+@(private)
+append_surface :: proc(
+	points: ^[dynamic]rl.Vector2,
+	world: game.World,
+	is_floor: bool,
+	from, to: f32,
+) {
+	if to <= from {
+		return
+	}
 	ground := game.get_ground(world)
-	start_time := core.ground_time_at_x(ground, span.start)
-	end_time := core.ground_time_at_x(ground, span.end)
+	start_time := core.ground_time_at_x(ground, from)
+	end_time := core.ground_time_at_x(ground, to)
 
 	for i in 0 ..< world.track.count {
 		point := world.track.points[i]
@@ -170,144 +275,224 @@ span_samples :: proc(
 		if point.time >= end_time {
 			break
 		}
-		x := span.start + (point.time - start_time) * max(ground.speed, 1)
-		if x > span.start && x < span.end {
-			append(&samples, x)
+		x := from + (point.time - start_time) * max(ground.speed, 1)
+		if x > from && x < to {
+			push_point(points, rl.Vector2{x, terrain_surface_y(world, is_floor, x)})
 		}
 	}
-
-	append(&samples, span.end)
-	return samples
 }
 
-// Fills one unbroken stretch of ground, from its surface to the screen
-// edge, and runs the world's light along the surface.
+// The far side of a step: two right angles for every form but the
+// pyramid, which is a staircase of them.
 //
-// It takes a list of pieces rather than one span because the track's own
-// relief will arrive that way (roadmap R3): consecutive pieces share an
-// x, so the two points there differ only in height and a vertical face
-// falls out of the polyline for free — for the fill and for the lit edge
-// alike. Today every stretch is a single piece.
+// Read off the obstacle's own rectangle rather than off the surface, so
+// the top of the mark is exactly the top of the hitbox. The two vertical
+// faces are implied — this appends the far edge at the same x the caller
+// already put the surface at, and the polyline goes straight up.
 @(private)
-draw_terrain_stretch :: proc(
-	world: game.World,
-	parts: []Span,
-	palette: core.Palette,
-	alive: f32,
-	is_floor: bool,
-) {
-	outline := make([dynamic]rl.Vector2, 0, 64, context.temp_allocator)
-	for part in parts {
-		for x in span_samples(world, part) {
-			append(&outline, rl.Vector2{x, terrain_surface_y(world, is_floor, x)})
-		}
-	}
-	if len(outline) < 2 {
+append_step :: proc(points: ^[dynamic]rl.Vector2, step: Step, is_floor: bool) {
+	// The edge of the box furthest from the lane it stands on. Hanging
+	// from the ceiling is the same picture with the mirror applied.
+	far_y := is_floor ? step.rect.y : step.rect.y + step.rect.height
+
+	if step.form != .Pyramid {
+		push_point(points, rl.Vector2{step.start, far_y})
+		push_point(points, rl.Vector2{step.end, far_y})
 		return
 	}
 
-	edge_y: f32 = is_floor ? core.SCREEN_HEIGHT : 0
+	// Cubes in a staircase, rising away from the player: the low step is
+	// met first, which is what says in advance which side to be on.
+	base_y := is_floor ? step.rect.y + step.rect.height : step.rect.y
+	grow := is_floor ? f32(-1) : f32(1)
+	columns := max(int(step.rect.width / game.CUBE_UNIT), 1)
+	width := step.rect.width / f32(columns)
 
-	strip := make([dynamic]rl.Vector2, 0, len(outline) * 2, context.temp_allocator)
-	for point in outline {
-		append(&strip, point)
-		append(&strip, rl.Vector2{point.x, edge_y})
+	for column in 0 ..< columns {
+		top := base_y + grow * f32(column + 1) * game.CUBE_UNIT
+		left := step.start + f32(column) * width
+		push_point(points, rl.Vector2{left, top})
+		push_point(points, rl.Vector2{left + width, top})
 	}
-	rl.DrawTriangleStrip(raw_data(strip[:]), i32(len(strip)), palette.silhouette)
-
-	// The rim: the world's own light run along the surface, as one neon
-	// stroke (stroke.odin) rather than as a segment per sample. Same
-	// shape, three differences that only a single mark can have — the
-	// turns weld instead of leaving a wedge, the ends round over the lip
-	// of a hole, and the halo stops beading at every vertex, which it did
-	// for as long as the rim was a row of separate glowing lines.
-	//
-	// The line is always drawn at full opacity even when its world is
-	// dormant: it is the boundary between ground and air, and losing it
-	// would cost readability (pillar 2) to buy mood.
-	rim_alpha := TERRAIN_RIM_DORMANT + (TERRAIN_RIM_ALIVE - TERRAIN_RIM_DORMANT) * alive
-
-	rim := new_stroke(core.with_alpha(palette.light, rim_alpha), core.LIGHT_RIM_THICKNESS)
-	rim.glow = TERRAIN_GLOW_STRENGTH * alive
-	rim.spread = TERRAIN_GLOW_SPREAD
-	// The ground keeps the colour it had. A neon core lifted toward white
-	// is what the sketch asks of a *plant*; on a rim that runs the whole
-	// width of the screen it is a brightness change nobody asked for, and
-	// the bloom would pick it up twice over. One number to turn up if the
-	// terrain should join the rest of the style later.
-	rim.core_light = 0
-	draw_stroke(outline[:], rim)
 }
 
-// A break in the floor: the ground stops, and you can see down into it.
-// The two vertical walls catch the world's light, which is what says
-// "this has depth" rather than "this is a dark rectangle".
+// One lane, as a single polyline running the width of the screen with
+// every cube welded into it. The holes are not cut here — they are taken
+// out afterwards, so that a cube straddling a hole's edge is clipped
+// rather than mis-authored into a broken shape.
 @(private)
-draw_chasm_gap :: proc(world: game.World, gap: Span, palette: core.Palette, alive: f32) {
-	// Darker than any background the palette produces, so the hole reads
-	// as a hole rather than as a patch of distant sky.
-	void_color := core.lerp_color(palette.silhouette, rl.Color{0, 0, 0, 255}, 0.85)
+build_lane_outline :: proc(
+	world: game.World,
+	obstacles: []game.Obstacle,
+	lane: core.Lane,
+	allocator := context.temp_allocator,
+) -> [dynamic]rl.Vector2 {
+	steps := collect_steps(world, obstacles, lane, allocator)
+	is_floor := lane == core.Lane.Real
 
-	left_y := terrain_surface_y(world, true, gap.start)
-	right_y := terrain_surface_y(world, true, gap.end)
+	// A cube may reach past the margin; the line has to start before it
+	// and end after it, or its vertical face would be drawn at the wrong
+	// x. Both ends are off screen either way.
+	left := f32(-TERRAIN_MARGIN)
+	right := f32(core.SCREEN_WIDTH + TERRAIN_MARGIN)
+	if len(steps) > 0 {
+		left = min(left, steps[0].start)
+		right = max(right, steps[len(steps) - 1].end)
+	}
 
-	rl.DrawRectangleRec(
-		rl.Rectangle{gap.start, min(left_y, right_y), gap.end - gap.start, core.SCREEN_HEIGHT},
-		void_color,
-	)
+	points := make([dynamic]rl.Vector2, 0, 96, allocator)
+	push_point(&points, rl.Vector2{left, terrain_surface_y(world, is_floor, left)})
 
-	// The cross-section of the broken ground, lit at the top and fading
-	// into the dark as it goes down.
-	wall_color := core.with_alpha(palette.light, 0.20 + 0.35 * alive)
-	rl.DrawLineEx(
-		rl.Vector2{gap.start, left_y},
-		rl.Vector2{gap.start, left_y + CHASM_WALL_DEPTH},
-		core.RIM_THICKNESS,
-		wall_color,
-	)
-	rl.DrawLineEx(
-		rl.Vector2{gap.end, right_y},
-		rl.Vector2{gap.end, right_y + CHASM_WALL_DEPTH},
-		core.RIM_THICKNESS,
-		wall_color,
-	)
+	cursor := left
+	for step in steps {
+		append_surface(&points, world, is_floor, cursor, step.start)
+		push_point(&points, rl.Vector2{step.start, terrain_surface_y(world, is_floor, step.start)})
+		append_step(&points, step, is_floor)
+		push_point(&points, rl.Vector2{step.end, terrain_surface_y(world, is_floor, step.end)})
+		cursor = step.end
+	}
 
-	// The lip: the last of the surface line, turned down into the break.
-	lip_color := core.with_alpha(palette.light, TERRAIN_RIM_DORMANT + 0.4 * alive)
-	rl.DrawCircleV(rl.Vector2{gap.start, left_y}, core.LIGHT_RIM_THICKNESS, lip_color)
-	rl.DrawCircleV(rl.Vector2{gap.end, right_y}, core.LIGHT_RIM_THICKNESS, lip_color)
+	append_surface(&points, world, is_floor, cursor, right)
+	push_point(&points, rl.Vector2{right, terrain_surface_y(world, is_floor, right)})
+	return points
 }
 
-// A break in the ceiling, which does not break: it dissolves. The edges
-// fade out into the gap instead of stopping at it, and what is behind
-// glows, because in the Dream world an absence is an opening.
+// The part of an outline between two x values, with vertices interpolated
+// onto the two cuts.
+//
+// The outline walks x forward and never back, so a segment either lies
+// inside the window, outside it, or crosses one of its edges — which is
+// what makes this a walk rather than a general polygon clip. A vertical
+// face is two points at the same x and is kept or dropped whole.
 @(private)
-draw_dream_hole_gap :: proc(world: game.World, gap: Span, palette: core.Palette, alive: f32) {
+clip_outline :: proc(
+	outline: []rl.Vector2,
+	from, to: f32,
+	allocator := context.temp_allocator,
+) -> [dynamic]rl.Vector2 {
+	piece := make([dynamic]rl.Vector2, 0, len(outline), allocator)
+	if to <= from || len(outline) < 2 {
+		return piece
+	}
+
+	for i in 0 ..< len(outline) - 1 {
+		a := outline[i]
+		b := outline[i + 1]
+		if b.x < from || a.x > to {
+			continue
+		}
+		if a.x < from && b.x > a.x {
+			t := (from - a.x) / (b.x - a.x)
+			push_point(&piece, rl.Vector2{from, a.y + (b.y - a.y) * t})
+		} else if a.x >= from && a.x <= to {
+			push_point(&piece, a)
+		}
+		if b.x > to && b.x > a.x {
+			t := (to - a.x) / (b.x - a.x)
+			push_point(&piece, rl.Vector2{to, a.y + (b.y - a.y) * t})
+		}
+	}
+
+	last := outline[len(outline) - 1]
+	if last.x >= from && last.x <= to {
+		push_point(&piece, last)
+	}
+	return piece
+}
+
+// The light one lane's line is drawn in. Alpha and halo both grow with
+// how awake that world is; the colour and the weight do not, because the
+// two worlds are told apart by the field behind them (art direction,
+// decision 1).
+@(private)
+terrain_stroke :: proc(palette: core.Palette, alive: f32) -> Stroke {
+	alpha := TERRAIN_RIM_DORMANT + (TERRAIN_RIM_ALIVE - TERRAIN_RIM_DORMANT) * alive
+	line := new_stroke(core.with_alpha(palette.light, alpha), TERRAIN_STROKE_THICKNESS)
+	line.glow = TERRAIN_GLOW_STRENGTH * (0.45 + 0.55 * alive)
+	line.spread = TERRAIN_GLOW_SPREAD
+	line.core_light = TERRAIN_CORE_LIGHT
+	return line
+}
+
+// One unbroken stretch of one lane, as a single mark.
+//
+// broken_start / broken_end say whether that end of the piece is a hole
+// rather than the edge of the screen, which is the only thing that
+// decides what happens there.
+@(private)
+draw_terrain_piece :: proc(
+	world: game.World,
+	piece: ^[dynamic]rl.Vector2,
+	palette: core.Palette,
+	alive: f32,
+	is_floor: bool,
+	broken_start, broken_end: bool,
+) {
+	if len(piece) < 2 {
+		return
+	}
+
+	// The floor ends: the line turns down into the break. Two more right
+	// angles, and the mark says "cut" rather than "fade" — which is the
+	// truth, because this is the danger that kills outright.
+	if is_floor {
+		if broken_start {
+			lip := piece[0]
+			inject_at(piece, 0, rl.Vector2{lip.x, lip.y + CHASM_WALL_DEPTH})
+		}
+		if broken_end {
+			lip := piece[len(piece) - 1]
+			append(piece, rl.Vector2{lip.x, lip.y + CHASM_WALL_DEPTH})
+		}
+	}
+
+	draw_stroke(piece[:], terrain_stroke(palette, alive))
+
+	// The ceiling dissolves: the line runs on past the lip and thins to
+	// nothing instead of stopping. Drawn as its own tapered stroke rather
+	// than as part of the piece, because a stroke's taper runs end to end
+	// and a piece has two of them.
+	if !is_floor {
+		if broken_start {
+			draw_dream_tail(world, piece[0], -1, palette, alive)
+		}
+		if broken_end {
+			draw_dream_tail(world, piece[len(piece) - 1], 1, palette, alive)
+		}
+	}
+}
+
+// The last of a ceiling, running into the opening and thinning away.
+// direction is -1 to the left of the piece and +1 to its right.
+@(private)
+draw_dream_tail :: proc(
+	world: game.World,
+	lip: rl.Vector2,
+	direction: f32,
+	palette: core.Palette,
+	alive: f32,
+) {
+	end_x := lip.x + direction * DREAM_HOLE_FADE
+	tail := [2]rl.Vector2{lip, rl.Vector2{end_x, terrain_surface_y(world, false, end_x)}}
+
+	stroke := terrain_stroke(palette, alive)
+	stroke.taper = DREAM_HOLE_TAPER
+	// Square at the wide end so it butts against the piece's round cap
+	// instead of adding a second one on top of it.
+	stroke.round_caps = false
+	draw_stroke(tail[:], stroke)
+}
+
+// The light behind a dissolved ceiling. It is the whole of what a Dream
+// hole *is* now that nothing is filled: an opening, lit from beyond.
+@(private)
+draw_dream_opening :: proc(world: game.World, gap: Span, palette: core.Palette, alive: f32) {
 	width := gap.end - gap.start
-	fade := min(f32(DREAM_HOLE_FADE), width * 0.5)
-
-	// The light behind the dissolved ceiling.
-	center := rl.Vector2{(gap.start + gap.end) * 0.5, terrain_surface_y(world, false, (gap.start + gap.end) * 0.5)}
-	draw_glow_circle(center, width * 0.7, palette.accent, DREAM_HOLE_GLOW * (0.4 + 0.6 * alive))
-
-	// The two dissolving edges, drawn as columns of the ceiling's own
-	// silhouette thinning out into the gap.
-	for offset := f32(0); offset < fade; offset += DREAM_HOLE_FADE_STEP {
-		strength := 1 - offset / fade
-		color := core.with_alpha(palette.silhouette, strength)
-
-		left_x := gap.start + offset
-		rl.DrawRectangleRec(
-			rl.Rectangle{left_x, 0, DREAM_HOLE_FADE_STEP, terrain_surface_y(world, false, left_x)},
-			color,
-		)
-
-		right_x := gap.end - offset - DREAM_HOLE_FADE_STEP
-		rl.DrawRectangleRec(
-			rl.Rectangle{right_x, 0, DREAM_HOLE_FADE_STEP, terrain_surface_y(world, false, right_x)},
-			color,
-		)
+	center := rl.Vector2 {
+		(gap.start + gap.end) * 0.5,
+		terrain_surface_y(world, false, (gap.start + gap.end) * 0.5),
 	}
+	draw_glow_circle(center, width * 0.7, palette.accent, DREAM_HOLE_GLOW * (0.4 + 0.6 * alive))
 }
 
 @(private)
@@ -317,22 +502,37 @@ draw_terrain_side :: proc(
 	palettes: core.PaletteSet,
 	is_floor: bool,
 ) {
+	lane := is_floor ? core.Lane.Real : core.Lane.Dream
 	palette := is_floor ? palettes.real : palettes.dream
 	alive := is_floor ? palettes.real_alive : palettes.dream_alive
 
-	gaps := collect_gap_spans(world, obstacles, is_floor ? core.Lane.Real : core.Lane.Dream)
+	outline := build_lane_outline(world, obstacles, lane)
+	if len(outline) < 2 {
+		return
+	}
+	left := outline[0].x
+	right := outline[len(outline) - 1].x
 
-	for gap in gaps {
-		if is_floor {
-			draw_chasm_gap(world, gap, palette, alive)
-		} else {
-			draw_dream_hole_gap(world, gap, palette, alive)
+	gaps := collect_gap_spans(world, obstacles, lane)
+
+	// The glow of an opening goes under the line, not over it.
+	if !is_floor {
+		for gap in gaps {
+			draw_dream_opening(world, gap, palette, alive)
 		}
 	}
 
-	for span in solid_spans(gaps[:]) {
-		piece := [1]Span{span}
-		draw_terrain_stretch(world, piece[:], palette, alive, is_floor)
+	for span in solid_spans(gaps[:], left, right) {
+		piece := clip_outline(outline[:], span.start, span.end)
+		draw_terrain_piece(
+			world,
+			&piece,
+			palette,
+			alive,
+			is_floor,
+			span.start > left + TERRAIN_EPSILON,
+			span.end < right - TERRAIN_EPSILON,
+		)
 	}
 }
 
