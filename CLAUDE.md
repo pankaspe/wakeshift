@@ -101,8 +101,8 @@ the left that eats the ground a mistake costs you, a track whose corridor undula
 and the Sentinel — so all three dangers and all three verbs are on screen. **Phase RL is in
 progress**: RL.1 through RL.8 are done, so **nothing on screen is filled but the background** — a
 field whose colour is the world, two unfilled strokes that are the floor and the ceiling with the
-cubes welded into them, a character made of the same mark but heavier and whiter — one closed contour, a robed
-figure under a hood — a dormant lane
+cubes welded into them, a character made of the same mark, brighter but no heavier — one open contour, a hooded figure
+that rises out of the floor's own line — a dormant lane
 that thins and dims behind the one you are in, and two fronts that are both clips: a pen near the
 right edge writing the world, and the Corruption fraying it into dust on the left. Still missing:
 the real pattern pool (R5), fragments and the Gate (R6).
@@ -452,13 +452,19 @@ is the thing that reads at this size.
   and never a right angle. A figure built out of straight edges would be wearing the one shape
   the whole picture reserves for "this costs you". Measured: the sharpest interior angle is 33°,
   the hood's own point, and nothing is near 90.
-- **The visible figure fills the box, and the number that says so derives.** How far the drawing
-  reaches past its lowest anchor depends on how it is drawn, so `PLAYER_HEM_DEEP_Y` is half a
-  stroke inside the box rather than a constant someone keeps in step. RL.3 had a whole chain
-  hanging off this — the leg length *and* the stride were derived from it, because feet that
-  cover less ground than the world does are feet that skate. Cloth does not skate, so only the
-  first half survived. A shape whose edge falls exactly on the box's bottom lights the pixel row
-  *before* it, which is what contact looks like in a readback.
+- **It is open at the feet, and that is the whole idea.** The two ends of the stroke land on the
+  lane's surface at the lane's own weight, so the floor's line closes the figure and the
+  character reads as the ground standing up rather than as a shape standing on it — the sentence
+  section 10 opens with. Two consequences: the feet take **none** of the body's bob (the body
+  bobs inside the cloth, or the join breathes), and what steps is one end at a time, never both,
+  by construction — so there is always an end on the floor.
+- **The contour is one spline, not a chain of arcs**, and the tension is not the textbook one.
+  Independent arcs meet with a discontinuous tangent and at this size every one reads as a nick
+  in the cloth. A Cardinal spline through every anchor is C1 everywhere — but at Catmull-Rom's
+  0.5 it **overshoots past an anchor that sticks out**, and every anchor here that matters sticks
+  out, so the hood's point and the brim came out as horns: wrong for cloth, and pointed, which is
+  what the picture reserves for danger. `PLAYER_SPLINE_TENSION` is 0.30. Measured across 192
+  poses, the sharpest turn between two drawn segments is 109° and it is the hood's own point.
 - **The inertia machinery survived the redesign untouched**, because the value was there and not
   in the silhouette: the 0.07 s lag, the trail against the turn and against the rise, the clamp.
   It moves the hood now instead of the sprout, and not a line of it changed.
@@ -757,13 +763,18 @@ three curves turned out to be the library's to within 1e-7 and to have no caller
   *behind* the line, never the line: the character is drawn out of the **neutral** palette on
   purpose, because a mark that changes colour between the worlds is the mild version of the
   mistake that inverting body and rim was.
-- **The weight hierarchy is a rule, and it lives in the arithmetic.** Character, then the live
-  lane, then the dormant lane, then the parallax — thickest and whitest first (Design Doc,
-  section 10). `TERRAIN_STROKE_THICKNESS` is the rung everything else is expressed against:
-  `render/player.odin`'s weights are multiples of it and `TERRAIN_DORMANT_WEIGHT` is a fraction
-  of it, so tuning the world cannot silently invert the order. Do the same for anything new that
-  joins the ladder. All four rungs exist since RL.8: character 4.34 px, live lane 2.80, dormant
-  lane 1.96, parallax 1.18 / 0.95 / 0.78 at alphas 0.30 / 0.22 / 0.15.
+- **The weight hierarchy is a rule, and it lives in the arithmetic.** `TERRAIN_STROKE_THICKNESS`
+  is the rung everything else is expressed against: `render/player.odin`'s weight is a multiple
+  of it and `TERRAIN_DORMANT_WEIGHT` a fraction, so tuning the world cannot silently invert the
+  order. Do the same for anything new that joins the ladder. Live lane 2.80 px, dormant 1.96,
+  parallax 1.18 / 0.95 / 0.78 at alphas 0.30 / 0.22 / 0.15.
+- **The character is the exception, by playtest, and the design doc has not caught up.** Section
+  10 asks for it to be the thickest stroke on screen; it is drawn at the *live lane's* weight
+  instead, because on a 45 px figure a heavier pen was not reading as "important", it was filling
+  the shape in — a notch narrower than the pen is a notch the pen swallows. The hierarchy moved
+  to the other channel: the whitest core on screen (0.62 against the terrain's 0.30) and full
+  opacity against the lane's 0.85. Measured in a real frame, character 255 against lane 238. If
+  it stops standing out, raise those before raising the weight.
 - **The parallax may never enter the corridor**, and `core.TRACK_SKY_MARGIN` is what makes that
   checkable rather than believed: the track clamps every keyframe so both surfaces stay inside the
   screen with that much to spare, so the bands above y=70 and below y=650 are the only two places

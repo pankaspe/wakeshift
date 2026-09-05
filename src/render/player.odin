@@ -6,6 +6,21 @@
 * No sprite, no texture; the sense of quality is meant to come from the
 * math of the movement, not from the detail of the shapes.
 *
+* IT RISES OUT OF THE GROUND AND RETURNS TO IT
+*
+* The contour is **open at the feet**, not closed. The two ends of the
+* stroke land exactly on the lane's surface, at the same weight the lane
+* is drawn with, so the floor's own line closes the figure and the
+* character reads as the ground standing up rather than as a shape
+* standing on it. That is the sentence the design doc opens section 10
+* with — "il personaggio si solleva dal tratto e ci rientra" — and it was
+* the one thing the first robe did not do.
+*
+* Two consequences. The feet do **not** take the body's bob: the body bobs
+* inside the cloth and the hem stays where the ground is, or the join
+* would breathe. And what steps is one end at a time — never both, by
+* construction, so there is always an end on the floor.
+*
 * WHY IT IS A ROBE, AND WHY IT IS ONE MARK
 *
 * It was a stick figure until this pass: a bulb head, four limbs and a
@@ -21,6 +36,16 @@
 * at a glance that is somebody in a robe, and it is nothing like
 * Cavandoli's man — which matters, because his character is protected and
 * "one that reminds you of him, made of our own stroke" is the line.
+*
+* THE OUTLINE IS ONE SPLINE, NOT A CHAIN OF ARCS
+*
+* Every anchor is passed through by a Catmull-Rom spline rather than
+* joined by its own separate curve. That is what stops the silhouette
+* looking chipped: independent segments meet with a discontinuous tangent,
+* and at this size every one of those reads as a nick in the cloth. A
+* spline is C1 by construction, so the only place the outline changes
+* direction sharply is the one place that is supposed to — the hood's
+* point, and even that is a turn rather than a corner.
 *
 * AND IT CURVES, BECAUSE THE DANGER CORNERS
 *
@@ -109,13 +134,13 @@ import rl "vendor:raylib/v55"
 // inside the cloth there are no feet to skate, and only the first half of
 // the rule survives.
 
-PLAYER_HEM_DEEP_Y ::
-	0.5 - (TERRAIN_STROKE_THICKNESS * PLAYER_STROKE_WEIGHT * 0.5) / f32(game.PLAYER_SIZE)
-
-// The hem's two corners sit above its lowest point, so the cloth's arc
-// bottoms out in the middle and the contact point is the same one every
-// frame whatever the corners are doing.
-PLAYER_HEM_RISE :: 0.030
+// The two ends of the stroke sit **on** the surface rather than above it:
+// the character's line and the lane's line are the same weight and meet
+// there, so the ground closes the figure. That is why this is a plain
+// 0.5 and not the half-stroke inset the closed version needed — the round
+// cap reaching under the surface lands inside the lane's own line, which
+// is exactly the join it is meant to make.
+PLAYER_HEM_Y :: 0.5
 PLAYER_HEM_FRONT_X :: 0.215
 PLAYER_HEM_BACK_X :: -0.245
 
@@ -130,21 +155,21 @@ PLAYER_HEM_BACK_X :: -0.245
 // the head from the body is the outline changing direction three times,
 // not a gap the eye has to find. The whole read is **a cone on a bell**,
 // and it lives in the difference between the hat's width and the hem's.
-PLAYER_WAIST_Y :: -0.075
-PLAYER_WAIST_FRONT_X :: 0.124
-PLAYER_WAIST_BACK_X :: -0.131
+PLAYER_WAIST_Y :: -0.060
+PLAYER_WAIST_FRONT_X :: 0.126
+PLAYER_WAIST_BACK_X :: -0.134
 
 // The hat's brim: the widest the figure gets above the waist.
 // The hat's brim. Clearly **narrower than the hem**, which is the single
 // number that decides whether this reads as somebody in a robe or as an
 // abstract diamond: a hat as wide as the robe's base makes an hourglass,
 // and the first version of this figure was one.
-PLAYER_BRIM_Y :: -0.175
-PLAYER_BRIM_FRONT_X :: 0.178
-PLAYER_BRIM_BACK_X :: -0.182
+PLAYER_BRIM_Y :: -0.200
+PLAYER_BRIM_FRONT_X :: 0.152
+PLAYER_BRIM_BACK_X :: -0.158
 
 // The cone, measured from the middle of the brim.
-PLAYER_HAT_HEIGHT :: 0.340
+PLAYER_HAT_HEIGHT :: 0.320
 PLAYER_BRIM_CENTER_X :: (PLAYER_BRIM_FRONT_X + PLAYER_BRIM_BACK_X) * 0.5
 
 // Radians forward of straight up, at rest: the hat is worn at an angle,
@@ -155,17 +180,14 @@ PLAYER_HAT_CURVE :: 0.19
 // Positive is away from the figure's centre line. The robe bells, the
 // pinch is smooth, and the hat is very slightly concave — a witch's-hat
 // curve rather than a triangle's straight edge.
-PLAYER_BOW_HAT :: -0.048
-PLAYER_BOW_PINCH :: -0.008
+PLAYER_BOW_HAT :: -0.012
+PLAYER_BOW_PINCH :: -0.004
 PLAYER_BOW_ROBE :: 0.048
 
-// How deep the hem's arc hangs between its corners, as a control offset.
-PLAYER_BOW_HEM :: 0.9
-
-// How many points each bowed segment is tessellated into. Seven segments
-// at this makes a 37-point contour, which is one mark and nowhere near
-// STROKE_MAX_POINTS.
-PLAYER_CURVE_STEPS :: 5
+// How many points each span of the spline is tessellated into. Twelve
+// spans at this makes a 73-point contour, which is one mark and nowhere
+// near STROKE_MAX_POINTS.
+PLAYER_CURVE_STEPS :: 6
 
 // Where the eye rides, inside the figure just under the brim.
 PLAYER_HEAD_CENTER :: rl.Vector2{0.015, -0.170}
@@ -183,15 +205,8 @@ PLAYER_HEAD_CENTER :: rl.Vector2{0.015, -0.170}
 PLAYER_STRIDE_LENGTH :: 58
 
 PLAYER_HEM_STEP :: 0.055 // how far a hem corner lifts on its own beat
-PLAYER_HEM_SLIDE :: 0.075 // how far the cloth's lowest point slides with it
 PLAYER_LEAN :: 0.12 // radians of forward lean, a walker's posture
 PLAYER_BOUNCE :: 0.045 // vertical bob per step, in box fractions
-
-// How much of the body's bob the hem's corners take. Not all of it: the
-// body bobs *inside* the cloth, so the hem follows late and its lowest
-// point does not follow at all — which is what keeps the contact exact
-// while the figure is moving.
-PLAYER_HEM_FOLLOW :: 0.30
 
 // --- The Dream drift, which replaces the step as world_t rises ---
 
@@ -241,14 +256,24 @@ SETTLE_SQUASH_AMOUNT :: 0.28
 
 // --- The mark ---
 //
-// A weight as a multiple of the world's own stroke, because the hierarchy
-// is the rule and the absolute number is not: the character is the
-// thickest line on screen and the world is the second thickest, and
-// saying so in the arithmetic means tuning one cannot silently invert the
-// other (Design Doc, section 10).
+// A weight as a multiple of the world's own stroke, so that tuning the
+// world carries the character with it.
+//
+// **It is the same weight as the live lane, and that is a playtest
+// decision that overrides the design doc.** Section 10 asks for the
+// character to be the thickest stroke on screen; on the actual 45 px
+// figure a heavier pen was not reading as "important", it was filling in
+// the shape — a notch narrower than the pen is a notch the pen swallows,
+// so the hood, the shoulders and the robe were all being run together.
+// At the lane's own weight the figure has room to have features.
+//
+// The hierarchy is not abandoned, it moved to the other channel: the
+// character keeps the whitest core on screen (PLAYER_CORE_LIGHT against
+// the terrain's 0.30) and full opacity against the live lane's 0.85. If
+// it stops standing out, raise those before raising this.
 //
 // One weight, because there is one mark. The stick figure needed five.
-PLAYER_STROKE_WEIGHT :: 1.55
+PLAYER_STROKE_WEIGHT :: 1.0
 
 // The whitest core on screen, against the world's 0.30. It is the second
 // half of the hierarchy: heavier *and* brighter, or a thick line in the
@@ -273,7 +298,7 @@ PLAYER_FLIP_GLOW_BOOST :: 0.22
 // halfway through a turn. It is the character's own light, and the one
 // part of it allowed to take the world's colour.
 PLAYER_EYE_RADIUS :: 0.034
-PLAYER_EYE_OFFSET :: rl.Vector2{0.030, 0.010} // from the head centre
+PLAYER_EYE_OFFSET :: rl.Vector2{0.018, 0.014} // from the head centre
 PLAYER_EYE_GLOW :: 0.55
 
 // How the figure's local box lands on screen.
@@ -287,12 +312,11 @@ PlayerPose :: struct {
 // The anchors the contour runs through, in local coordinates, for this
 // instant. Index 0 is the front of the figure and 1 is the back.
 PlayerFigure :: struct {
-	tip:      rl.Vector2,
-	brim:     [2]rl.Vector2,
-	waist:    [2]rl.Vector2,
-	hem:      [2]rl.Vector2,
-	hem_deep: rl.Vector2,
-	head:     rl.Vector2, // not on the contour: where the eye rides
+	tip:   rl.Vector2,
+	brim:  [2]rl.Vector2,
+	waist: [2]rl.Vector2,
+	hem:   [2]rl.Vector2, // the two ends of the stroke, on the ground
+	head:  rl.Vector2, // not on the contour: where the eye rides
 }
 
 // Which lane the shape should currently be anchored to, for scaling
@@ -350,6 +374,7 @@ get_player_scale :: proc(player: game.Player) -> rl.Vector2 {
 // precisely the version the playtest killed. Swapping to it is a game
 // feel decision, not a tidy-up.
 PLAYER_WHIP_OVERSHOOT :: 1.70158
+
 
 
 @(private)
@@ -431,6 +456,7 @@ pose_point :: proc(pose: PlayerPose, local: rl.Vector2) -> rl.Vector2 {
 // A point measured from straight *up* and turning toward the front — the
 // direction a hat points, rather than the direction a limb hangs.
 
+
 @(private)
 up_from :: proc(from: rl.Vector2, angle, length: f32) -> rl.Vector2 {
 	return rl.Vector2{from.x + math.sin(angle) * length, from.y - math.cos(angle) * length}
@@ -493,91 +519,130 @@ new_player_figure :: proc(stride, time, world_t, whip, hat_lean: f32) -> PlayerF
 	front_lift := PLAYER_HEM_STEP * max(swing, 0) + PLAYER_WOBBLE_AMOUNT * max(wobble, 0)
 	back_lift := PLAYER_HEM_STEP * max(-swing, 0) + PLAYER_WOBBLE_AMOUNT * max(-wobble, 0)
 
-	hem_y := PLAYER_HEM_DEEP_Y - PLAYER_HEM_RISE + body.y * PLAYER_HEM_FOLLOW
+	// The feet take none of the body's bob: the body bobs inside the
+	// cloth, and the join with the ground has to be still or it breathes.
+	// front_lift and back_lift are never both non-zero, so one end is
+	// always on the floor.
 	figure.hem = {
-		rl.Vector2{PLAYER_HEM_FRONT_X, hem_y - front_lift},
-		rl.Vector2{PLAYER_HEM_BACK_X, hem_y - back_lift},
-	}
-	figure.hem_deep = rl.Vector2 {
-		PLAYER_HEM_SLIDE * (swing + wobble),
-		PLAYER_HEM_DEEP_Y,
+		rl.Vector2{PLAYER_HEM_FRONT_X, PLAYER_HEM_Y - front_lift},
+		rl.Vector2{PLAYER_HEM_BACK_X, PLAYER_HEM_Y - back_lift},
 	}
 
 	// The whip's pose, over the top of whatever the step was doing: the
-	// robe pulls in and lifts. Weighted so it is nothing at both ends of
-	// the turn and grows out of the walk rather than replacing it.
+	// robe pulls in and lifts, both feet leaving the ground because the
+	// character is between the two lanes and standing on neither.
+	// Weighted so it is nothing at both ends of the turn and grows out of
+	// the walk rather than replacing it.
 	for side in 0 ..< 2 {
 		figure.hem[side].x += (figure.waist[side].x - figure.hem[side].x) * PLAYER_WHIP_TUCK * turn
 		figure.hem[side].y -= PLAYER_WHIP_LIFT * turn
 	}
-	figure.hem_deep.y -= PLAYER_WHIP_LIFT * turn
 
 	return figure
 }
 
 // --- Drawing ---
 
-// One quadratic through a control point that bows the segment sideways.
-
-@(private)
-bezier_point :: proc(a, control, b: rl.Vector2, t: f32) -> rl.Vector2 {
-	u := 1 - t
-	return a * (u * u) + control * (2 * u * t) + b * (t * t)
-}
-
-// Appends a bowed segment from a to b, *excluding* b, so consecutive
-// segments chain into one polyline with no doubled vertex at the join.
+// How hard the spline pulls through its anchors, as a Cardinal spline's
+// tension. 0.5 is plain Catmull-Rom and 0 is a polyline.
 //
-// bow is in local units and positive means away from the figure's centre
-// line, which is why every caller multiplies it by the side's sign.
+// Not 0.5, and the difference is a whole shape. Catmull-Rom **overshoots
+// past an anchor that sticks out**, and every anchor on this figure that
+// matters sticks out — the hood's point and the two ends of the brim were
+// coming out as horns, which is both wrong for cloth and pointed, and
+// pointed is what the picture reserves for danger. Lower tension pulls
+// the curve tight against the anchors instead of bulging past them.
+PLAYER_SPLINE_TENSION :: 0.30
+
+// One span of a Cardinal spline: the curve passes through p1 and p2, and
+// p0 and p3 set the tangents at them.
+//
+// A spline rather than a chain of separate arcs, because separate arcs
+// meet with a discontinuous tangent and at 45 px every one of those reads
+// as a nick in the cloth. This is C1 everywhere by construction.
 
 @(private)
-append_curve :: proc(points: ^[dynamic]rl.Vector2, a, b: rl.Vector2, bow: f32) {
-	control := rl.Vector2{(a.x + b.x) * 0.5 + bow, (a.y + b.y) * 0.5}
-	for i in 0 ..< PLAYER_CURVE_STEPS {
-		append(points, bezier_point(a, control, b, f32(i) / f32(PLAYER_CURVE_STEPS)))
+spline_point :: proc(p0, p1, p2, p3: rl.Vector2, t: f32) -> rl.Vector2 {
+	t2 := t * t
+	t3 := t2 * t
+
+	// Hermite basis, with the tangents scaled by the tension.
+	h00 := 2 * t3 - 3 * t2 + 1
+	h10 := t3 - 2 * t2 + t
+	h01 := -2 * t3 + 3 * t2
+	h11 := t3 - t2
+
+	m1 := rl.Vector2{(p2.x - p0.x) * PLAYER_SPLINE_TENSION, (p2.y - p0.y) * PLAYER_SPLINE_TENSION}
+	m2 := rl.Vector2{(p3.x - p1.x) * PLAYER_SPLINE_TENSION, (p3.y - p1.y) * PLAYER_SPLINE_TENSION}
+
+	return rl.Vector2 {
+		h00 * p1.x + h10 * m1.x + h01 * p2.x + h11 * m2.x,
+		h00 * p1.y + h10 * m1.y + h01 * p2.y + h11 * m2.y,
 	}
 }
 
-// The contour, in local coordinates: down the front from the hat's point
-// to the hem, along the cloth, and back up the rear.
+// Samples a whole chain of anchors, ends included. The two end anchors
+// are their own neighbours, which is what stops the curve from flicking
+// away at the feet.
+
+@(private)
+append_spline :: proc(points: ^[dynamic]rl.Vector2, anchors: []rl.Vector2) {
+	if len(anchors) < 2 {
+		return
+	}
+	at :: proc(anchors: []rl.Vector2, index: int) -> rl.Vector2 {
+		return anchors[clamp(index, 0, len(anchors) - 1)]
+	}
+
+	for span in 0 ..< len(anchors) - 1 {
+		p0 := at(anchors, span - 1)
+		p1 := anchors[span]
+		p2 := anchors[span + 1]
+		p3 := at(anchors, span + 2)
+		for i in 0 ..< PLAYER_CURVE_STEPS {
+			append(points, spline_point(p0, p1, p2, p3, f32(i) / f32(PLAYER_CURVE_STEPS)))
+		}
+	}
+	append(points, anchors[len(anchors) - 1])
+}
+
+// A point partway between two anchors, pushed sideways: the bow that
+// makes a span bulge or pinch. It is an *anchor* rather than a control
+// point, so the spline runs through it and the whole outline stays one
+// smooth curve.
+
+@(private)
+bowed :: proc(a, b: rl.Vector2, bow: f32) -> rl.Vector2 {
+	return rl.Vector2{(a.x + b.x) * 0.5 + bow, (a.y + b.y) * 0.5}
+}
+
+// The contour, in local coordinates: up the front from the ground to the
+// hood's point, and down the back to the ground again.
 //
-// One closed polyline, so the whole character is a single mark with
-// mitred turns — no bead where two strokes would have met, and no place
-// for the additive halo to add twice (render/stroke.odin).
+// **Open at both ends, and that is the whole idea.** The ends land on the
+// lane's surface at the lane's own weight, so the floor's line closes the
+// figure and the character reads as the ground standing up.
 
 @(private)
 build_player_outline :: proc(figure: PlayerFigure, out: ^[dynamic]rl.Vector2) {
 	clear(out)
 
-	// Down the front.
-	append_curve(out, figure.tip, figure.brim[0], PLAYER_BOW_HAT)
-	append_curve(out, figure.brim[0], figure.waist[0], PLAYER_BOW_PINCH)
-	append_curve(out, figure.waist[0], figure.hem[0], PLAYER_BOW_ROBE)
-
-	// The cloth on the ground. Its control is placed so the arc's lowest
-	// point lands exactly on hem_deep at the middle of the segment, which
-	// is what makes the contact the same point every frame.
-	hem_control := rl.Vector2 {
-		2 * figure.hem_deep.x - 0.5 * (figure.hem[0].x + figure.hem[1].x),
-		2 * figure.hem_deep.y - 0.5 * (figure.hem[0].y + figure.hem[1].y),
+	anchors := [13]rl.Vector2 {
+		figure.hem[0],
+		bowed(figure.hem[0], figure.waist[0], PLAYER_BOW_ROBE),
+		figure.waist[0],
+		bowed(figure.waist[0], figure.brim[0], PLAYER_BOW_PINCH),
+		figure.brim[0],
+		bowed(figure.brim[0], figure.tip, PLAYER_BOW_HAT),
+		figure.tip,
+		bowed(figure.tip, figure.brim[1], -PLAYER_BOW_HAT),
+		figure.brim[1],
+		bowed(figure.brim[1], figure.waist[1], -PLAYER_BOW_PINCH),
+		figure.waist[1],
+		bowed(figure.waist[1], figure.hem[1], -PLAYER_BOW_ROBE),
+		figure.hem[1],
 	}
-	for i in 0 ..< PLAYER_CURVE_STEPS * 2 {
-		append(
-			out,
-			bezier_point(
-				figure.hem[0],
-				hem_control,
-				figure.hem[1],
-				f32(i) / f32(PLAYER_CURVE_STEPS * 2),
-			),
-		)
-	}
-
-	// And back up the rear, where "away from the centre" is the other way.
-	append_curve(out, figure.hem[1], figure.waist[1], -PLAYER_BOW_ROBE)
-	append_curve(out, figure.waist[1], figure.brim[1], -PLAYER_BOW_PINCH)
-	append_curve(out, figure.brim[1], figure.tip, -PLAYER_BOW_HAT)
+	append_spline(out, anchors[:])
 }
 
 // The character's mark.
@@ -587,19 +652,24 @@ build_player_outline :: proc(figure: PlayerFigure, out: ^[dynamic]rl.Vector2) {
 // it and gathered around it changes (Design Doc, section 10). It still
 // converges with depth, because every palette in the set does.
 
+
 @(private)
 player_stroke :: proc(palette: core.Palette, flare: f32, gain: GlowGain) -> Stroke {
 	line := new_stroke(palette.light, TERRAIN_STROKE_THICKNESS * PLAYER_STROKE_WEIGHT)
 	line.glow = PLAYER_STROKE_GLOW + PLAYER_FLIP_GLOW_BOOST * flare
 	line.spread = PLAYER_STROKE_SPREAD
 	line.core_light = PLAYER_CORE_LIGHT
-	line.closed = true
+	// Open, with round ends: the two of them land on the lane's line and
+	// the ground closes the figure (see build_player_outline).
+	line.closed = false
+	line.round_caps = true
 	// "The character is the same mark in both worlds; what changes is what
 	// is behind it and *how much it burns*" (Design Doc, section 10). The
 	// profile and the colour stay put; this is the half that moves.
 	apply_glow_gain(&line, gain)
 	return line
 }
+
 
 
 @(private)
@@ -693,6 +763,7 @@ draw_player :: proc(player: game.Player, world: game.World, palettes: core.Palet
 // lifted toward white. Authored in local space, so it follows the mirror
 // and the rotation with no special case — and being single, it has no
 // symmetry to break when the figure turns over.
+
 
 @(private)
 draw_player_eye :: proc(pose: PlayerPose, figure: PlayerFigure, color: rl.Color, gain: GlowGain) {

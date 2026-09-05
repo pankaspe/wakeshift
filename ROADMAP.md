@@ -1056,11 +1056,45 @@ cadenza scelta a occhio.
    fin dall'inizio, ed erano le **proporzioni** a essere sbagliate (tesa larga quanto l'orlo). Se
    una forma va ispezionata, va disegnata alla dimensione in cui si vede, non ingrandita dopo.
 
+**Secondo giro, dal tuo playtest (5 settembre).** Tre correzioni, e la seconda era quello che il
+documento chiedeva dall'inizio senza che nessuno lo facesse.
+
+1. **Il tratto è ora quello della corsia viva** (`PLAYER_STROKE_WEIGHT` da 1.55 a **1.0**, cioè
+   2.80 px). ⚠️ **Questo contraddice la sezione 10 del documento**, che chiede al personaggio *il
+   tratto più spesso dello schermo*. Sulla figura vera un pennino più grosso non leggeva come
+   "importante", riempiva la forma: una tacca più stretta del pennino è una tacca che il pennino
+   si mangia, quindi cappuccio, spalle e veste si fondevano fra loro. Al peso della corsia la
+   figura ha spazio per avere dei tratti. **La gerarchia non è abbandonata, ha cambiato canale**:
+   il personaggio tiene il nucleo più bianco dello schermo (0.62 contro lo 0.30 del terreno) e
+   opacità piena contro lo 0.85 della corsia. Misurato in un frame vero: **personaggio 255,
+   corsia viva 238**. Se smette di staccarsi, si alzano quelli prima del peso — e la tabella
+   della sezione 10 va aggiornata o va rimesso il peso, ma è una decisione tua.
+2. **Il contorno è aperto ai piedi.** I due capi del tratto atterrano sulla superficie della
+   corsia, allo stesso peso con cui la corsia è disegnata, quindi **è il pavimento a chiudere la
+   figura**: il personaggio legge come il terreno che si alza, non come una forma appoggiata
+   sopra. È la frase con cui la sezione 10 si apre — *"il personaggio si solleva dal tratto e ci
+   rientra"* — ed era l'unica cosa che la prima veste non faceva. Due conseguenze: i piedi **non**
+   prendono il rimbalzo del corpo (il corpo rimbalza dentro il tessuto, o la giuntura respira), e
+   quello che fa il passo è un capo per volta — mai tutti e due, per costruzione, quindi c'è
+   sempre un capo sul pavimento. Verificato su 64 fasi del passo.
+3. **Il contorno è una spline sola, non una catena di archi.** Gli archi indipendenti si
+   incontrano con la tangente discontinua, e a questa dimensione ognuna di quelle giunzioni legge
+   come una sbeccatura — era il "frastagliato". Adesso è una **spline Cardinal** che passa per
+   tutte le ancore, C1 ovunque. Misurato su 192 pose: la curva più stretta fra due segmenti
+   disegnati è **109°, e sta alla punta del cappuccio**, cioè nell'unico posto dove è voluta.
+
+   **La tensione non è 0.5.** Il Catmull-Rom classico **sfonda oltre un'ancora che sporge**, e su
+   questa figura tutte le ancore che contano sporgono: la punta del cappuccio e i due capi della
+   tesa uscivano come corna — sbagliate per il tessuto, e appuntite, che è quello che il quadro
+   riserva al pericolo. A 0.30 la curva si stringe sulle ancore invece di gonfiarsi oltre. La tesa
+   è poi diventata un rigonfiamento invece di uno spigolo, e la figura legge come **incappucciata**
+   più che come "col cappello" — che a 45 px è la sagoma migliore delle due.
+
 **Cosa tocca a te**: tutto il resto è gusto. Le manopole sono in testa a `render/player.odin` e
 sono geometriche — larghezza della tesa, delle spalle e dell'orlo, altezza e inclinazione del
-cappuccio, quanto si incurvano i tre pezzi (`PLAYER_BOW_*`), il passo dell'orlo. E resta aperta la
-domanda che il documento aveva già messo in conto: **45 px bastano?** Se no, la correzione è
-ingrandire il personaggio, ed è una decisione tua.
+cappuccio, quanto si incurvano i tre pezzi (`PLAYER_BOW_*`), il passo dell'orlo. Restano due domande aperte e sono tutte e due tue: **45 px bastano?** (se no si
+ingrandisce il personaggio) e **la tabella dei pesi della sezione 10 va aggiornata**, visto che
+il personaggio non è più il tratto più spesso ma il più bianco.
 
 ---
 
