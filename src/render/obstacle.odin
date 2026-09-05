@@ -75,9 +75,9 @@ draw_obstacle :: proc(
 	palettes: core.PaletteSet,
 	front_x: f32,
 ) {
-	// The Gap is the surface failing to exist and every other cube is a
-	// step in it: both belong to whoever owns the surface.
-	if obstacle.obstacle_type != .Cube || obstacle.cube != .Float {
+	// The Gap is the surface failing to exist and every cube that rests on
+	// a lane is a step in it: both belong to whoever owns the surface.
+	if obstacle.obstacle_type != .Cube || !obstacle.floating {
 		return
 	}
 

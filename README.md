@@ -24,11 +24,12 @@ scenery: the floor and the ceiling are two keyframed numbers, so they can never 
 other, and a pattern authors the shape of the world along with the things standing on it.
 
 **The cube** — *do not be here, or you pay.* It does not kill; it **blocks**. You are stopped
-against its face and you lose ground for as long as you stay. One primitive at six sizes —
-standard, small, wide, stack, pyramid, and one that floats — welded into the floor's own line as a
-step with two right angles. Because it is not lethal, it is the only danger allowed on both lanes
-at once, and a mirrored pair is a choice about which price to pay. Land on top of one and you ride
-it.
+against its face and you lose ground for as long as you stay. Its shape is **data, not code**: a
+pattern writes a skyline of columns — `{1,2,3}` is a staircase, `{3,0,3}` two towers with a canyon
+between them — and the same numbers are what blocks you, what holds you up, and what gets drawn, so
+a step you can see is a step you can stand on. Welded into the floor's own line, read by its right
+angles. Because it is not lethal, it is the only danger allowed on both lanes at once, and a
+mirrored pair is a choice about which price to pay. Land on top of one and you ride it.
 
 **The hole** — *do not be here.* The line simply stops: the only discontinuity in the game. The
 lane turns out of the corridor at the lip and the stroke ends — down off the floor, up off the

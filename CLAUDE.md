@@ -74,35 +74,25 @@ Most sessions start cold. Read, in this order:
 **There is no roadmap and no phase list.** The user decides the next step and says so. If you
 finish what was asked and think something else is needed, say what and why — do not start it.
 
-**Where the project stands.** Three dangers are on screen and all three read: the cube blocks and
-can be landed on, the hole stops the line and takes you into it, the curtain pair asks for one flip
-on the beat. The world is drawn as La Linea — nothing filled but the field, obstacles welded into
-the floor's own polyline, a pen writing the world on the right and the Corruption fraying it on the
-left. The character is a hooded figure and is **provisional**: the final one is a lemur.
+**Where the project stands.** **Two** dangers are on screen and both read: the cube blocks and can
+be landed on, the hole stops the line and takes you into it. The world is drawn as La Linea —
+nothing filled but the field, obstacles welded into the floor's own polyline, a pen writing the
+world on the right and the Corruption fraying it on the left. The character is a hooded figure and
+is **provisional**: the final one is a lemur.
 
-**The next step is decided and written down**: the obstacle set drops to **two** — cube and hole —
-and the cube gets smaller so shapes can grow. `TIMELINE.md` ends with the four tasks (T1..T4) and
-the model each is tagged for. Read them there; do not re-derive them.
+The obstacle set came down to two over T1–T3 in September 2026: the Sentinel deleted, the cube's
+unit halved to 27 with the hole's widths cut loose from it, and the cube's shape turned from a
+hardcoded enum into a **column profile authored in the pattern**. `TIMELINE.md` has the entries.
 
-What that work needs to know before touching anything, so a cold session does not spend turns
-finding it out:
-
-- **The Sentinel is in six files.** `game/obstacle.odin` (19 mentions), `game/pattern.odin` (19 —
-  three patterns plus the validator's clauses), `render/obstacle.odin` (15),
-  `game/collision.odin` (5), `game/world.odin` (1), and `game/difficulty.odin` refers to the
-  patterns by name in its tier lists. `README.md` has a section called *The curtain*.
-  `is_lethal_to_both_lanes` already returns false for everything and goes with it.
-- **`CUBE_UNIT` is not only the cube's size.** `GAP_WIDTH_SHORT/MEDIUM/LONG` are multiples of it
-  (1.2 / 1.9 / 2.6, so 65 / 103 / 140 px), and the hole is not to change. Decouple them before
-  touching the unit.
-- **The cube's width is its price**, because width is how long you stay pinned. Halving the unit
-  halves what a single block costs, and that has to be measured rather than assumed.
-- **A shape's staircase is already derived rather than drawn per form**: `append_step` in
-  `render/terrain.odin` emits the pyramid's columns from the obstacle's rectangle. That is the
-  hook a column profile plugs into.
+**T4 is the one task of that group still open**: the floating cube gaining horizontal movement
+alongside its vertical bob. What it needs to know before it starts: the vertical bob is already a
+pure function of the obstacle's own age (`get_cube_lift`), and the horizontal is the same
+arithmetic on x — but a cube that moves in x **changes when it reaches you**, so the window
+`event_window` computes for the fairness check has to be widened by the swing's amplitude, or two
+obstacles that are legal apart become illegal together.
 
 After that, and not before: **a difficulty curve built on the two obstacles**, which means the
-real pattern pool.
+real pattern pool. That is the piece the user is waiting on to judge whether the 27 px cube reads.
 
 Why the design was rewritten in September 2026, measured rather than guessed: 200 simulated runs
 that never touched the key, **161 survived the whole first tier**, median death at 35 s; **86% of
@@ -328,21 +318,32 @@ reproduces it.
   Measured after: 0 px of interpenetration on Small, Standard and Wide, and 18 px on the two
   162 px-tall forms, which is side contact rather than enclosure.
 
-### The three dangers, three verbs
+### The two dangers, two verbs
 
 | | says | kills? | built? |
 |---|---|---|---|
 | **Cube** | *do not be here, or you pay* | no — it **blocks** | ✅ |
 | **Gap** | *do not be here* | yes | ✅ |
-| **Sentinel** | *not this lane, not now* — and in facing pairs, *flip, on the beat* | yes | ✅ |
 
-The cube is **one primitive at six sizes** (`CubeForm`): standard, small, wide, stack, pyramid,
-and the floating one. Mechanically only the width matters — and, on the floating one, whether
-the box is in the body's band at all — so a stack and a pyramid cost exactly what they are wide
-and their height is rhetoric. That is the point: they read as *worse* at a glance while costing
-the same, which is the cheapest variety in the set.
+There were three until September 2026. The Sentinel — a curtain of light fired across the
+corridor, whose facing pairs demanded a flip on the beat — was built, played, and then deleted
+along with the whole idea of a third verb, because two elements that combine are a game and three
+that each say their own thing are a list. What it proved before it went is still worth keeping:
+**measure an obstacle of that class before building it.** Two earlier shapes for it were
+arithmetically impossible and only arithmetic found that out — a ray sweeping the corridor (a flip
+crosses at ~2100 px/s against a ray's ~450, head-on, and two things closing from opposite ends
+always meet: zero surviving presses out of two hundred), and a slot between two facing beams (a
+body is inside a 160 px slot for 0.054 s but its own 45 px take 0.167 s to cross, so it is
+impossible for a beam of any width including zero).
 
-Three rules the implementation established, all found by replaying the simulation:
+**The cube's shape is data** (`CubeProfile`): a run of columns, each `CUBE_UNIT` wide, each a
+whole number of units tall, authored in the pattern. `{1,2,3}` is a staircase, `{3,0,3}` two
+towers with a canyon between them, `{1}` the primitive. One function — `get_cube_column` — is
+what the block, the support and the drawing all read, which is what keeps the mark and the hitbox
+the same thing. Before it, the pyramid was drawn as steps and collided as its bounding box: it
+showed a low step it would not let you use.
+
+Rules the implementation established, all found by replaying the simulation:
 
 - **A cube holds the character; it never drags them.** The pin clamps forward progress, and the
   clamp is floored at one step's worth of scroll (`advance_ground`). Without the floor, a
@@ -355,49 +356,28 @@ Three rules the implementation established, all found by replaying the simulatio
   work past the box.
 - **The width of a lone cube costs nothing.** Whatever it is, the answer is one flip to the free
   lane. Width becomes a price only where there is no free lane — which is the mirrored pair and
-  nowhere else. Small and Wide are therefore in the set for the eye, not the hand, and that is a
-  legitimate job.
-- **A pin freezes the character *in the world*, so a cube inside a Sentinel's beam is a trap
-  rather than a price.** A pinned body no longer moves relative to anything authored in the
-  world, the beam included — so the beam can never pass them, and the flip that would free them
-  is the one thing it kills. They stand there until the Corruption arrives, which is the one
-  death pillar 7 forbids. `validate_pattern_pool` rejects it: the pinned box is
-  `[face - PLAYER_SIZE, face]`, so the beam has to have cleared that box before the face reaches
-  it, which is exactly the two event windows not overlapping. The combination the design wants
-  is therefore built the other way round — the beam holds you on the lane you chose and the cube
-  is waiting on it the instant the ban lifts, which leaves exactly one journey's worth of
-  window. Measured: leaving on the release dodges it entirely, leaving a quarter second late
-  costs 6 pinned steps and 27 px of runway.
-
+  nowhere else. A one-column cube and a two-column one are therefore in the set for the eye, not
+  the hand, and that is a legitimate job.
+- **"The width is the price" is the intent and not the behaviour**, and T2 measured it. Replayed
+  at 27, 54 and 108 px, every shape costs the same ground: 40.5 px to a player who answers a lone
+  cube in 0.15 s, 4.5 px for a mirrored pair answered at once, 2205 px to one who never presses.
+  What is charged is **time spent pinned**, and both ways out of a pin — a flip to the free lane,
+  or a landing on top — are width-independent. Pricing that is what R5 is for; until then, do not
+  quote a width as a cost.
 - **A cube blocks, and that is the design's centre of gravity.** Because it is not lethal, the
   game is finally allowed to threaten **both lanes at once** — a mirrored cube pair is legal,
   and it is the first thing in the project's history that turns "where do I go" into "which
   price do I pay". The v1.x design could never do it: two lethal lanes is an unsolvable pattern.
-  What a cube costs is its **width**, because width is how long you stay pinned.
-- **The Sentinel is a curtain, and the obstacle is the pair.** An emitter on one lane fires a
-  curtain of light across the corridor toward the other, stopping `SENTINEL_CLEARANCE` short of a
-  body settled there. A single one is "not this lane, not now": its own lane is lethal, the far
-  one is clear. **Two of them on opposite lanes, separated in time, are one forced and timed
-  flip** — be on the far lane for the first, cross in the gap, be on the other for the second.
-  That is a demand neither of the other two dangers makes, and it is composed in the pattern pool
-  rather than built into the obstacle.
-- **It is the one thing in the game that standing still does not survive**, which is deliberate:
-  the exact failing that ended v1.x was a contract under which doing nothing was almost always
-  right. It is held to the last tier for the same reason.
-- **Two shapes were tried for it first and both are arithmetically impossible.** A ray sweeping
-  the whole corridor: a flip crosses at ~2100 px/s against a ray's ~450, head-on, and two things
-  closing from opposite ends always meet — the harness found zero surviving presses out of two
-  hundred. Then a pair facing each other *across* the corridor with a slot between them: a body
-  is inside a 160 px slot for 0.054 s, but a beam threatens for as long as its x overlaps the
-  body, and the body alone is 45 px, which is 0.167 s at the opening speed — so it is impossible
-  for a beam of any width including zero. The demand survived both; what changed is that the pair
-  runs *along* the corridor instead of across it, which puts the middle somewhere the character
-  can actually be. **Measure this class of obstacle before building it.**
-- **`is_lethal_to_both_lanes` is now false for everything**, and that is a simplification worth
-  keeping. The Sentinel used to be the exception, which is why the fairness rule needed a second
-  sentence about its window; a curtain belongs to the lane it is fired from, so the ordinary rule
-  covers it with no special case and two facing curtains are legal exactly when they do not
-  overlap in time.
+- **A body is never on one column.** It is 45 px and a column is 27, so it always straddles two
+  and rests on the higher — the same "highest ground under its whole width" rule the track obeys.
+  Landing on a staircase therefore puts the character on the *upper* of the two steps they cover,
+  not the one their leading edge touched. Know this before authoring a skyline.
+- **A column of height zero is a place to be, not a wall.** The skyline drops to the lane's own
+  surface and comes back, and the body stands on the track there. It is not a hole — the ground
+  is still there.
+- **`is_lethal_to_both_lanes` is gone, and nothing is lethal to both lanes**, which is the
+  simplification that let the fairness rule go back to one sentence. The Sentinel was the only
+  thing that ever was.
 - **A hole takes you when there is nothing under your *centre*.** Not when your leading edge
   crosses the lip: measured on 5 September, the box test ended the run 18 px — 0.07 s — before
   the body's centre reached the hole, and 8 px before the drawn figure touched it at all, so the
@@ -406,14 +386,15 @@ Three rules the implementation established, all found by replaying the simulatio
   you are half over is one you have fallen into — and the centre rather than the drawn figure's
   own edge, because what the renderer happens to draw may never decide what the simulation does.
 - **A danger that is lethal before it is drawn is the one thing pillar 3 forbids outright.** The
-  Sentinel's ray was, for 0.17 s: it was drawn only while sweeping, and it becomes lethal the
-  instant its window touches the character, which is earlier. It is now drawn for as long as it
-  exists, parked on the pulsar's lane before it fires — and that parked ray is not a detail, it
-  is the warning. Check any new obstacle for the same gap between "can kill" and "is on screen".
-- **Invulnerability is decided per type, not once at the top of the collision check.** The grace
-  period exists to forgive the flip started at the last possible instant against a hole — but
-  against a Sentinel the flip *is* the mistake, so forgiving the first tenth of a second of
-  every journey would hand a free crossing to exactly the player it is aimed at.
+  Sentinel's ray managed 0.17 s of it — drawn only while sweeping, lethal from the instant its
+  window touched the character, which is earlier. The fix was to draw it for as long as it
+  existed, and the rule outlives the obstacle: check any new danger for a gap between "can kill"
+  and "is on screen".
+- **Invulnerability is decided per type, not once at the top of the collision check.** It is a
+  switch rather than an early return, and it stays one even though only the hole is lethal today:
+  the grace period exists to forgive the flip started at the last possible instant against a
+  hole, and a danger that punishes the flip itself would need the opposite. Deciding it per type
+  is what makes adding such a danger a case rather than a rewrite.
 - **A hole breaks both lanes the same way, mirrored.** The stroke **turns out of the corridor**
   at the lip — down off the floor, up off the ceiling — which puts two more right angles in it.
   Nothing is added to the break, ever: **filling a hole with a mark makes it a thing rather than
@@ -444,12 +425,20 @@ Three rules the implementation established, all found by replaying the simulatio
 
 ### The fairness rule — the only one there is
 
-> **At every instant at least one lane must be non-lethal. While a Sentinel is up, both must
-> be.**
+> **At every instant at least one lane must be non-lethal.**
 
 That is the entire pattern contract in v2.0, and it replaces a machine of band sets with
-subset-containment chaining. Everything else — mirrored cubes, pyramids, fragments in the
-awkward place — is legal by construction, because none of it kills.
+subset-containment chaining. It had a second sentence about the Sentinel's window until that
+obstacle was deleted; only the hole is lethal now, so one sentence covers it. Everything else —
+mirrored cubes, staircases, a skyline in the awkward place — is legal by construction, because
+none of it kills.
+
+The **profile** is the other half of the contract, and it is validated the same way rather than
+by a closed set of shapes: `report_profile_faults` rejects a skyline with too many columns, one
+taller than `CUBE_MAX_HEIGHT`, one with nothing in it, and a lifted cube with more than one
+column. The height bound is the one with a failure behind it — a floor cube tall enough to reach
+a body on the ceiling would slide through it without blocking it, since an obstacle only ever
+tests its own lane.
 
 Two things the old contract taught that are still worth knowing:
 
@@ -619,9 +608,9 @@ polyline. Neither front needs a per-object animation.
 
 - **A shape cut at one end is open there and closed at the end it finished; cut at both, it is
   not a loop at all but two marks.** `draw_cut_shape` in `render/obstacle.odin` owns that, and it
-  is the part that is easy to get backwards in silence — before RL.5 the Sentinel's outline was
-  built from its left edge rightward, so a half-written beam would have been capped at the pen
-  and open at the end it had already finished.
+  is the part that is easy to get backwards in silence — a shape built from its left edge
+  rightward would be capped at the pen and left open at the end it had already finished, which is
+  exactly backwards.
 - **The Corruption's own lit edge is drawn with primitives and must stay drawn.** It was the
   shader-independent fallback when there was a shader; with the shader off it is the only thing
   marking the front, and a lethal front nobody can see is the one thing in this game that would
@@ -680,11 +669,12 @@ fixed x near the right edge and scrolls toward the player from under the pen (De
   *mean*, deliberately not in how they are drawn: the draw front is marked by absence — the lines
   stop — plus a nib on each of them. When the pen is over a hole there is no nib, because what is
   being drawn is an absence.
-- **A shape that can be half-written has to be built from the pen outward.** The Sentinel's
-  outline used to run from its left edge rightward, so clipping left both loose ends on the left:
-  a half-written beam would have been capped at the pen and open at the end it had already
-  finished. The path now starts at the pen, runs away from it and comes back, so the loose ends
-  are where the ink stops.
+- **A shape that can be half-written has to be built from the pen outward.** A shape whose
+  outline runs from its left edge rightward leaves both loose ends on the left when it is clipped:
+  capped at the pen, open at the end it had already finished. The path has to start at the pen,
+  run away from it and come back, so the loose ends are where the ink stops. This cost a silent
+  bug once and the only survivor of that class is the floating cube — check any new self-drawn
+  shape the same way.
 
 **Nothing in the background may cross the corridor, and that was tested.** A receding grid —
 spokes from a vanishing point, rings expanding along them — was built on 5 September at the
@@ -699,8 +689,8 @@ limitation to work around, they are the whole licence.
 Decision 4 of the art direction: the line's glow grows toward the Dream, so that where you are
 *going* is said by something other than colour (pillar 6). It lives in `render/palette.odin` as
 `GlowGain` / `glow_gain` / `apply_glow_gain`, and **every stroke in the game goes through it** —
-terrain, gap tails, Dream openings, the floating cube, the Sentinel, the character, the eye. One
-channel, not a habit each file has to remember.
+terrain, the floating cube, the character, the eye. One channel, not a habit each file has to
+remember.
 
 Four things the implementation established, all found by measuring before writing:
 
@@ -932,8 +922,8 @@ raise it with the user before writing code.
    tension comes from.
 6. **Never colour alone.** The two lanes are always distinguishable by position and by type of
    motion as well as by colour. This is an accessibility constraint, not a preference.
-7. **A mistake costs ground, not the run.** Only the gap and the Sentinel kill outright.
-   Everything else costs distance, and you die when the distance you have left runs out.
+7. **A mistake costs ground, not the run.** Only the gap kills outright. Everything else costs
+   distance, and you die when the distance you have left runs out.
 
 ---
 
@@ -956,10 +946,12 @@ Tracked here so they are not rediscovered. Nothing here is scheduled — the use
   the face is moving at exactly that. It was invisible while a cube was a filled mass. Closing it
   needs the pushback to exceed the world's speed while penetrating, which would also make
   `velocity_x` drop below `-scroll_speed` and force `score.odin` to clamp.
-- **The pool is still a placeholder**, now nineteen patterns over three obstacle types. The real
-  pool is R5.2. The last measurement of the number that condemned v1.3 — how much of the time at
-  least one lane is lethal — was 19.9%, against a Definition of Done that asks for over 40%, and
-  it has not been re-measured since the Sentinel arrived (R5.4 builds the tool that does).
+- **The pool is still a placeholder**, twenty patterns over two obstacle types, and it is the next
+  piece of work. Measured after T3, over 8 seeds x 120 s with no player: at least one lane is
+  *threatened* 13.1% of the time, both at once 0.5%, at least one *lethal* 3.7% — against a
+  Definition of Done that asks for over 40%. No pattern uses a skyline of more than three columns
+  or a column of height zero, because they were all written when the shape was an enum: the
+  profile is available and unused.
 - Menus, HUD and the options screen take their colours from the palette but still use raylib's
   default bitmap font. Everything drawn from primitives is crisp at native resolution and only
   the text is not (phase R7).

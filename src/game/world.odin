@@ -153,16 +153,35 @@ get_support_y :: proc(
 			continue
 		}
 
-		switch lane {
-		case .Real:
-			top := rect.y
-			if body_y + body_height <= top + tolerance {
-				support = min(support, top)
+		// Column by column, because a skyline is not one surface: a body
+		// straddling a staircase rests on the highest step under its
+		// width, exactly as it rests on the highest ground under it. A
+		// column of height zero offers nothing and is skipped — the track
+		// underneath is already the answer there.
+		//
+		// **A body is never on one column.** It is 45 px and a column is
+		// 27, so it always spans two and takes the higher of them, which
+		// is worth knowing before authoring a staircase: landing on one
+		// puts the character on the *upper* of the two steps they cover,
+		// not the one their leading edge touched. Verified by replay.
+		for index in 0 ..< len(get_cube_profile(obstacle)) {
+			column := get_cube_column(obstacle, rect, index)
+			if column.rect.height <= 0 {
+				continue
 			}
-		case .Dream:
-			bottom := rect.y + rect.height
-			if body_y >= bottom - tolerance {
-				support = max(support, bottom)
+			if column.rect.x >= x + width || column.rect.x + column.rect.width <= x {
+				continue
+			}
+
+			switch lane {
+			case .Real:
+				if body_y + body_height <= column.contact + tolerance {
+					support = min(support, column.contact)
+				}
+			case .Dream:
+				if body_y >= column.contact - tolerance {
+					support = max(support, column.contact)
+				}
 			}
 		}
 	}

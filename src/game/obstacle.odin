@@ -20,24 +20,26 @@
 *                 mid-flip answers it as completely as being on the other
 *                 lane does (see collision.odin).
 *
-* THE CUBE IS ONE PRIMITIVE AT SIX SIZES
+* THE CUBE IS A SKYLINE, AND THE SKYLINE IS DATA
 *
-* Everything the design asks of the obstacle set is a box on a lane at a
-* different size or a different height, and CubeForm is the whole
-* vocabulary. Mechanically only two numbers matter — the width, which is
-* the price, and whether the box is in the body's band at all — so a
-* stack and a pyramid cost exactly what they are wide and their height is
-* rhetoric. That is a feature: they are read at a glance as *worse* while
-* costing the same, which is how the set gets variety without getting
-* rules.
+* Everything the design asks of the obstacle set is a run of columns on a
+* lane, and the pattern authors the numbers: CubeProfile is the whole
+* vocabulary and this file knows the name of no shape at all. What a
+* column does — stop the body, hold it up, or be drawn — is answered in
+* one place, get_cube_column, so the three readers cannot disagree.
 *
 * **"The width is the price" is the design's intent and not currently the
 * game's behaviour.** Measured by replay when the unit was halved: every
-* form costs the same ground as every other, because what is actually
+* shape costs the same ground as every other, because what is actually
 * charged is the time spent pinned, and the two ways out of a pin — one
 * flip to the free lane, or a landing on top of the box — are both width-
-* independent. The forms differ today in what they *say*, not in what
-* they take. See CUBE_UNIT below for the numbers.
+* independent. Shapes differ today in what they *say*, not in what they
+* take. See CUBE_UNIT below for the numbers.
+*
+* What the profile did change is that a shape can now be *entered*. A
+* staircase has a low step that is really a step: land on it and the wall
+* becomes the next column along, which is a thing no version of the six
+* forms could express, because they all collided as one filled box.
 *
 * Nothing here ever reads the player's position. An obstacle that adapts
 * feels stolen even when it is survivable, and it breaks pillar 3: the
@@ -98,26 +100,64 @@ ObstacleType :: enum {
 	Gap, // either lane: the surface is simply not there
 }
 
-// The cube vocabulary (Design Doc, section 6). Standard is first so that
-// it is the zero value: a pattern event that says nothing about its cube
-// gets the primitive.
-// Sizes in brackets are what each form comes to at the current unit. Two
-// of them are worth reading twice: Standard is now well under the body's
-// 45 px, so the primitive on its own is a bump, and Wide is exactly what
-// Standard used to be — which is why the mirrored pair, whose whole
-// subject is width, was moved onto it.
+// A CUBE IS A SKYLINE, AND THE SKYLINE IS DATA
 //
-// Small is the one form the halving leaves stranded: at 13 px it is no
-// longer an arrangement of unit boxes but a fragment of one, and it is
-// the obvious thing for the column profiles of the next step to absorb.
-CubeForm :: enum {
-	Standard, // one unit square [27] — the primitive, and a bump on its own
-	Small, // half a unit [13]: stranded below the unit, see above
-	Wide, // two units of width [54], which is two units of price
-	Stack, // one wide, three tall [27x81]: costs what it is wide, looks worse
-	Pyramid, // three wide and stepped [81x81]: says in advance which side to be on
-	Float, // bobs in and out of the body's band [27] — the one timing cube
-}
+// A cube is a run of columns, each CUBE_UNIT wide, each a whole number of
+// units tall. The pattern authors the numbers; nothing here knows the
+// name of a shape. `{1, 2, 3}` is a staircase, `{3, 0, 3}` is two towers
+// with a canyon between them, `{1}` is the primitive.
+//
+// It replaced a six-entry enum whose shapes were welded into three
+// different files — the box in get_cube_size, the staircase in
+// render/terrain.odin, and nothing at all in the collision, which is the
+// part that mattered: the pyramid was *drawn* as steps and *collided* as
+// its bounding box, so the low step it showed you could not be stood on.
+// One profile read by all three is what makes the mark and the hitbox the
+// same thing, which is the rule the rest of the renderer already keeps.
+//
+// **A zero is a column that is not there**, and it is a legal thing to
+// author: the skyline drops to the lane's own surface and comes back. It
+// is not the same as a hole — the ground is still there to stand on.
+//
+// The old vocabulary is now four literals and one deletion. Standard is
+// {1}, Wide {1,1}, Stack {3}, Pyramid {1,2,3}; Float stopped being a
+// shape at all and became `floating`, which is orthogonal and always
+// should have been. Small is gone: it was half a unit, and the halving in
+// T2 left it a fragment of a column rather than an arrangement of them —
+// at the current unit a single column *is* the bump it was there to be.
+CubeProfile :: []u8
+
+// What an event gets when it says nothing about its cube.
+PROFILE_PRIMITIVE := CubeProfile{1}
+
+// The shapes that earned a name, so a pattern reads as prose where it
+// wants to and as numbers where it has something particular to say.
+PROFILE_WIDE := CubeProfile{1, 1}
+PROFILE_STACK := CubeProfile{3}
+PROFILE_PYRAMID := CubeProfile{1, 2, 3}
+
+// The bounds validate_pattern_pool holds an authored profile inside.
+//
+// **Height is the one with teeth.** An obstacle belongs to a lane, and
+// blocks_player only ever tests the lane it stands on — so a floor cube
+// tall enough to reach a body hanging from the ceiling would pass
+// straight through them without stopping them, which is a mark that lies
+// about what it does. The corridor is never narrower than TRACK_SPAN_MIN,
+// so the tallest column that always clears a body on the far lane is
+// (250 - 45) / 27 = 7.6 units.
+//
+// Seven is therefore the answer and it is **tight, not comfortable**:
+// replayed against a body hanging from the ceiling at TRACK_SPAN_MIN, a
+// seven-unit column leaves 16 px of daylight and an eight-unit one
+// overlaps it by 11. There is no room here for a shape that is "only a
+// bit taller".
+//
+// Width is a softer bound and is here to keep the lane's polyline inside
+// STROKE_MAX_POINTS: a column costs two vertices, so eight columns make a
+// cube 18 points instead of 4, and a screen tiled with the widest legal
+// cubes comes to about 123 against a cap of 256 (render/stroke.odin).
+CUBE_MAX_COLUMNS :: 8
+CUBE_MAX_HEIGHT :: 7
 
 // How high a floating cube rises above the surface of its lane, and how
 // long a full rise-and-fall takes.
@@ -155,12 +195,61 @@ Obstacle :: struct {
 	size:         rl.Vector2,
 	obstacle_type: ObstacleType,
 
-	// Cube only. The form decides the box; the phase decides where in its
-	// bob a floating one is at the moment it reaches the anchor, so a
-	// pattern can author "this one blocks" and "this one you go under"
-	// out of the same obstacle.
-	cube:         CubeForm,
+	// Cube only. The profile is the shape; floating says whether it rests
+	// on its lane or bobs off it, and the phase decides where in that bob
+	// it is at the moment it reaches the anchor — so a pattern can author
+	// "this one blocks" and "this one you go under" out of the same
+	// obstacle.
+	//
+	// The profile is a slice of the pattern's own static data, never
+	// allocated and never owned, so an Obstacle stays a plain value that
+	// can be copied and compacted like any other.
+	profile:      CubeProfile,
+	floating:     bool,
 	float_phase:  f32,
+}
+
+// A cube's profile, with the empty one resolved to the primitive. Every
+// reader goes through this, so "says nothing" means one thing everywhere.
+get_cube_profile :: proc(obstacle: Obstacle) -> CubeProfile {
+	return len(obstacle.profile) > 0 ? obstacle.profile : PROFILE_PRIMITIVE
+}
+
+// One column of a skyline, in screen coordinates.
+CubeColumn :: struct {
+	rect:    rl.Rectangle, // the box it occupies; zero-height if the column is absent
+	contact: f32, // the edge a body meets it at: its top on the floor, its bottom on the ceiling
+}
+
+// Column `index` of a cube, given the obstacle's own bounding box —
+// which every caller already has, so the track is not resampled per
+// column.
+//
+// The far edge of the box is what the columns grow from: for a cube
+// standing on its lane that is the lane's surface, and for a floating one
+// it is the underside of the box. So a lifted cube needs no special case
+// here — its single column is the box itself, and a body can land on top
+// of it exactly as it can on ground.
+get_cube_column :: proc(obstacle: Obstacle, rect: rl.Rectangle, index: int) -> CubeColumn {
+	profile := get_cube_profile(obstacle)
+	height := f32(profile[index]) * CUBE_UNIT
+	if obstacle.floating {
+		height = rect.height
+	}
+
+	is_floor := obstacle.lane == .Real
+	base := is_floor ? rect.y + rect.height : rect.y
+	contact := is_floor ? base - height : base + height
+
+	return CubeColumn {
+		rect = rl.Rectangle {
+			rect.x + f32(index) * CUBE_UNIT,
+			min(contact, base),
+			CUBE_UNIT,
+			height,
+		},
+		contact = contact,
+	}
 }
 
 // Gap width variants. Picked randomly at creation — flavour, and the one
@@ -189,35 +278,34 @@ GAP_WIDTH_LONG :: 140
 // so that "how big is a box" and "how wide is a hole" stay unrelated.
 GAP_HEIGHT :: 54
 
-// The box a cube form stands in, before its lane decides which way up it
-// is. Width is the price; height is how the shape reads.
-get_cube_size :: proc(form: CubeForm) -> rl.Vector2 {
-	switch form {
-	case .Standard:
-		return rl.Vector2{CUBE_UNIT, CUBE_UNIT}
-	case .Small:
-		return rl.Vector2{CUBE_UNIT * 0.5, CUBE_UNIT * 0.5}
-	case .Wide:
-		return rl.Vector2{CUBE_UNIT * 2, CUBE_UNIT}
-	case .Stack:
-		return rl.Vector2{CUBE_UNIT, CUBE_UNIT * 3}
-	case .Pyramid:
-		return rl.Vector2{CUBE_UNIT * 3, CUBE_UNIT * 3}
-	case .Float:
-		return rl.Vector2{CUBE_UNIT, CUBE_UNIT}
+// The box a profile stands in, before its lane decides which way up it
+// is: as wide as it has columns, as tall as its tallest one.
+//
+// It is the *bounding* box, and since the profile arrived it is no longer
+// the hitbox — a skyline with a short column has air inside this
+// rectangle that nothing collides with. It stays because the position,
+// the culling and the fairness windows all reason about where a whole
+// obstacle is, and because get_cube_column measures the columns from its
+// far edge.
+get_cube_size :: proc(profile: CubeProfile) -> rl.Vector2 {
+	columns := len(profile) > 0 ? profile : PROFILE_PRIMITIVE
+
+	tallest: u8 = 0
+	for height in columns {
+		tallest = max(tallest, height)
 	}
-	return rl.Vector2{CUBE_UNIT, CUBE_UNIT}
+	return rl.Vector2{f32(len(columns)) * CUBE_UNIT, f32(tallest) * CUBE_UNIT}
 }
 
 // The widest this event can ever turn out to be. Used by the fairness
 // check, which has to reason about a pattern before its random choices
 // have been made.
-get_max_width :: proc(obstacle_type: ObstacleType, form: CubeForm) -> f32 {
+get_max_width :: proc(obstacle_type: ObstacleType, profile: CubeProfile) -> f32 {
 	switch obstacle_type {
 	case .Gap:
 		return GAP_WIDTH_LONG
 	case .Cube:
-		return get_cube_size(form).x
+		return get_cube_size(profile).x
 	}
 	return CUBE_UNIT
 }
@@ -232,11 +320,12 @@ new_obstacle :: proc(
 	arrival_time: f32,
 	lane: core.Lane,
 	obstacle_type: ObstacleType,
-	form: CubeForm,
+	profile: CubeProfile,
+	floating: bool,
 	float_phase: f32,
 	rng: rand.Generator,
 ) -> Obstacle {
-	size := get_cube_size(form)
+	size := get_cube_size(profile)
 
 	switch obstacle_type {
 	case .Gap:
@@ -252,7 +341,7 @@ new_obstacle :: proc(
 		}
 		size = rl.Vector2{width, GAP_HEIGHT}
 	case .Cube:
-	// the form already gave us the box
+	// the profile already gave us the box
 	}
 
 	return Obstacle {
@@ -260,13 +349,14 @@ new_obstacle :: proc(
 		lane = lane,
 		size = size,
 		obstacle_type = obstacle_type,
-		cube = form,
+		profile = profile,
+		floating = floating,
 		float_phase = float_phase,
 	}
 }
 
 // How far a floating cube currently stands off the surface of its lane.
-// Zero for every other form.
+// Zero for every cube that rests on it.
 //
 // A function of the obstacle's **own age**, never of the global clock: at
 // age zero it is at the phase its pattern authored, so the author knows
@@ -280,7 +370,7 @@ new_obstacle :: proc(
 // the game where how much room you have changes what an obstacle asks of
 // you, and it is worth having.
 get_cube_lift :: proc(obstacle: Obstacle, world: World) -> f32 {
-	if obstacle.obstacle_type != .Cube || obstacle.cube != .Float {
+	if obstacle.obstacle_type != .Cube || !obstacle.floating {
 		return 0
 	}
 	age := world.elapsed_time - obstacle.arrival_time

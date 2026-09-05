@@ -63,12 +63,18 @@ PatternEvent :: struct {
 	lane:          core.Lane,
 	obstacle_type: ObstacleType,
 
-	// Cube only, and both have a zero value that means "the primitive":
-	// an event that says nothing about its cube gets a standard one, low
-	// in its bob. Authoring a floating cube is therefore two words —
-	// the form, and where in its rise it meets the anchor.
-	cube:          CubeForm,
-	cube_phase:    f32, // Float only: 0 is down and blocking, 0.5 is up and open
+	// Cube only, and every one has a zero value that means "the
+	// primitive": an event that says nothing about its cube gets one
+	// column one unit tall, resting on its lane.
+	//
+	// The profile is the skyline in units — {1,2,3} is a staircase,
+	// {3,0,3} two towers with a canyon between them (obstacle.odin).
+	// Floating is orthogonal to it rather than one of its shapes, which
+	// is what lets a pattern lift any cube it likes and is why the phase
+	// only means anything alongside it.
+	profile:       CubeProfile,
+	floating:      bool,
+	cube_phase:    f32, // floating only: 0 is down and blocking, 0.5 is up and open
 }
 
 Pattern :: struct {
@@ -336,7 +342,7 @@ pattern_swell := Pattern {
 // the height is rhetoric. It earns its place by being read as *worse* at
 // a glance, which is the cheapest variety in the whole set.
 pattern_stack := Pattern {
-	events   = []PatternEvent{{time_offset = 0.9, lane = .Real, obstacle_type = .Cube, cube = .Stack}},
+	events   = []PatternEvent{{time_offset = 0.9, lane = .Real, obstacle_type = .Cube, profile = PROFILE_STACK}},
 	track    = []core.TrackPoint {
 		{time = 0, spine = 360, span = 340},
 		{time = 0.9, spine = 376, span = 340},
@@ -351,7 +357,7 @@ pattern_stack := Pattern {
 // early, which is the point of it: the silhouette says which side of the
 // corridor is going to be worth being on before the mass arrives.
 pattern_pyramid := Pattern {
-	events   = []PatternEvent{{time_offset = 1.2, lane = .Dream, obstacle_type = .Cube, cube = .Pyramid}},
+	events   = []PatternEvent{{time_offset = 1.2, lane = .Dream, obstacle_type = .Cube, profile = PROFILE_PYRAMID}},
 	track    = []core.TrackPoint {
 		{time = 0, spine = 360, span = 340},
 		{time = 1.0, spine = 344, span = 340},
@@ -369,13 +375,13 @@ pattern_pyramid := Pattern {
 // only becomes a price where there is no free lane to flip to — which is
 // the mirrored pair below, and nowhere else.
 //
-// So the small and the wide cube are here for the eye, not the hand, and
-// that is a legitimate job: they are how the set stops looking like one
-// object repeated.
+// So a one-column cube and a two-column one are here for the eye, not
+// the hand, and that is a legitimate job: they are how the set stops
+// looking like one object repeated.
 pattern_bump_and_wall := Pattern {
 	events   = []PatternEvent {
-		{time_offset = 0.9, lane = .Real, obstacle_type = .Cube, cube = .Small},
-		{time_offset = 1.9, lane = .Dream, obstacle_type = .Cube, cube = .Wide},
+		{time_offset = 0.9, lane = .Real, obstacle_type = .Cube, profile = PROFILE_PRIMITIVE},
+		{time_offset = 1.9, lane = .Dream, obstacle_type = .Cube, profile = PROFILE_WIDE},
 	},
 	track    = []core.TrackPoint {
 		{time = 0, spine = 360, span = 340},
@@ -398,18 +404,18 @@ pattern_bump_and_wall := Pattern {
 // width. The corridor opens for it so the two boxes read as a pair rather
 // than as a pinch.
 //
-// **Wide rather than the primitive, and that is not a strengthening.**
-// Wide is two units — 54 px, exactly what a standard cube was before the
+// **Two columns rather than one, and that is not a strengthening.**
+// PROFILE_WIDE is 54 px, exactly what a standard cube was before the
 // unit halved — so the encounter is the same size and the same four
 // flips it has always been. What changed underneath it is that the
 // primitive is now narrower than the body, and a box that disappears
 // inside the character while it is costing them ground is the one thing
 // MIRROR_MIN_WIDTH exists to forbid. The pair is about width, so it has
-// to be authored out of a form wide enough to be seen paying for.
+// to be authored wide enough to be seen paying for.
 pattern_mirror := Pattern {
 	events   = []PatternEvent {
-		{time_offset = 1.0, lane = .Real, obstacle_type = .Cube, cube = .Wide},
-		{time_offset = 1.0, lane = .Dream, obstacle_type = .Cube, cube = .Wide},
+		{time_offset = 1.0, lane = .Real, obstacle_type = .Cube, profile = PROFILE_WIDE},
+		{time_offset = 1.0, lane = .Dream, obstacle_type = .Cube, profile = PROFILE_WIDE},
 	},
 	track    = []core.TrackPoint {
 		{time = 0, spine = 360, span = 340},
@@ -431,7 +437,7 @@ pattern_float_open := Pattern {
 			time_offset = 1.3,
 			lane = .Dream,
 			obstacle_type = .Cube,
-			cube = .Float,
+			floating = true,
 			cube_phase = 0.5,
 		},
 	},
@@ -453,10 +459,10 @@ pattern_float_pair := Pattern {
 			time_offset = 1.0,
 			lane = .Dream,
 			obstacle_type = .Cube,
-			cube = .Float,
+			floating = true,
 			cube_phase = 0.5,
 		},
-		{time_offset = 2.1, lane = .Dream, obstacle_type = .Cube, cube = .Float},
+		{time_offset = 2.1, lane = .Dream, obstacle_type = .Cube, floating = true},
 	},
 	track    = []core.TrackPoint {
 		{time = 0, spine = 360, span = 340},
@@ -601,7 +607,8 @@ generate_ahead :: proc(
 					generator.generated_until + event.time_offset,
 					event.lane,
 					event.obstacle_type,
-					event.cube,
+					event.profile,
+				event.floating,
 					event.cube_phase,
 					rng,
 				),
@@ -634,7 +641,7 @@ generate_ahead :: proc(
 @(private)
 event_window :: proc(event: PatternEvent) -> (start, end: f32) {
 	v := f32(INITIAL_SCROLL_SPEED)
-	w := get_max_width(event.obstacle_type, event.cube)
+	w := get_max_width(event.obstacle_type, event.profile)
 	return event.time_offset - f32(PLAYER_SIZE) / v, event.time_offset + w / v
 }
 
@@ -674,6 +681,7 @@ validate_pattern_pool :: proc(pool: []Pattern) {
 					pattern.duration,
 				)
 			}
+			report_profile_faults(event, index)
 		}
 		report_conflicts(pattern, index, pattern, index, 0)
 	}
@@ -770,6 +778,79 @@ report_track_faults :: proc(pattern: Pattern, index: int) {
 	}
 }
 
+// Checks an authored skyline.
+//
+// This is the other half of "the shape is data". A profile is free — a
+// pattern may write any run of columns it likes — so the thing that keeps
+// a free profile safe is arithmetic here rather than a closed set of
+// shapes somewhere else, exactly as the track is authored freely and held
+// to its rate limits.
+//
+// The height bound is the one with a failure behind it rather than a
+// taste. An obstacle belongs to a lane and blocks only bodies on that
+// lane, so a floor cube tall enough to reach a character hanging from the
+// ceiling would slide straight through them: a mark that does not do what
+// it looks like it does, which is worse than a mark that is merely hard.
+// The corridor is never narrower than TRACK_SPAN_MIN, so anything over
+// CUBE_MAX_HEIGHT can reach the other lane at some legal span.
+@(private)
+report_profile_faults :: proc(event: PatternEvent, index: int) {
+	if event.obstacle_type != .Cube {
+		// A hole has no shape to author, so a profile on one is a line
+		// that silently does nothing — the kind of authoring mistake that
+		// survives review precisely because it has no effect.
+		if len(event.profile) > 0 || event.floating {
+			fmt.printf(
+				"WARNING: pattern %d gives a %v at %.2fs a cube's shape — profiles and floating belong to cubes\n",
+				index, event.obstacle_type, event.time_offset,
+			)
+		}
+		return
+	}
+
+	profile := event.profile
+	if len(profile) == 0 {
+		return // the primitive, which is always legal
+	}
+
+	if len(profile) > CUBE_MAX_COLUMNS {
+		fmt.printf(
+			"WARNING: pattern %d authors a %d-column cube at %.2fs, over the %v-column limit\n",
+			index, len(profile), event.time_offset, CUBE_MAX_COLUMNS,
+		)
+	}
+
+	tallest: u8 = 0
+	for height in profile {
+		tallest = max(tallest, height)
+		if int(height) > CUBE_MAX_HEIGHT {
+			fmt.printf(
+				"WARNING: pattern %d authors a column %v units tall at %.2fs, over the %v-unit limit — it would reach a body on the other lane without blocking it\n",
+				index, height, event.time_offset, CUBE_MAX_HEIGHT,
+			)
+		}
+	}
+
+	// All zeros is a cube that is not there: it takes up width in every
+	// window the validator computes and blocks nothing.
+	if tallest == 0 {
+		fmt.printf(
+			"WARNING: pattern %d authors a cube at %.2fs whose columns are all zero — it is a shape with nothing in it\n",
+			index, event.time_offset,
+		)
+	}
+
+	// A floating cube is drawn as its bounding box (render/obstacle.odin),
+	// so a skyline lifted off its lane would be a box that does not match
+	// the columns the collision uses. One column keeps the two the same.
+	if event.floating && len(profile) > 1 {
+		fmt.printf(
+			"WARNING: pattern %d floats a %d-column cube at %.2fs — a lifted cube is drawn as one box, so it must be one column\n",
+			index, len(profile), event.time_offset,
+		)
+	}
+}
+
 // The width bounds on a cube that faces another cube across the corridor
 // — the one encounter the player cannot dodge, only pay for.
 //
@@ -857,11 +938,11 @@ report_conflicts :: proc(first: Pattern, first_index: int, second: Pattern, seco
 
 @(private)
 report_mirror_width :: proc(index: int, event: PatternEvent) {
-	width := get_max_width(event.obstacle_type, event.cube)
+	width := get_max_width(event.obstacle_type, event.profile)
 	if width < MIRROR_MIN_WIDTH || width > MIRROR_MAX_WIDTH {
 		fmt.printf(
 			"WARNING: pattern %d faces a %v cube (%.0f px) across the corridor at %.2fs — a mirrored pair must be between %.0f and %.0f px wide\n",
-			index, event.cube, width, event.time_offset, MIRROR_MIN_WIDTH, MIRROR_MAX_WIDTH,
+			index, event.profile, width, event.time_offset, MIRROR_MIN_WIDTH, MIRROR_MAX_WIDTH,
 		)
 	}
 }

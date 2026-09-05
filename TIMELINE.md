@@ -128,18 +128,19 @@ x ne dura 0.167, per un raggio di larghezza qualsiasi, zero compreso.
 
 ## Dove sta il gioco adesso
 
-A schermo non c'è niente di pieno tranne il fondo. Ci sono i **tre ostacoli** (cubo, buco,
-tenda), il tracciato che ondeggia e si strozza, la Corruzione che avanza da sinistra, il pennino
-che scrive il mondo a destra, e la parallasse.
+A schermo non c'è niente di pieno tranne il fondo. Ci sono i **due ostacoli** (quadrato e buco),
+il tracciato che ondeggia e si strozza, la Corruzione che avanza da sinistra, il pennino che
+scrive il mondo a destra, e la parallasse.
 
-Manca la **curva di difficoltà costruita sui tre ostacoli** — il pool vero — che è il pezzo che
-serve per avere la quadra sul gioco.
+Manca la **curva di difficoltà costruita sui due ostacoli** — il pool vero — che è il pezzo che
+serve per avere la quadra sul gioco. Le venti pattern attuali sono state scritte quando la forma
+era un enum: nessuna usa ancora una skyline di più di tre colonne né una colonna di altezza zero.
 
 ---
 
 ## In corso — gli ostacoli si riducono a due
 
-**Stato: in progress.** Restano **quadrato** e **buco**. Il buco funziona già ed è intoccabile: ci
+**Stato: T1, T2 e T3 fatti; resta T4.** Restano **quadrato** e **buco**. Il buco funziona già ed è intoccabile: ci
 cadi dentro, ti dissolvi, muori. Il quadrato diventa più piccolo, così le forme possono crescere.
 La curva di difficoltà sui due elementi è lo step **dopo** questo.
 
@@ -150,8 +151,9 @@ La curva di difficoltà sui due elementi è lo step **dopo** questo.
 | **T3** | **La forma diventa dato** → `CubeForm` da enum cablato a **profilo di colonne** autorato nel pattern, così ogni skyline è dato e non codice. Tocca blocco (contro quale colonna ti fermi), appoggio (su quale poggi) e disegno (il terreno emette il profilo invece della piramide cablata). Proposta: profilo libero più un validatore che rifiuta quelli illegali. | Opus |
 | **T4** | **Il fluttuante, orizzontale e verticale** → Il verticale c'è già come funzione dell'età dell'ostacolo. L'orizzontale è la stessa matematica su x, ma **cambia quando ti raggiunge**, quindi la finestra che il validatore usa per l'equità va allargata dell'ampiezza dell'oscillazione o due ostacoli legali separatamente diventano illegali insieme. | Opus |
 
-**Decisione ancora aperta (T3)**: profilo libero, o un set chiuso di forme composte? Il primo dà
-più varietà e più modi di sbagliare un pattern, il secondo è più sicuro e più povero.
+**Decisione presa (T3)**: profilo libero, più un validatore che rifiuta quelli illegali.
+
+**Restano da fare: T4.** T1, T2 e T3 sono chiusi — le voci in fondo.
 
 ---
 
@@ -179,3 +181,13 @@ Il soffitto non si dissolve più: si spezza come il pavimento, con la linea che 
 al labbro e due angoli retti, lo stesso segno specchiato. Via la coda sfumata e l'alone
 dell'apertura, che a schermo era stato scambiato per un emettitore. Con due soli ostacoli ognuno
 deve essere un segno solo che dice una cosa sola, da qualsiasi parte lo incontri.
+
+---
+
+## 5 settembre 2026 — T3: la forma diventa dato
+
+`CubeForm` non esiste più. Il pattern scrive la skyline in colonne — `{1,2,3}` è una scala,
+`{3,0,3}` due torri e un canyon — e le stesse cifre sono ciò che blocca, ciò che regge e ciò che
+viene disegnato: una funzione sola, `get_cube_column`. Prima la piramide era *disegnata* a gradini
+e *collideva* come scatola piena, cioè mostrava uno scalino su cui non ti lasciava salire. Il
+fluttuante smette di essere una forma e diventa un flag. Un validatore rifiuta i profili illegali.

@@ -94,7 +94,18 @@ check_player_obstacle_collision :: proc(player: Player, obstacle: Obstacle, worl
 	return false
 }
 
-// Whether this obstacle is holding the character back right now.
+// The face the character is stopped against right now, if any.
+//
+// **Which column, not which obstacle**, and that is what the profile
+// bought. A skyline is only as much of a wall as the column the body has
+// actually reached: walk into `{1, 2, 3}` and you are stopped at its left
+// edge, but come down onto the low step from a flip and you stand on it,
+// with the next column up becoming the face instead. Before the profile
+// the whole bounding box blocked, so a pyramid was drawn as steps and
+// collided as a block — it showed a low step it would not let you use.
+//
+// A column of height zero is not there and cannot stop anything, which is
+// what makes a canyon in a skyline a place to be rather than a wall.
 //
 // Only a settled player is blocked. Mid-flip they are travelling between
 // the lanes and nothing standing on one can reach them, which is what
@@ -106,15 +117,44 @@ check_player_obstacle_collision :: proc(player: Player, obstacle: Obstacle, worl
 // waved the character through solid cubes would let a well-timed flip
 // walk straight through the one obstacle that is supposed to cost
 // something.
-blocks_player :: proc(player: Player, obstacle: Obstacle, world: World) -> bool {
+get_blocking_face :: proc(
+	player: Player,
+	obstacle: Obstacle,
+	world: World,
+) -> (
+	face: f32,
+	blocked: bool,
+) {
 	if !blocks_lane(obstacle.obstacle_type) {
-		return false
+		return 0, false
 	}
 	if player.state == .Transitioning || player.lane != obstacle.lane {
-		return false
+		return 0, false
 	}
-	return rl.CheckCollisionRecs(
-		to_rect(player.position, player.size),
-		get_obstacle_rect(obstacle, world),
-	)
+
+	body := to_rect(player.position, player.size)
+	rect := get_obstacle_rect(obstacle, world)
+	if rect.x >= body.x + body.width || rect.x + rect.width <= body.x {
+		return 0, false
+	}
+
+	// Left to right, so the face is the first column that is in the way
+	// rather than the tallest one — the body is stopped by what it reaches
+	// first.
+	for index in 0 ..< len(get_cube_profile(obstacle)) {
+		column := get_cube_column(obstacle, rect, index)
+		if column.rect.height <= 0 {
+			continue
+		}
+		if rl.CheckCollisionRecs(body, column.rect) {
+			return column.rect.x, true
+		}
+	}
+	return 0, false
+}
+
+// Whether this obstacle is holding the character back right now.
+blocks_player :: proc(player: Player, obstacle: Obstacle, world: World) -> bool {
+	_, blocked := get_blocking_face(player, obstacle, world)
+	return blocked
 }

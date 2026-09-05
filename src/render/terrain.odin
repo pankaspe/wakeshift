@@ -129,10 +129,10 @@ Span :: struct {
 // construction rather than by agreement.
 @(private)
 Step :: struct {
-	start: f32,
-	end:   f32,
-	rect:  rl.Rectangle,
-	form:  game.CubeForm,
+	start:    f32,
+	end:      f32,
+	rect:     rl.Rectangle,
+	obstacle: game.Obstacle, // carried whole, so the skyline is read from the same place the collision reads it
 }
 
 // Every cube standing on one lane, left to right and never overlapping.
@@ -155,7 +155,7 @@ collect_steps :: proc(
 		if obstacle.obstacle_type != .Cube || obstacle.lane != lane {
 			continue
 		}
-		if obstacle.cube == .Float {
+		if obstacle.floating {
 			continue
 		}
 		rect := game.get_obstacle_rect(obstacle, world)
@@ -167,7 +167,7 @@ collect_steps :: proc(
 		}
 		append(
 			&found,
-			Step{start = rect.x, end = rect.x + rect.width, rect = rect, form = obstacle.cube},
+			Step{start = rect.x, end = rect.x + rect.width, rect = rect, obstacle = obstacle},
 		)
 	}
 
@@ -306,37 +306,25 @@ append_surface :: proc(
 	}
 }
 
-// The far side of a step: two right angles for every form but the
-// pyramid, which is a staircase of them.
+// The far side of a step: the obstacle's own skyline, one column at a
+// time, two right angles each.
 //
-// Read off the obstacle's own rectangle rather than off the surface, so
-// the top of the mark is exactly the top of the hitbox. The two vertical
-// faces are implied — this appends the far edge at the same x the caller
-// already put the surface at, and the polyline goes straight up.
+// Read off the columns the simulation collides with rather than off a
+// shape this file knows the name of, so the mark and the hitbox are the
+// same thing by construction. Until the profile arrived this procedure
+// held the only copy of what a pyramid looked like, and the collision
+// held a different answer — a staircase that was drawn but could not be
+// stood on. Nothing here decides a form any more; it draws the numbers.
+//
+// The vertical faces are implied: consecutive columns share an x, so the
+// polyline goes straight up or down between their tops on its own, and a
+// column of height zero puts that x back on the lane's own surface.
 @(private)
 append_step :: proc(points: ^[dynamic]rl.Vector2, step: Step, is_floor: bool) {
-	// The edge of the box furthest from the lane it stands on. Hanging
-	// from the ceiling is the same picture with the mirror applied.
-	far_y := is_floor ? step.rect.y : step.rect.y + step.rect.height
-
-	if step.form != .Pyramid {
-		push_point(points, rl.Vector2{step.start, far_y})
-		push_point(points, rl.Vector2{step.end, far_y})
-		return
-	}
-
-	// Cubes in a staircase, rising away from the player: the low step is
-	// met first, which is what says in advance which side to be on.
-	base_y := is_floor ? step.rect.y + step.rect.height : step.rect.y
-	grow := is_floor ? f32(-1) : f32(1)
-	columns := max(int(step.rect.width / game.CUBE_UNIT), 1)
-	width := step.rect.width / f32(columns)
-
-	for column in 0 ..< columns {
-		top := base_y + grow * f32(column + 1) * game.CUBE_UNIT
-		left := step.start + f32(column) * width
-		push_point(points, rl.Vector2{left, top})
-		push_point(points, rl.Vector2{left + width, top})
+	for index in 0 ..< len(game.get_cube_profile(step.obstacle)) {
+		column := game.get_cube_column(step.obstacle, step.rect, index)
+		push_point(points, rl.Vector2{column.rect.x, column.contact})
+		push_point(points, rl.Vector2{column.rect.x + column.rect.width, column.contact})
 	}
 }
 

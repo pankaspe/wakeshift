@@ -373,11 +373,16 @@ advance_ground :: proc(
 
 	player.is_blocked = false
 	for obstacle in obstacles {
-		if !blocks_player(player^, obstacle, world) {
+		// The face is the blocking *column's* left edge, not the
+		// obstacle's: inside a skyline the body is held by whichever
+		// column it has reached, and standing on a low step means the
+		// wall is the next one along (collision.odin).
+		face, blocked := get_blocking_face(player^, obstacle, world)
+		if !blocked {
 			continue
 		}
 		player.is_blocked = true
-		player.position.x = min(player.position.x, get_obstacle_rect(obstacle, world).x - player.size.x)
+		player.position.x = min(player.position.x, face - player.size.x)
 	}
 
 	player.position.x = max(player.position.x, entry_x - world.scroll_speed * delta_time)
