@@ -184,8 +184,13 @@ draw_background :: proc(
 	rl.DrawRectangle(0, 0, core.SCREEN_WIDTH, core.SCREEN_HEIGHT, field.near)
 
 	// Under the vignette, and out of the same lagged palette the field
-	// itself is drawn from: the horizons belong to the background, not to
-	// the world standing in front of it.
+	// itself is drawn from: the tunnel and the horizons belong to the
+	// background, not to the world standing in front of it.
+	//
+	// The grid first and furthest back — it is the only part of the
+	// background that crosses the corridor, so everything else is drawn
+	// over it.
+	draw_grid(field, time)
 	draw_parallax(field, scroll)
 
 	edge := core.dim_color(field.deep, VIGNETTE_DEPTH)

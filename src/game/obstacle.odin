@@ -86,16 +86,19 @@ CubeForm :: enum {
 CUBE_FLOAT_LIFT :: 96
 CUBE_FLOAT_PERIOD :: 1.6
 
-// The beam's width, and how much of the corridor it takes.
+// The beam's width: about 0.7 s at the opening speed, long enough that
+// "hold still" is a commitment rather than a flinch.
 //
-// The width is about 0.7 s at the opening speed: long enough that "hold
-// still" is a commitment rather than a flinch. The band is a *fraction*
-// of the span because the corridor's width changes along the track, and
-// what has to stay true at every span is that a settled body on either
-// lane is clear of it: (1 - band)/2 of the narrowest corridor is 72 px
-// against a 45 px body.
+// It has no height of its own. It **crosses the corridor from side to
+// side** (Design Doc, section 10), which is what it has always meant: the
+// collision test is `horizontally_overlapping` plus "are you moving", and
+// it has never once looked at the beam's height (collision.odin). Until 5
+// September it was *drawn* as a horizontal band taking a fraction of the
+// span, on the theory that a settled body had to be clear of it — but
+// nothing was ever clear of it, because the rule is about time and not
+// about where you are standing. The band was a picture of a rule the game
+// does not have.
 SENTINEL_WIDTH :: CUBE_UNIT * 3.5
-SENTINEL_BAND :: 0.42
 
 // True for the type that is an *absence* rather than a thing. It is also
 // exactly the set the terrain draws rather than draw_obstacle: only the
@@ -255,8 +258,11 @@ get_cube_lift :: proc(obstacle: Obstacle, world: World) -> f32 {
 // An obstacle's size right now.
 //
 // Stored for everything except the Sentinel, whose height is the
-// corridor's: the beam takes a fixed fraction of the span, so it opens
-// and closes with the world instead of being a bar of its own.
+// corridor's whole span: it crosses from the floor to the ceiling, so it
+// opens and closes with the world instead of being a bar of its own.
+// Nothing in the simulation reads that height — the beam forbids
+// *moving*, not standing anywhere — so it is the drawing's number, kept
+// here because that is where an obstacle's geometry lives.
 get_obstacle_size :: proc(obstacle: Obstacle, world: World) -> rl.Vector2 {
 	if obstacle.obstacle_type != .Sentinel {
 		return obstacle.size
@@ -264,7 +270,7 @@ get_obstacle_size :: proc(obstacle: Obstacle, world: World) -> rl.Vector2 {
 	time_until_arrival := obstacle.arrival_time - world.elapsed_time
 	x := core.WORLD_ANCHOR_X + time_until_arrival * world.scroll_speed
 	_, span := get_track_at_x(world, x)
-	return rl.Vector2{obstacle.size.x, span * SENTINEL_BAND}
+	return rl.Vector2{obstacle.size.x, span}
 }
 
 // Computes the obstacle's current on-screen position, derived from how

@@ -96,6 +96,28 @@ TERRAIN_MARGIN :: 100
 // How far the broken floor turns down into the void, in pixels.
 CHASM_WALL_DEPTH :: 22
 
+// --- The teeth ---
+//
+// A floor gap grows spikes across it. The line still stops — a hole is
+// the only discontinuity in the game and that is unchanged — but what
+// fills the break is a row of points rather than nothing, which is the
+// one place the picture can afford to shout: this is the danger that
+// kills outright, and pillar 3 wants it legible from the moment it comes
+// on screen.
+//
+// It also fits the grammar rather than fighting it. *The world curves,
+// the danger corners* — teeth are all corner, and they are the sharpest
+// thing on a screen where everything else bends.
+//
+// The ceiling keeps its dissolve instead: an absence overhead is a way
+// through, not a fall, and giving both sides teeth would delete the one
+// asymmetry that tells the two worlds apart by shape.
+SPIKE_WIDTH :: 17 // one tooth, base to base
+SPIKE_HEIGHT :: 21
+SPIKE_ALPHA :: 0.9
+SPIKE_GLOW :: 0.35
+SPIKE_SPREAD :: 4.0
+
 // How far a dissolving ceiling edge runs on into the gap before it has
 // thinned away, and how little of the stroke is left at the far end.
 DREAM_HOLE_FADE :: 30
@@ -544,6 +566,51 @@ draw_dream_opening :: proc(world: game.World, gap: Span, light: LaneLight) {
 	)
 }
 
+// The teeth in a broken floor.
+//
+// One mark, not one per tooth: a single zig-zag polyline welds its own
+// turns and the additive halo stops beading at every point, which is the
+// same reason the surface is one stroke rather than a segment per sample
+// (render/stroke.odin).
+//
+// Whole teeth only. A gap is not a multiple of a tooth, so the row is
+// centred in the hole and whatever is left over is left as floor — a
+// half-tooth at a lip would read as a chipped one, and the lips already
+// have their own mark.
+@(private)
+draw_spikes :: proc(world: game.World, gap: Span, right: f32, light: LaneLight) {
+	start := max(gap.start, -TERRAIN_MARGIN)
+	end := min(gap.end, right)
+	width := end - start
+	teeth := int(width / SPIKE_WIDTH)
+	if teeth < 1 {
+		return
+	}
+
+	span := f32(teeth) * SPIKE_WIDTH
+	base := start + (width - span) * 0.5
+
+	points := make([dynamic]rl.Vector2, 0, teeth * 2 + 1, context.temp_allocator)
+	for tooth in 0 ..= teeth {
+		x := base + f32(tooth) * SPIKE_WIDTH
+		append(&points, rl.Vector2{x, terrain_surface_y(world, true, x)})
+		if tooth < teeth {
+			tip := x + SPIKE_WIDTH * 0.5
+			append(&points, rl.Vector2{tip, terrain_surface_y(world, true, tip) - SPIKE_HEIGHT})
+		}
+	}
+
+	// The lane's own light and the lane's own life: teeth are what the
+	// world does here, not a thing standing in it.
+	alpha := SPIKE_ALPHA * (0.45 + 0.55 * light.alive)
+	row := new_stroke(core.with_alpha(light.palette.light, alpha), TERRAIN_STROKE_THICKNESS)
+	row.glow = SPIKE_GLOW * (0.45 + 0.55 * light.alive)
+	row.spread = SPIKE_SPREAD
+	row.core_light = TERRAIN_CORE_LIGHT
+	apply_glow_gain(&row, light.gain)
+	draw_stroke(points[:], row)
+}
+
 @(private)
 draw_terrain_side :: proc(
 	world: game.World,
@@ -572,9 +639,12 @@ draw_terrain_side :: proc(
 
 	gaps := collect_gap_spans(world, obstacles, lane)
 
-	// The glow of an opening goes under the line, not over it.
-	if !is_floor {
-		for gap in gaps {
+	// The glow of an opening goes under the line, not over it; the floor's
+	// teeth go under it too, so the lips are drawn over their bases.
+	for gap in gaps {
+		if is_floor {
+			draw_spikes(world, gap, right, light)
+		} else {
 			draw_dream_opening(world, gap, light)
 		}
 	}

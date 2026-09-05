@@ -376,22 +376,29 @@ Three rules the implementation established, all found by replaying the simulatio
   and it is the first thing in the project's history that turns "where do I go" into "which
   price do I pay". The v1.x design could never do it: two lethal lanes is an unsolvable pattern.
   What a cube costs is its **width**, because width is how long you stay pinned.
-- **The Sentinel is the only danger that asks what you are *doing* rather than where you are.**
-  It occupies `SENTINEL_BAND` of the span, centred on the spine, so standing on either lane is
-  safe and crossing is death. Nothing forbids the press: the flip is simply what it kills, which
-  means committing to a lane in advance. A *fraction* of the span rather than a fixed height,
-  because the corridor's width changes along the track and what has to stay true at every span
-  is that a settled body is clear of it — at the narrowest corridor that leaves 72 px against a
-  45 px body. It has no lane, so it is drawn out of the **neutral** palette: it belongs to
-  neither world, and the one thing it must never look like is a threat to only one of them.
+- **The Sentinel is the only danger that asks what you are *doing* rather than where you are**,
+  and since 5 September it is drawn as what it has always been: a beam **crossing the corridor**,
+  floor to ceiling. Nothing forbids the press — the flip is simply what it kills, which means
+  committing to a lane in advance. It used to be drawn as a horizontal band taking 42% of the
+  span, on the theory that a settled body had to be clear of it; nothing was ever clear of it,
+  because `check_player_obstacle_collision` tests `horizontally_overlapping` plus "are you
+  moving" and has never once looked at the beam's height. The band was a picture of a rule the
+  game does not have. Three vertical marks now: a bright one down the middle of the window and
+  two faint ones at its edges, which are what say the ban lasts 0.7 s — a single line could not.
+  It has no lane, so it is drawn out of the **neutral** palette: it belongs to neither world, and
+  the one thing it must never look like is a threat to only one of them.
 - **Invulnerability is decided per type, not once at the top of the collision check.** The grace
   period exists to forgive the flip started at the last possible instant against a hole — but
   against a Sentinel the flip *is* the mistake, so forgiving the first tenth of a second of
   every journey would hand a free crossing to exactly the player it is aimed at.
-- **The floor breaks, the ceiling dissolves.** It survived the loss of the fill in RL.2, carried
-  entirely by what the line does: the floor's stroke **turns down** into the break, which puts
-  two more right angles in it, and the ceiling's **runs on past the lip and tapers to nothing**
-  while the opening glows. Same cut, opposite reading.
+- **The floor breaks, the ceiling dissolves**, and the floor's break now has **teeth**. The
+  line still stops — a hole is the only discontinuity in the game and that is unchanged, the
+  surface never crosses its own gap — but a row of spikes fills the break, drawn as one zig-zag
+  polyline so the turns weld and the halo does not bead at every point. It fits the grammar
+  rather than fighting it: *the world curves, the danger corners*, and teeth are all corner on a
+  screen where everything else bends. The ceiling keeps its dissolve, because an absence overhead
+  is a way through rather than a fall, and giving both sides teeth would delete the one asymmetry
+  that tells the two worlds apart by shape.
 - **The track owns the holes, and since RL.2 it owns the cubes too.** `render/terrain.odin` is
   the only code that knows where its own surface is. It builds each lane as **one polyline across
   the whole screen** — cubes welded in as steps, read off the obstacle's own rectangle so the
@@ -645,6 +652,18 @@ fixed x near the right edge and scrolls toward the player from under the pen (De
   a half-written beam would have been capped at the pen and open at the end it had already
   finished. The path now starts at the pen, runs away from it and comes back, so the loose ends
   are where the ink stops.
+
+### The grid is the one background element allowed into the corridor
+
+`render/parallax.odin` also draws a tunnel: spokes running out from a vanishing point and rings
+expanding along them, each ring a fixed multiple of the one inside it, because a constant spacing
+reads as a target rather than as distance. It is the exception to the rule above, and the licence
+is specific: it has no edge to be mistaken for a lane, it moves on a different axis from
+everything else (outward from the middle, not right to left), and it is the faintest thing on
+screen — measured, it moves the picture by at most 17 levels between two moments. The spokes are
+fainter than the rings because a radial line crossing the corridor is the most competing shape
+the background has. If it ever fights the play line it is the first thing to turn down: pillar 2
+says readability wins.
 
 ### The glow is a third channel, and it is the one that survives depth
 

@@ -73,10 +73,10 @@ OBSTACLE_EDGE_ALIVE :: 0.95
 FLOAT_GLOW_STRENGTH :: 0.30
 FLOAT_GLOW_RADIUS :: 1.1
 
-// How many places the beam asks the corridor where it is. The spine is
-// linear between keyframes, so this only has to be fine enough that a
-// keyframe falling between two samples does not visibly flatten a corner.
-SENTINEL_SAMPLES :: 24
+// How much heavier the marks where the beam meets the two lanes are than
+// the beam itself.
+SENTINEL_FOOT_WEIGHT :: 1.9
+
 SENTINEL_GLOW_STRENGTH :: 0.55
 SENTINEL_GLOW_SPREAD :: 6
 SENTINEL_EDGE_ALPHA :: 0.75
@@ -205,19 +205,22 @@ draw_floating_cube :: proc(
 
 // --- The Sentinel ---
 //
-// A band across the middle of the corridor, following the spine for its
-// whole length so that it is unmistakably *of* the world rather than laid
-// over it. Drawn out of the neutral palette at full life: it belongs to
-// neither lane, and the one thing it must never look like is an obstacle
-// that only threatens the world it happens to be nearer.
+// A beam **across the corridor**, from the floor to the ceiling: three
+// vertical marks rather than a horizontal band. The bright one is the
+// middle of the window; the two faint ones are its edges, and they are
+// what says how long the ban lasts — 0.7 s at the opening speed, which a
+// single line could not tell you.
 //
-// An outline and a lit axis, with nothing inside. The outline is where
-// the band stops being safe, and drawing it as a closed stroke is what
-// says the band is a *thing* with two square ends rather than a pair of
-// extra lanes: the corners are the read (art direction, "the world
-// curves, the danger corners"). The axis is the brightest mark on screen
-// while it is up, and it is meant to be — it is the line the player must
-// not cross.
+// It used to be drawn as a band taking 42% of the span, on the theory
+// that a settled body was clear of it. Nothing was ever clear of it: the
+// collision test is "are you moving while it is passing you" and has
+// never looked at the beam's height (game/collision.odin). The band was a
+// picture of a rule the game does not have, and a line crossing the
+// corridor is a picture of the rule it does — *do not move now*.
+//
+// Drawn out of the neutral palette at full life: it belongs to neither
+// lane, and the one thing it must never look like is an obstacle that
+// only threatens the world it happens to be nearer.
 @(private)
 draw_sentinel :: proc(
 	obstacle: game.Obstacle,
@@ -227,48 +230,65 @@ draw_sentinel :: proc(
 ) {
 	rect := game.get_obstacle_rect(obstacle, world)
 	palette := palettes.neutral
+	gain := glow_gain(palettes.world_t)
 
-	// The beam is 189 px wide, which is 0.7 s of crossing either front at
-	// the opening speed. Popping it into or out of existence whole would
-	// be the one place in the picture where something plainly did not get
-	// drawn, or did not get eaten.
-	from, to, eaten, written, any := drawn_extent(rect.x, rect.width, front_x)
+	from, to, _, _, any := drawn_extent(rect.x, rect.width, front_x)
 	if !any {
 		return
 	}
 
-	// Both edges, left to right; draw_cut_shape decides which way round
-	// the path runs and therefore where its loose ends land.
-	top: [SENTINEL_SAMPLES + 1]rl.Vector2
-	bottom: [SENTINEL_SAMPLES + 1]rl.Vector2
-	axis: [SENTINEL_SAMPLES + 1]rl.Vector2
-
-	for i in 0 ..= SENTINEL_SAMPLES {
-		x := from + (to - from) * f32(i) / f32(SENTINEL_SAMPLES)
-		spine, span := game.get_track_at_x(world, x)
-		half := span * game.SENTINEL_BAND * 0.5
-
-		top[i] = rl.Vector2{x, spine - half}
-		bottom[i] = rl.Vector2{x, spine + half}
-		axis[i] = rl.Vector2{x, spine}
+	// Where the beam meets each lane, taken from the terrain's own surface
+	// so the ends land on the lines rather than near them.
+	beam :: proc(world: game.World, x: f32) -> [2]rl.Vector2 {
+		return [2]rl.Vector2 {
+			{x, terrain_surface_y(world, false, x)},
+			{x, terrain_surface_y(world, true, x)},
+		}
 	}
 
-	gain := glow_gain(palettes.world_t)
-
-	edge := new_stroke(core.with_alpha(palette.light, SENTINEL_EDGE_ALPHA), core.LIGHT_RIM_THICKNESS)
-	edge.glow = SENTINEL_GLOW_STRENGTH
+	// The two edges of the window first, underneath: they are the quiet
+	// half of the mark and the axis has to sit on top of them.
+	edge := new_stroke(core.with_alpha(palette.light, SENTINEL_EDGE_ALPHA), core.RIM_THICKNESS)
+	edge.glow = SENTINEL_GLOW_STRENGTH * 0.5
 	edge.spread = SENTINEL_GLOW_SPREAD
+	edge.core_light = 0
 	apply_glow_gain(&edge, gain)
-	draw_cut_shape(top[:], bottom[:], eaten, written, edge)
 
-	// The gain is the scene's, not a lane's, so applying it here does not
-	// give the beam a world: it burns with everything else on screen.
-	core_line := new_stroke(core.with_alpha(palette.accent, SENTINEL_AXIS_ALPHA), core.RIM_THICKNESS)
+	// Only where the edge is really this beam's own end, not the pen's or
+	// the Corruption's: a clipped end is where the world stops, and
+	// marking it would say the ban starts there.
+	if from <= rect.x + 0.01 {
+		line := beam(world, from)
+		draw_stroke(line[:], edge)
+	}
+	if to >= rect.x + rect.width - 0.01 {
+		line := beam(world, to)
+		draw_stroke(line[:], edge)
+	}
+
+	// The beam itself, down the middle of the window: the brightest thing
+	// on screen while it is up, and it is meant to be — it is the line the
+	// player must not cross.
+	middle := clamp((rect.x + rect.width * 0.5), from, to)
+	axis := beam(world, middle)
+	core_line := new_stroke(core.with_alpha(palette.accent, SENTINEL_AXIS_ALPHA), core.LIGHT_RIM_THICKNESS)
 	core_line.glow = SENTINEL_GLOW_STRENGTH
 	core_line.spread = SENTINEL_GLOW_SPREAD
 	core_line.core_light = 0.5
 	apply_glow_gain(&core_line, gain)
 	draw_stroke(axis[:], core_line)
+
+	// And a mark where it touches each lane. The beam is the one thing in
+	// the game that ends *on* both lines at once, and the two points are
+	// what make it read as crossing them rather than as passing behind.
+	foot := new_stroke(core.with_alpha(palette.accent, 1), core.LIGHT_RIM_THICKNESS * SENTINEL_FOOT_WEIGHT)
+	foot.glow = SENTINEL_GLOW_STRENGTH
+	foot.spread = SENTINEL_GLOW_SPREAD
+	foot.core_light = 0.6
+	apply_glow_gain(&foot, gain)
+	for point in axis {
+		draw_stroke_dot(point, foot)
+	}
 }
 
 // The mark an obstacle is outlined with: one neon line in the world's
