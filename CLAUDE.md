@@ -80,8 +80,29 @@ on the beat. The world is drawn as La Linea — nothing filled but the field, ob
 the floor's own polyline, a pen writing the world on the right and the Corruption fraying it on the
 left. The character is a hooded figure and is **provisional**: the final one is a lemur.
 
-What is missing is the thing that turns a set of pieces into a game: **a difficulty curve built on
-those three obstacles**, which means the real pattern pool.
+**The next step is decided and written down**: the obstacle set drops to **two** — cube and hole —
+and the cube gets smaller so shapes can grow. `TIMELINE.md` ends with the four tasks (T1..T4) and
+the model each is tagged for. Read them there; do not re-derive them.
+
+What that work needs to know before touching anything, so a cold session does not spend turns
+finding it out:
+
+- **The Sentinel is in six files.** `game/obstacle.odin` (19 mentions), `game/pattern.odin` (19 —
+  three patterns plus the validator's clauses), `render/obstacle.odin` (15),
+  `game/collision.odin` (5), `game/world.odin` (1), and `game/difficulty.odin` refers to the
+  patterns by name in its tier lists. `README.md` has a section called *The curtain*.
+  `is_lethal_to_both_lanes` already returns false for everything and goes with it.
+- **`CUBE_UNIT` is not only the cube's size.** `GAP_WIDTH_SHORT/MEDIUM/LONG` are multiples of it
+  (1.2 / 1.9 / 2.6, so 65 / 103 / 140 px), and the hole is not to change. Decouple them before
+  touching the unit.
+- **The cube's width is its price**, because width is how long you stay pinned. Halving the unit
+  halves what a single block costs, and that has to be measured rather than assumed.
+- **A shape's staircase is already derived rather than drawn per form**: `append_step` in
+  `render/terrain.odin` emits the pyramid's columns from the obstacle's rectangle. That is the
+  hook a column profile plugs into.
+
+After that, and not before: **a difficulty curve built on the two obstacles**, which means the
+real pattern pool.
 
 Why the design was rewritten in September 2026, measured rather than guessed: 200 simulated runs
 that never touched the key, **161 survived the whole first tier**, median death at 35 s; **86% of

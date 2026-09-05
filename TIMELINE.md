@@ -134,3 +134,21 @@ che scrive il mondo a destra, e la parallasse.
 
 Manca la **curva di difficoltà costruita sui tre ostacoli** — il pool vero — che è il pezzo che
 serve per avere la quadra sul gioco.
+
+---
+
+## In corso — gli ostacoli si riducono a due
+
+**Stato: in progress.** Restano **quadrato** e **buco**. Il buco funziona già ed è intoccabile: ci
+cadi dentro, ti dissolvi, muori. Il quadrato diventa più piccolo, così le forme possono crescere.
+La curva di difficoltà sui due elementi è lo step **dopo** questo.
+
+| | Task | Modello |
+|---|---|---|
+| **T1** | **Rimuovere Sentinella e pulsar** → Cancellazione meccanica: il tipo `.Sentinel`, le costanti `SENTINEL_*`, i tre pattern che la usano e i loro riferimenti nei tier, `draw_sentinel`, le clausole del validatore che la nominano, `is_lethal_to_both_lanes` che resta senza chiamanti, e la sezione *The curtain* nel README. Verifica: compila, il pool valida senza warning, nessun riferimento morto. | Sonnet |
+| **T2** | **Il quadrato più piccolo, e il buco slegato da lui** → Oggi `GAP_WIDTH_*` sono multipli di `CUBE_UNIT`: rimpicciolire l'unità rimpicciolirebbe anche i buchi, che devono restare come sono. Prima si staccano le due scale (buchi a 65/103/140 px assoluti), poi l'unità scende da 54 a **27**. Misurare: quanto terreno costa un blocco alla nuova taglia, e se un singolo si legge ancora contro un personaggio di 45 px. | Opus |
+| **T3** | **La forma diventa dato** → `CubeForm` da enum cablato a **profilo di colonne** autorato nel pattern, così ogni skyline è dato e non codice. Tocca blocco (contro quale colonna ti fermi), appoggio (su quale poggi) e disegno (il terreno emette il profilo invece della piramide cablata). Proposta: profilo libero più un validatore che rifiuta quelli illegali. | Opus |
+| **T4** | **Il fluttuante, orizzontale e verticale** → Il verticale c'è già come funzione dell'età dell'ostacolo. L'orizzontale è la stessa matematica su x, ma **cambia quando ti raggiunge**, quindi la finestra che il validatore usa per l'equità va allargata dell'ampiezza dell'oscillazione o due ostacoli legali separatamente diventano illegali insieme. | Opus |
+
+**Decisione ancora aperta (T3)**: profilo libero, o un set chiuso di forme composte? Il primo dà
+più varietà e più modi di sbagliare un pattern, il secondo è più sicuro e più povero.
