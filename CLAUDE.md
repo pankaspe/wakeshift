@@ -7,11 +7,15 @@ Operational rules for developing this project.
 - **What it looks like** → **`docs/inspiration/La_Linea.png`**. The art direction changed
   wholesale on 4 September 2026: out goes the Ori-like silhouette-and-light of
   `docs/archive/sketch/sketch_3`, in comes **La Linea** — a filled background, one continuous stroke
-  that *is* the world, a character who rises out of that stroke and returns to it. It is
-  binding. `docs/` is deliberately **not tracked by git**: it is the author's working material and
-  lives only on their disk, and everything under `docs/archive/` — the old design docs, the old
-  roadmap, the superseded sketches — is history rather than instruction. Do not read it as binding
-  and do not go there looking for the plan.
+  that *is* the world, a character who rises out of that stroke and returns to it. It is binding.
+- **How the world is built** → **`docs/inspiration/sketch.jpeg`**, the author's own, and binding
+  the same way. Flat floor and flat ceiling with all the relief made of **bricks**: staircases,
+  isolated towers, plateaus, canyons, facing constrictions, and one detached block that moves.
+  That is the world C1 and C2 are going to build (`TIMELINE.md`).
+- `docs/` is deliberately **not tracked by git**: it is the author's working material and lives
+  only on their disk, and everything under `docs/archive/` — the old design docs, the old roadmap,
+  the superseded sketches — is history rather than instruction. Do not read it as binding and do
+  not go there looking for the plan. `docs/inspiration/` is the exception: it is current.
 - **What has been built, in order** → `TIMELINE.md` (Italian; the user's file). One line per
   piece of work, and **there is no roadmap**: the user decides the next step, one at a time.
 - **How we work** → this file
@@ -80,19 +84,19 @@ nothing filled but the field, obstacles welded into the floor's own polyline, a 
 world on the right and the Corruption fraying it on the left. The character is a hooded figure and
 is **provisional**: the final one is a lemur.
 
-The obstacle set came down to two over T1–T3 in September 2026: the Sentinel deleted, the cube's
-unit halved to 27 with the hole's widths cut loose from it, and the cube's shape turned from a
-hardcoded enum into a **column profile authored in the pattern**. `TIMELINE.md` has the entries.
-
-T4 closed the group: the floating cube now **orbits**, its vertical bob and a horizontal drift on
-one clock a quarter turn apart, and `event_window` grew by the swing's amplitude because an
-obstacle that moves in x changes when it reaches you.
+What the obstacle set became in September 2026, in code terms rather than as history — the
+timeline has the story. `CUBE_UNIT` is **27**, deliberately narrower than the 45 px body, so a
+single brick is a bump and a *shape* is what threatens. A cube's shape is a **`CubeProfile`**, a
+run of column heights authored in the pattern, and one function (`get_cube_column`) is what the
+block, the support and the drawing all read. `floating` is a flag rather than a shape, and a
+floating cube **orbits** — bob and drift on one clock, a quarter turn apart. The hole's widths and
+the mirrored pair's bounds are absolute pixels and deliberately not multiples of the unit.
 
 **The next piece is decided and written down**, and it is the whole of what is left before the
 game can be judged: `TIMELINE.md` ends with five tasks (C1..C5) and the model each is tagged for.
 Read them there rather than re-deriving them. In one sentence: **the world gets built out of the
 bricks**, so the floor and the ceiling go straight and every piece of relief becomes a column
-profile — the author's `sketch.jpeg` in the repo root is the reference.
+profile — `docs/inspiration/sketch.jpeg` is the reference and it is binding.
 
 Two things a cold session should know before starting on it:
 
@@ -226,6 +230,11 @@ splitting them would force premature interfaces.
 
 ### The track is simulation
 
+> **C1 is about to delete most of this.** The corridor stops undulating and the relief moves into
+> the column profiles, so `Pattern.track`, `report_track_faults` and the keyframing go. What must
+> survive is `Ground` and `ground_time_at_x` — the scroll-to-time mapping — plus the four rules
+> marked **Outlives C1** below. Read this section as still-true-today, not as a design to defend.
+
 `core/track.odin` owns the shape of the world, because the player and the obstacles stand on it.
 It is **two numbers keyframed in world time**:
 
@@ -247,16 +256,19 @@ coherence is a property of the representation rather than a rule someone has to 
 - **A `Track` is a plain value** — a fixed `[TRACK_CAPACITY]TrackPoint` inside `World`, not a
   dynamic array beside it. So `interpolated_world` can copy the World forward by a fraction of a
   step and read a track nobody owns. Measured: a long run peaks at 20 of the 64 slots.
+  **Outlives C1** as a habit: anything the presentation copies forward wants to be a value.
 - **A body rests on the highest ground under its whole width**, not under one chosen point.
   Verified against a crest straddled by the player's box: the feet land on the crest, not in the
-  slope on either side of it.
+  slope on either side of it. **Outlives C1**, and is now also the column rule — a body straddling
+  a staircase rests on the higher step.
 - **The flip's duration is constant in time whatever the span is.** The corridor changes width;
   the gesture must not, or it stops being a reflex. Measured at 0.167 s across spans of 250, 340
-  and 430, crossing 205, 295 and 385 px respectively.
-- **The sky used to ride the spine**, and phase RL deleted the sky. The rule it came from is
-  still true and still worth knowing, because it will come up again for anything the world
-  contains: a *world* element nailed to the screen while the world slides underneath it reads as
-  two pictures. What replaced the sky — a vignette — is not a world element but a property of the
+  and 430, crossing 205, 295 and 385 px respectively. **Outlives C1**: with the corridor fixed the
+  measurement stops mattering, but "the gesture never changes with the world" still binds.
+- **The sky used to ride the spine**, and phase RL deleted the sky. **Outlives C1.** The rule it
+  came from is
+  still worth knowing, because it will come up again for anything the world contains: a *world*
+  element nailed to the screen while the world slides underneath it reads as two pictures. What replaced the sky — a vignette — is not a world element but a property of the
   lens looking at it, so it stays screen-fixed on purpose (`render/background.odin`).
 
 **Patterns author the track** (`Pattern.track`), on the same clock and in the same file as the
@@ -305,7 +317,7 @@ Three things follow, and all three are load-bearing:
 ### A cube is ground you can be above
 
 Since 5 September `game/world.odin` answers "what does a body at this x rest on" with the track
-*and* any cube it is already above (`get_support_y`). One comparison is the whole rule:
+*and* any cube column it is already above (`get_support_y`). One comparison is the whole rule:
 
 > **You rest on a surface your feet were already at or above.**
 
@@ -320,14 +332,17 @@ reproduces it.
 - **A settled body falls toward a support that dropped away**, at `PLAYER_FALL_SPEED`; rising
   ground is not eased, because a floor coming up under you has already arrived, and a journey is
   never eased because it owns its own path. Without it, riding a cube off its leading edge is a
-  54 px teleport in one frame — the game has no gravity to spread it over.
+  whole column's height of teleport in one frame — the game has no gravity to spread it over.
+- **Since the profile it is answered per column**, not per obstacle, so a body straddling a
+  staircase rests on the highest step under its width exactly as it rests on the highest ground.
+  A column of height zero offers nothing and the track underneath is the answer there.
 - What it replaced: a flip onto an occupied lane used to leave the character standing **inside**
-  the box, 100% of every cube form, for up to 2.5 seconds. Three correct rules met to produce it
-  — nothing on a lane may block a crossing character, so a cube scrolls over their x during the
+  the box, 100% of every cube, for up to 2.5 seconds. Three correct rules met to produce it —
+  nothing on a lane may block a crossing character, so a cube scrolls over their x during the
   0.16 s flip; the landing surface came from the track alone; and the pushback is capped at one
   step's scroll, which is exactly what the cube is doing, so the penetration never closed.
-  Measured after: 0 px of interpenetration on Small, Standard and Wide, and 18 px on the two
-  162 px-tall forms, which is side contact rather than enclosure.
+  Measured after: 0 px of interpenetration coming down onto a box, and side contact rather than
+  enclosure on the tall ones.
 
 ### The two dangers, two verbs
 
@@ -336,16 +351,12 @@ reproduces it.
 | **Cube** | *do not be here, or you pay* | no — it **blocks** | ✅ |
 | **Gap** | *do not be here* | yes | ✅ |
 
-There were three until September 2026. The Sentinel — a curtain of light fired across the
-corridor, whose facing pairs demanded a flip on the beat — was built, played, and then deleted
-along with the whole idea of a third verb, because two elements that combine are a game and three
-that each say their own thing are a list. What it proved before it went is still worth keeping:
-**measure an obstacle of that class before building it.** Two earlier shapes for it were
-arithmetically impossible and only arithmetic found that out — a ray sweeping the corridor (a flip
-crosses at ~2100 px/s against a ray's ~450, head-on, and two things closing from opposite ends
-always meet: zero surviving presses out of two hundred), and a slot between two facing beams (a
-body is inside a 160 px slot for 0.054 s but its own 45 px take 0.167 s to cross, so it is
-impossible for a beam of any width including zero).
+There were three until September 2026, when a Sentinel that fired a curtain across the corridor
+was deleted along with the whole idea of a third verb: two elements that combine are a game, three
+that each say their own thing are a list. One lesson outlives it — **measure an obstacle of that
+class before building it.** Two shapes for it were arithmetically impossible and only arithmetic
+found that out, because a flip crosses the corridor at ~2100 px/s and a 45 px body still takes
+0.167 s to clear any given x.
 
 **The cube's shape is data** (`CubeProfile`): a run of columns, each `CUBE_UNIT` wide, each a
 whole number of units tall, authored in the pattern. `{1,2,3}` is a staircase, `{3,0,3}` two
@@ -484,8 +495,12 @@ all established by reading pixels back:
 - **`STROKE_MAX_POINTS` is load-bearing, and it truncates in silence.** Since RL.2 a lane is one
   mark spanning the whole screen, so the longest polyline in the game is the world itself; a
   polyline over the cap would be a line that stops in mid air with nothing to say so. Raised to
-  256 against a measured worst case around fifty. The same class of silent failure as the winding
-  above: check a new kind of stroke by reading the pixels back, not by looking at it.
+  256 against a worst case measured at around fifty — but that was before the column profile, and
+  a column costs **two vertices**: an eight-column cube is 18 points instead of 4, and a screen
+  tiled with the widest legal ones comes to about 123. Still inside the cap, with much less room
+  than the number suggests, and C2 is about to fill the screen with skylines. **Re-measure it
+  there.** The same class of silent failure as the winding above: check a new kind of stroke by
+  reading the pixels back, not by looking at it.
 
 Since RL.3 it draws the character too, and one shape was worth building properly: the bulb is the
 outline of the **union** of two overlapping circles, not two circle outlines on top of each
@@ -942,15 +957,15 @@ raise it with the user before writing code.
 
 Tracked here so they are not rediscovered. Nothing here is scheduled — the user decides.
 
-- **A mirrored pair costs almost nothing in runway.** Measured: three flips, 0.33 s, 4 px given
-  up at the opening speed — a rhythm break rather than a price, because a mashing character is
-  mid-flip ten steps out of eleven and mid-flip nothing on a lane can reach them. Whether that
-  is enough is a tuning question for R5.3 and the knob is `PLAYER_RECOVERY_RATIO`, not a bug.
-- **Landing on a cube is now free, and R5 has to price that in.** Since 5 September a cube the
-  character came down onto is ground they stand on, so flipping into an occupied lane costs
-  nothing where it used to cost the cube's whole width in dragged ground. A cube still charges
-  when it arrives at the character's *side*, which is the case the design was written around, but
-  a mirrored pair is much cheaper than the v2.0 measurements assumed.
+- **A block costs almost nothing, and pricing it is unfinished work.** Three findings that are
+  really one. Landing on a cube is free: since 5 September a box the character came down onto is
+  ground they stand on, so flipping into an occupied lane costs nothing where it used to cost the
+  cube's whole width in dragged ground. A mirrored pair therefore collapses to a rhythm break —
+  measured in T2 at **one pinned step, 4.5 px**, identical at 27, 54 and 108 px wide. And a lone
+  cube costs 40.5 px to a player who answers in 0.15 s, also width-independent. What is charged
+  everywhere is **time spent pinned**. The knobs are `PLAYER_RECOVERY_RATIO` and whatever rule
+  eventually prices a landing; neither is a bug, and until one of them moves, do not quote a
+  width as a cost.
 - **A floating cube descending onto a body underneath it drags them backwards.** Found by replay
   in T4 and **not caused by it**: the cube's blocking face is *behind* a character who has run
   under it, so the pin clamps them to a position they have already passed and the one-step floor
@@ -960,10 +975,11 @@ Tracked here so they are not rediscovered. Nothing here is scheduled — the use
   214 pinned steps. The fix is a rule about what a descending surface does to a body below it,
   which the game has never needed before; the pool does not currently author a float that lands
   on the player, so nothing on screen hits it today.
-- **A body landing exactly as a tall cube arrives keeps up to 18 px of side contact**, 40% of its
-  width. It is the documented "move first, resolve second" cap doing its job: whatever overlap
-  the landing frame starts with is kept, because the pushback is limited to one step's scroll and
-  the face is moving at exactly that. It was invisible while a cube was a filled mass. Closing it
+- **A body landing exactly as a tall cube arrives keeps side contact it never sheds** — measured
+  at 18 px back when the unit was 54, so re-measure before quoting it. It is the documented
+  "move first, resolve second" cap doing its job: whatever overlap the landing frame starts with
+  is kept, because the pushback is limited to one step's scroll and the face is moving at exactly
+  that. It was invisible while a cube was a filled mass. Closing it
   needs the pushback to exceed the world's speed while penetrating, which would also make
   `velocity_x` drop below `-scroll_speed` and force `score.odin` to clamp.
 - **The pool is still a placeholder**, twenty patterns over two obstacle types, and it is the next
