@@ -100,6 +100,16 @@ PLAYER_RECOVERY_RATIO :: 0.66
 // so a player mashing the key would be permanently untouchable.
 INVULNERABILITY_DURATION :: 0.10
 
+// How fast a settled body drops when the thing it was standing on stops
+// being there, in pixels per second.
+//
+// The game has no gravity — every vertical movement it has is a scripted
+// journey — so walking off the leading edge of a cube needs a speed of
+// its own or it is a 54 px teleport in one frame. At this it takes about
+// four frames, which is short enough to read as falling off rather than
+// as a second kind of flip.
+PLAYER_FALL_SPEED :: 900
+
 Player :: struct {
 	position:              rl.Vector2,
 	size:                  rl.Vector2,
@@ -167,10 +177,22 @@ new_player :: proc() -> Player {
 // the world nudged forward by the leftover fraction of a step, so the
 // character rides the same interpolated ground the terrain is drawn on
 // instead of stepping down it at the tick rate.
-get_player_y :: proc(player: Player, world: World) -> f32 {
+// It takes the obstacle list because since 5 September the ground is not
+// only the track: a cube the body is already above is something it stands
+// *on* (world.odin, get_support_y). Both endpoints of a journey are
+// resolved that way too, so a flip onto an occupied lane aims at the top
+// of the box instead of at the floor underneath it.
+get_player_y :: proc(player: Player, world: World, obstacles: []Obstacle) -> f32 {
 	switch player.state {
 	case .Real, .Dream:
-		return get_lane_y(world, player.lane, player.position.x, player.size)
+		return get_stand_y(
+			world,
+			obstacles,
+			player.lane,
+			player.position.x,
+			player.size,
+			player.position.y,
+		)
 
 	case .Transitioning:
 		// player.lane is still the lane we left; target_lane is the one we
@@ -179,8 +201,22 @@ get_player_y :: proc(player: Player, world: World) -> f32 {
 		// after it lands on the ground that is actually there — and a
 		// corridor that narrows mid-flip simply shortens the path rather
 		// than moving the target out from under the arithmetic.
-		from := get_lane_y(world, player.lane, player.position.x, player.size)
-		to := get_lane_y(world, player.target_lane, player.position.x, player.size)
+		from := get_stand_y(
+			world,
+			obstacles,
+			player.lane,
+			player.position.x,
+			player.size,
+			player.position.y,
+		)
+		to := get_stand_y(
+			world,
+			obstacles,
+			player.target_lane,
+			player.position.x,
+			player.size,
+			player.position.y,
+		)
 		return from + (to - from) * flip_progress(player.transition_timer / FLIP_DURATION)
 	}
 	return player.position.y
@@ -261,7 +297,28 @@ update_player :: proc(
 	// One place decides where the body is, for every state: the walls
 	// moved under it this step even if the player did nothing, and the
 	// ground under them changes with x as well as with time.
-	player.position.y = get_player_y(player^, world)
+	// One place decides where the body is, for every state: the walls moved
+	// under it this step even if the player did nothing, the ground under
+	// them changes with x as well as with time, and since 5 September a
+	// cube they came down onto is part of that ground.
+	//
+	// A settled body **falls** toward a support that has dropped away
+	// rather than snapping to it: riding a cube off its leading edge is a
+	// 54 px drop, and the game has no gravity to spread it over. Rising
+	// ground is not eased — a floor coming up under you has already
+	// arrived — and neither is a journey, which owns its own path.
+	target := get_player_y(player^, world, obstacles)
+	if player.state == .Transitioning {
+		player.position.y = target
+	} else {
+		fall := PLAYER_FALL_SPEED * delta_time
+		toward_ground := player.lane == .Real ? target > player.position.y : target < player.position.y
+		if toward_ground {
+			player.position.y += clamp(target - player.position.y, -fall, fall)
+		} else {
+			player.position.y = target
+		}
+	}
 }
 
 // Runs the character back toward where they belong, then pushes them out

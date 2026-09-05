@@ -73,7 +73,7 @@ draw_gameplay :: proc(
 	// with the world because it *is* the world, a moment later.
 	fx.draw_particles(particles)
 
-	render.draw_player(player, world, palettes)
+	render.draw_player(player, world, obstacles, palettes)
 
 	// Last, over everything: the front is in front of the world it is
 	// eating. This is the edge; the fraying is the dust above.

@@ -303,6 +303,33 @@ Three things follow, and all three are load-bearing:
   cancel exactly and depth stops; recovering, the character outruns the world and repays the
   loss in score as well as in room. Blocking costs depth with no line of code that says so.
 
+### A cube is ground you can be above
+
+Since 5 September `game/world.odin` answers "what does a body at this x rest on" with the track
+*and* any cube it is already above (`get_support_y`). One comparison is the whole rule:
+
+> **You rest on a surface your feet were already at or above.**
+
+Coming down onto a cube they are, so a flip onto an occupied lane lands on top of the box.
+Walking into one side-on they are not, so it stays a wall and blocks. It needs no physics and no
+new state: the body's last position is already state and already deterministic, so a replay
+reproduces it.
+
+- **The contact edge belongs to the lane being asked about**, not to the lane the character is
+  on. Mid-flip the two endpoints are resolved separately, and testing the ceiling with the
+  floor's foot makes a journey start by teleporting.
+- **A settled body falls toward a support that dropped away**, at `PLAYER_FALL_SPEED`; rising
+  ground is not eased, because a floor coming up under you has already arrived, and a journey is
+  never eased because it owns its own path. Without it, riding a cube off its leading edge is a
+  54 px teleport in one frame — the game has no gravity to spread it over.
+- What it replaced: a flip onto an occupied lane used to leave the character standing **inside**
+  the box, 100% of every cube form, for up to 2.5 seconds. Three correct rules met to produce it
+  — nothing on a lane may block a crossing character, so a cube scrolls over their x during the
+  0.16 s flip; the landing surface came from the track alone; and the pushback is capped at one
+  step's scroll, which is exactly what the cube is doing, so the penetration never closed.
+  Measured after: 0 px of interpenetration on Small, Standard and Wide, and 18 px on the two
+  162 px-tall forms, which is side contact rather than enclosure.
+
 ### The three dangers, three verbs
 
 | | says | kills? | built? |
@@ -870,31 +897,17 @@ Tracked here so they are not rediscovered. Each is scheduled in `ROADMAP.md`.
   up at the opening speed — a rhythm break rather than a price, because a mashing character is
   mid-flip ten steps out of eleven and mid-flip nothing on a lane can reach them. Whether that
   is enough is a tuning question for R5.3 and the knob is `PLAYER_RECOVERY_RATIO`, not a bug.
-- **A flip onto an occupied lane leaves the character standing inside the cube, and it is not
-  cosmetic.** Measured on 5 September, replaying the real step order: **100% of every cube form**,
-  for **up to 2.5 seconds** — until the obstacle is culled. Once inside, the character is dragged
-  at exactly the scroll speed, which is also what the cube is doing, so they hold station relative
-  to it and never come out; the only escape is to flip away.
-
-  The cause is not a collision bug, it is three correct rules meeting. Mid-flip nothing on a lane
-  may block the character (that is what makes a tap the escape from a pin), so a cube **scrolls
-  over their x while they are crossing** — 43 px of world travel in a 0.16 s flip. They then land
-  on a surface computed from the track alone, which knows nothing about obstacles. And the
-  pushback is capped at one step's scroll so a landing cannot be yanked backwards — which means
-  the character loses ground at exactly the rate the cube does, and the penetration never closes.
-
-  Two fixes were tried against the harness and neither is the answer. Letting the rectangle test
-  run mid-flip (removing the `.Transitioning` early-out) changes almost nothing: a 54 px cube only
-  occupies the bottom sixth of the corridor, so by the time the descending body is low enough to
-  touch it, it is already horizontally inside. Pushing back faster than the world would restore
-  contact but spends exactly what the flip won, which is the teleport `advance_ground` documents
-  and rejects, and it makes a mirrored pair unescapable.
-
-  **What is left is a design decision, not a repair**, and it is open: either the character stands
-  *on top* of a cube they came down onto (which needs `get_lane_y` to know about obstacles, and
-  makes landing on one free unless something else charges for it), or the press is refused into an
-  occupied lane (which breaks "nothing forbids the press"), or the cost stays as it is and only
-  the picture changes. It was invisible while a cube was a filled mass and RL.2 made it plain.
+- **Landing on a cube is now free, and R5 has to price that in.** Since 5 September a cube the
+  character came down onto is ground they stand on, so flipping into an occupied lane costs
+  nothing where it used to cost the cube's whole width in dragged ground. A cube still charges
+  when it arrives at the character's *side*, which is the case the design was written around, but
+  a mirrored pair is much cheaper than the roadmap's measurements assumed.
+- **A body landing exactly as a tall cube arrives keeps up to 18 px of side contact**, 40% of its
+  width. It is the documented "move first, resolve second" cap doing its job: whatever overlap
+  the landing frame starts with is kept, because the pushback is limited to one step's scroll and
+  the face is moving at exactly that. It was invisible while a cube was a filled mass. Closing it
+  needs the pushback to exceed the world's speed while penetrating, which would also make
+  `velocity_x` drop below `-scroll_speed` and force `score.odin` to clamp.
 - **The pool is still a placeholder**, now nineteen patterns over three obstacle types. The real
   pool is R5.2. The last measurement of the number that condemned v1.3 — how much of the time at
   least one lane is lethal — was 19.9%, against a Definition of Done that asks for over 40%, and

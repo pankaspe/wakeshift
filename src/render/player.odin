@@ -693,7 +693,16 @@ draw_player_marks :: proc(
 	draw_stroke(screen[:], player_stroke(palette, flare, gain))
 }
 
-draw_player :: proc(player: game.Player, world: game.World, palettes: core.PaletteSet) {
+// obstacles goes in because the ground is not only the track any more: a
+// cube the character came down onto is something they stand on
+// (game/world.odin), and the drawn body has to be placed on the same
+// ground the simulation put it on.
+draw_player :: proc(
+	player: game.Player,
+	world: game.World,
+	obstacles: []game.Obstacle,
+	palettes: core.PaletteSet,
+) {
 	// The terrain is drawn against the world nudged forward by the
 	// leftover fraction of a simulation step (main/interpolated_world),
 	// so the body is placed on that same ground rather than on the ground
@@ -702,7 +711,7 @@ draw_player :: proc(player: game.Player, world: game.World, palettes: core.Palet
 	// which is most visible exactly where the frame rate is highest.
 	// A local copy: render never mutates game state.
 	player := player
-	player.position.y = game.get_player_y(player, world)
+	player.position.y = game.get_player_y(player, world, obstacles)
 
 	pose := new_player_pose(player)
 

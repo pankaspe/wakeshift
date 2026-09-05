@@ -108,3 +108,91 @@ update_world :: proc(world: ^World, delta_time: f32, target_scroll_speed: f32) {
 	// is the one procedure that advances it.
 	core.track_prune(&world.track, world.elapsed_time - core.TRACK_HISTORY)
 }
+
+// --- Standing on things ---
+
+// The surface a body of the given size rests on at this x, obstacles
+// included: the track, or the top of a cube it is already above.
+//
+// WHY "ALREADY ABOVE" IS THE WHOLE RULE
+//
+// A cube cannot simply be ground, or it would stop being a price: the
+// moment its leading edge slid under any part of the body the support
+// would jump 54 px and the character would ride over every obstacle in
+// the game. It cannot simply not be ground either, which is what it was
+// until 5 September — a flip onto an occupied lane then left the
+// character standing *inside* the box, 100% of every form, for up to two
+// and a half seconds, because mid-flip nothing on a lane may block them
+// so the cube scrolls over their x while they cross.
+//
+// The discriminator is the one a platformer uses and it needs no physics:
+// **you rest on a surface your feet were already at or above.** Coming
+// down onto a cube, they are; walking into one side-on, they are not, and
+// it stays a wall that blocks (collision.odin). The body's last position
+// is already state and already deterministic, so nothing has to be
+// remembered that a replay could not reproduce.
+//
+// Hanging from the ceiling is the same sentence mirrored: cubes hang
+// down, the contact edge is the top of the box, and "above" is "below".
+// Which edge it is belongs to **the lane being asked about**, not to the
+// lane the character is on — mid-flip the two endpoints are resolved
+// separately and each one has to use its own side, or the ceiling is
+// tested with the floor's foot and a journey starts by teleporting.
+get_support_y :: proc(
+	world: World,
+	obstacles: []Obstacle,
+	lane: core.Lane,
+	x, width: f32,
+	body_y, body_height: f32,
+) -> f32 {
+	support := core.track_support_y(world.track, get_ground(world), lane, x, width)
+
+	// How much of a step's worth of slack the test gets. Without it a body
+	// resting exactly on a cube fails its own test on the next frame, the
+	// support drops away and it flickers.
+	tolerance := world.scroll_speed * core.FIXED_TIMESTEP + 1
+
+	for obstacle in obstacles {
+		if !blocks_lane(obstacle.obstacle_type) || obstacle.lane != lane {
+			continue
+		}
+		rect := get_obstacle_rect(obstacle, world)
+		if rect.x >= x + width || rect.x + rect.width <= x {
+			continue
+		}
+
+		switch lane {
+		case .Real:
+			top := rect.y
+			if body_y + body_height <= top + tolerance {
+				support = min(support, top)
+			}
+		case .Dream:
+			bottom := rect.y + rect.height
+			if body_y >= bottom - tolerance {
+				support = max(support, bottom)
+			}
+		}
+	}
+	return support
+}
+
+// Where a body of the given size rests against one lane at x, standing on
+// whatever is actually there. The obstacle-aware get_lane_y.
+get_stand_y :: proc(
+	world: World,
+	obstacles: []Obstacle,
+	lane: core.Lane,
+	x: f32,
+	size: rl.Vector2,
+	body_y: f32,
+) -> f32 {
+	surface := get_support_y(world, obstacles, lane, x, size.x, body_y, size.y)
+	switch lane {
+	case .Real:
+		return surface - size.y
+	case .Dream:
+		return surface
+	}
+	return surface
+}
