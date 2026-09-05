@@ -6,8 +6,10 @@ Operational rules for developing this project.
   statement of the design and is still binding on *what* to build.
 - **What it looks like** → **`docs/inspiration/La_Linea.png`**. The art direction changed
   wholesale on 4 September 2026: out goes the Ori-like silhouette-and-light of
-  `docs/archive/sketch/sketch_3`, in comes **La Linea** — a filled background, one continuous stroke
-  that *is* the world, a character who rises out of that stroke and returns to it. It is binding.
+  `docs/archive/sketch/sketch_3`, in comes **La Linea** — a filled background and one continuous
+  stroke that *is* the world. It is binding. One clause of it is not: the character no longer
+  rises out of that stroke and returns to it, because on 6 September a playtest replaced the
+  figure with a filled block. See "The character is a filled block".
 - **How the world is built** → **`docs/inspiration/sketch.jpeg`**, the author's own, and binding
   the same way. Flat floor and flat ceiling with all the relief made of **bricks**: staircases,
   isolated towers, plateaus, canyons, facing constrictions, and one detached block that moves.
@@ -81,11 +83,13 @@ finish what was asked and think something else is needed, say what and why — d
 **Where the project stands.** **Two** dangers are on screen and both read: the cube blocks and can
 be landed on, the hole stops the line and takes you into it. The world is drawn as La Linea —
 nothing filled but the field, obstacles welded into the floor's own polyline, a pen writing the
-world on the right and the Corruption fraying it on the left. The character is a hooded figure and
-is **provisional**: the final one is a lemur.
+world on the right and the Corruption fraying it on the left. The character is a **filled block**
+in its lane's colour — the third and simplest of three designs, after a stick figure and a robed
+one. The earlier note that the final character would be a lemur is superseded by that.
 
 What the obstacle set became in September 2026, in code terms rather than as history — the
-timeline has the story. `CUBE_UNIT` is **27**, deliberately narrower than the 45 px body, so a
+timeline has the story. `CUBE_UNIT` is **27**, deliberately narrower than the body (45 px then,
+38 now), so a
 single brick is a bump and a *shape* is what threatens. A cube's shape is a run of column heights,
 and one function (`get_cube_column`) is what the block, the support and the drawing all read.
 Since C2 the pattern does not write those heights: it declares a **`Skyline`** — a form and the
@@ -259,7 +263,7 @@ What survived, and why each one had to:
   place the conversion lives. Verified as exact inverses to 1e-6 over 400 samples.
 - **A body rests on the highest ground under its whole width.** The track half of it is trivial
   now, but the rule moved wholesale to the columns: a body straddling a staircase rests on the
-  higher step (`get_support_y`). It is 45 px and a column is 27, so it always straddles two.
+  higher step (`get_support_y`). It is 38 px and a column is 27, so it always straddles two.
 - **A `World` is a plain value**, and it stayed one when the `Track` field left it — so
   `interpolated_world` still copies the world forward by a fraction of a step. The habit is the
   point: anything the presentation copies forward wants to be a value.
@@ -357,7 +361,7 @@ There were three until September 2026, when a Sentinel that fired a curtain acro
 was deleted along with the whole idea of a third verb: two elements that combine are a game, three
 that each say their own thing are a list. One lesson outlives it — **measure an obstacle of that
 class before building it.** Two shapes for it were arithmetically impossible and only arithmetic
-found that out, because a flip crosses the corridor at ~2100 px/s and a 45 px body still takes
+found that out, because a flip crosses the corridor at ~2100 px/s and the body still takes
 0.167 s to clear any given x.
 
 **The cube's shape is data**: a run of columns, each `CUBE_UNIT` wide, each a whole number of
@@ -409,7 +413,7 @@ Rules the implementation established, all found by replaying the simulation:
   game is finally allowed to threaten **both lanes at once** — a mirrored cube pair is legal,
   and it is the first thing in the project's history that turns "where do I go" into "which
   price do I pay". The v1.x design could never do it: two lethal lanes is an unsolvable pattern.
-- **A body is never on one column.** It is 45 px and a column is 27, so it always straddles two
+- **A body is never on one column.** It is 38 px and a column is 27, so it always straddles two
   and rests on the higher — the same "highest ground under its whole width" rule the track obeys.
   Landing on a staircase therefore puts the character on the *upper* of the two steps they cover,
   not the one their leading edge touched. Know this before authoring a skyline.
@@ -575,82 +579,112 @@ all established by reading pixels back:
   or the density moves. The same class of silent failure as the winding above: check a new kind of
   stroke by reading the pixels back, not by looking at it.
 
-Since RL.3 it draws the character too, and one shape was worth building properly: the bulb is the
-outline of the **union** of two overlapping circles, not two circle outlines on top of each
-other, because the arcs would cross inside a head that is five pixels wide. Which half of each
-circle to keep is decided by **probing the midpoint**, not by deriving it — the derivation turns
-on which intersection point the radical construction produced first, and both answers are a
-closed loop, so getting it backwards is silent.
+Since RL.3 it draws the character too, which since 6 September is four points and a closed flag
+(`render/player.odin`). One lesson outlives the shapes it was learned on, because it will come up
+again for any small compound outline: the stick figure's head was the outline of the **union** of
+two overlapping circles rather than two circle outlines on top of each other, since the arcs
+would cross inside a head five pixels wide — and which half of each circle to keep had to be
+decided by **probing the midpoint**, never by deriving it, because the derivation turns on which
+intersection the radical construction produced first and both answers are a closed loop, so
+getting it backwards is silent.
 
 It is written to know nothing about the game. That matters because of an open question: `ui` may
 not import `render`, so the menus cannot reach the stroke as things stand. Either `ui` gains
 that import (the graph stays acyclic) or `stroke.odin` and `glow.odin` move into a package of
 primitives below both. Keep this file free of `game` imports so that stays a file move.
 
-### The character is one closed contour
+### The character is a filled block
 
-A small robed figure under a pointed hood (`render/player.odin`), authored as fractions of the
-player's box, and the bottom of that box is the ground.
+A 38 px square, filled, in the colour of the lane it is standing on, with **no outline at all**
+(`render/player.odin`). It was a robed figure under a pointed hood until 6 September, and a stick
+figure with four limbs before that.
 
-It was a stick figure with a bulb head, four limbs and a sprout until 5 September, and a
-playtest screenshot ended that: **nine marks in forty-five pixels have nowhere to be**, and on
-screen it read as a knot rather than as somebody. The robe deletes the problem instead of tuning
-it — with the limbs inside the cloth there is one contour, and a contour is a silhouette, which
-is the thing that reads at this size.
+All three redesigns are the same argument taken one step further, and it is the one worth
+keeping: **a 45 px shape drawn with a 4 px pen cannot hold detail.** Nine marks in forty-five
+pixels read as a knot; one contour read as somebody but still spent its whole budget on being a
+somebody. The block spends none, and the interest moves entirely into how it moves — which is
+where the design has always said the sense of quality comes from.
 
-- **A 45 px figure drawn with a 4.3 px pen cannot hold internal detail.** A notch narrower than
-  the pen is a notch the pen fills in, so nothing tries to draw a neck. What separates the head
-  from the body is the outline changing direction three times, and the whole read is **a cone on
-  a bell** — which lives entirely in the hat being clearly narrower than the hem. Make them equal
-  and you get an hourglass; the first version of this figure was one.
-- **It curves, because the danger corners.** Every segment is a bowed curve: never a straight run
-  and never a right angle. A figure built out of straight edges would be wearing the one shape
-  the whole picture reserves for "this costs you". Measured: the sharpest interior angle is 33°,
-  the hood's own point, and nothing is near 90.
-- **It is open at the feet, and that is the whole idea.** The two ends of the stroke land on the
-  lane's surface at the lane's own weight, so the floor's line closes the figure and the
-  character reads as the ground standing up rather than as a shape standing on it — the sentence
-  section 10 opens with. Two consequences: the feet take **none** of the body's bob (the body
-  bobs inside the cloth, or the join breathes), and what steps is one end at a time, never both,
-  by construction — so there is always an end on the floor.
-- **The contour is one spline, not a chain of arcs**, and the tension is not the textbook one.
-  Independent arcs meet with a discontinuous tangent and at this size every one reads as a nick
-  in the cloth. A Cardinal spline through every anchor is C1 everywhere — but at Catmull-Rom's
-  0.5 it **overshoots past an anchor that sticks out**, and every anchor here that matters sticks
-  out, so the hood's point and the brim came out as horns: wrong for cloth, and pointed, which is
-  what the picture reserves for danger. `PLAYER_SPLINE_TENSION` is 0.30. Measured across 192
-  poses, the sharpest turn between two drawn segments is 109° and it is the hood's own point.
-- **The inertia machinery survived the redesign untouched**, because the value was there and not
-  in the silhouette: the 0.07 s lag, the trail against the turn and against the rise, the clamp.
-  It moves the hood now instead of the sprout, and not a line of it changed.
-- **With no legs, the hem takes the step.** One corner lifts at a time and the cloth's lowest
-  point slides with it; in the Dream the same two numbers undulate slowly instead. Pillar 6 still
-  holds — the *type* of motion says which world is live with the colour removed.
-- **Only the feet touch anything.** Hanging from the ceiling is half a turn plus a mirror, which
-  is a vertical flip, so the feet are at the *top* of the box there and whatever grows out of the
-  crown points into open air in both worlds. That is why the sprout may overhang the box and the
-  feet may not.
+Two decisions carry the read, and both are about telling it apart from everything else:
 
-The poses are **layers over one figure**, not separate animations: each is a 0..1 weight the
-pose so far is lerped toward, in a fixed order. That is what keeps one figure builder and one
-place a limb angle comes from. The whip of a flip rides `sin(whip * PI)` — zero at *both* ends of
-the turn by construction, so it grows out of the run cycle and settles back into it with no seam.
+- **It is filled, and it is the second filled thing in the game.** The field is the other. The
+  obstacles are *also* squares and they are hollow, welded into the lane's own line — so fill is
+  the whole of "this one is you", which is a stronger discriminator than any silhouette at this
+  size. This is the deliberate exception to the golden rule below, not an oversight in it.
+- **It takes its lane's colour**, and it is the only mark in the game that changes colour between
+  the worlds. That reverses a rule the robe kept on purpose: a mark that changes colour is the
+  mild version of the mistake inverting body and rim was. A filled block is a different case —
+  the fill *is* its identity, so a block wearing the colour of the line it stands on belongs to
+  that world instead of visiting it. Mid-flip the colour travels with the body on the journey's
+  own clock, not on `world_t`, so it arrives already belonging to where it lands.
+- **There is no outline, and the colour match is arithmetic rather than intention.** The first
+  version had a neon edge and a playtest took it off: an outline makes the block a lit object
+  standing in front of the lane instead of a piece of it. Matching the lane then turned out to
+  need the *core lift* as well as the hue — a neon line is not its own colour at the centre, and
+  the terrain lifts its core by `TERRAIN_CORE_LIGHT`, so a block drawn from the raw `light` sat
+  22 values of 255 under the line it was standing on. Using the terrain's own recipe closes it:
+  measured in a real frame, the block and the lane agree to **4 channel values of 255 in the Real
+  world and 7 in the Dream**, and 14 px outside the block the frame reads the field exactly.
+- **The drawn square is the collision box, to the pixel.** Measured: 38 px lit against a 38 px
+  box, where the outlined version measured 47. That is why the size change went into
+  `PLAYER_SIZE` and not into a render-side factor — a body drawn smaller than the box that blocks
+  it shows a cube stopping the character before touching them, which is the "mark and hitbox
+  disagree" failure this project has already paid for twice.
+- **It went from 45 px to 38 px by playtest**, and four things derived from `PLAYER_SIZE` were
+  re-checked rather than assumed: `MIRROR_MIN_WIDTH` (the facing pair's legal band becomes
+  [38, 54] and `SHAPE_FACING` is 54), `CUBE_MAX_HEIGHT` (28 px of daylight now instead of 21),
+  the fairness windows (shorter, so a legal pool stays legal — the validator agrees), and "a body
+  is never on one column" (38 is still well over `CUBE_UNIT`'s 27). The cost is measurable: every
+  threat window is `(width + body) / speed`, so the density curve fell about three points per
+  band, peaking at 66.5% instead of 71.1%.
 
-The sprout's inertia is **measured, not integrated**: everything that moves the head is a pure
-function of the world's clock, so "where was it a moment ago" is one more evaluation of the same
-functions rather than state kept in the renderer — state that would have to survive the frame
-and be reproduced by a replay to mean anything.
+- **The glow is the frame's, not a primitive halo.** With the outline gone the block does not go
+  through `render/stroke.odin` at all, so it takes no `glow_gain` and throws no halo of its own —
+  it glows because a 38 px surface at 0.85 luma is far over every bloom threshold there is
+  (`fx/bloom.odin`). That is the resolution CLAUDE.md already preferred: where a halo looks
+  doubled, remove the primitive one rather than lowering the bloom. The flip's glow swell went
+  with it.
+- **There is no rotation, and that is not an omission.** The flip used to be a half turn with
+  Penner's easeOutBack overshoot — the most tuned number in the project. A square's half turn is
+  invisible, so all that would survive is the overshoot, which reads as a small unrequested
+  tumble on the one gesture the whole game is made of. `whip_ease` went with it. The only
+  rotation left is the death fall's, where a tumbling block is the point.
+- **The squash and stretch survived untouched**, because the value was in the machinery and not
+  in the silhouette: the stretch rides `sin(whip * PI)`, so it is nothing at both ends of the
+  turn and everything in the middle, and the landing bounce is a decaying oscillation on
+  `settle_timer`. Both scale about the surface being touched rather than about the centre —
+  verified at 0.0000 px of drift across the whole bounce in both lanes, because a landing that
+  scales about its centre looks like it happened above the ground.
+- **`SETTLE_SQUASH_AMOUNT` came down from 0.28 to 0.20 when the robe became a block.** Cloth can
+  deform by a third and still read as cloth; measured on the square, 0.28 drew a 45 px box as
+  51 x 32 on landing, which is jelly rather than a landing. A block reads its own edges much more
+  sharply, so the same motion needs less of it.
+- **Pillar 6 still holds, and it had to be re-said for a block.** The two worlds are never told
+  apart by colour alone: in the Real world the block compresses on a beat and stays planted, in
+  the Dream it lifts off the ceiling and settles back on a long slow period, crossfaded on
+  `world_t`. A beat that lifts the block off the *floor* is wrong — on the floor the contact is
+  what reads, so the Real world's motion has to be a squash and the Dream's a lift.
+- **`PLAYER_STRIDE_LENGTH` is 120 because the robe's 58 was measured and was wrong here.** That
+  was a two-step walk cycle, 29 px a step, 0.107 s at the opening speed — nine footfalls a
+  second. Under a robe that is a small character walking quickly; on a block it is a 9 Hz
+  vibration. One beat per 120 px is 2.3 a second, which is a pulse you can count.
+- **A run opens with the landing bounce already playing**, because `settle_timer` starts at zero.
+  It is a consequence of the zero value rather than a line of code, and it is kept deliberately:
+  the alternative is a block that is simply there on frame one.
+- **The fill and the edge are the same square by construction.** The fill goes through raylib's
+  `DrawRectanglePro` rather than through two triangles of our own, because a triangle's winding
+  is not free — raylib culls back faces, and getting it backwards is a shape that silently does
+  not appear. `DrawRectanglePro` builds its corners with exactly the arithmetic `pose_corners`
+  does, so the degrees are the only conversion. Verified by reading the frame back: the block's
+  interior is lit at 0.84 against a field at 0.30, in both lanes.
 
-One trap when writing that arithmetic: the trail against a *turn* has to have the mirror undone
-(`* mirror`), because a turn is measured on screen while the lean is authored in the figure's own
-frame. The trail against the head's *rise* must not be, because backward is a direction in the
-figure's frame.
-
-A lesson from the flip's first version, worth keeping because it will come up again in the game
-feel pass: it shipped with a curve that lingered mid-journey, on the theory that a flip which
-visibly slows teaches the player something. Playtest killed it — a flourish placed *on the
-player's own motion* is not decoration, it is friction. Teach with the background, the light,
-the particles; never by making the character do something it did not ask to do.
+What the redesign deleted, and what it cost: the profile anchors, the Cardinal spline and its
+0.30 tension, the hat's 0.07 s inertia, the eye, the mirror, the rotation, the run cycle's hem
+step and the Dream's undulation. Roughly five hundred lines. The two lessons worth carrying out
+of it are the pen-versus-detail one at the top, and this: **the inertia was measured, not
+integrated** — everything that moved the head was a pure function of the world's clock, so "where
+was it a moment ago" was one more evaluation rather than state kept in the renderer. Any future
+follow-through wants building that way.
 
 ### Presentation
 
@@ -851,7 +885,16 @@ is global and the other is a boundary.
 The art direction leant on the same split, and one half of that has since been replaced.
 *Scenery is line, danger is mass* belonged to `sketch_3` and died with it — under La Linea
 everything is line, so a rule about fill cannot separate anything. Its replacement is geometric:
-**the world curves, the danger corners** (see the top of this file). What survives untouched is
+**the world curves, the danger corners** (see the top of this file).
+
+**That rule has one exception now, and it is the player.** The character became a filled square on
+6 September, so there is a right angle on screen that does not mean "this costs you". It reads
+anyway, and the reason is worth knowing before anything else is tempted to break it: the rule is
+about the *strokes*, and the player is the one thing that is not a stroke. Fill separates it from
+every other square in the corridor, which is the whole reason the block is filled at all — so the
+half of the old split that died has come back for exactly one object. Nothing else may use it.
+
+What survives untouched is
 the Corruption's own reading, and it gets better rather than worse: a front that eats the line
 away is the same mark the mechanic is, and RL.6 turns it from a filter on the frame into the
 line fraying into particles.
@@ -866,13 +909,13 @@ three curves turned out to be the library's to within 1e-7 and to have no caller
 - **The `flux` tween may not.** It allocates a map and a dynamic array and it runs on a wall
   clock, so it is presentation only — inside a simulation step it would break replay and score
   validation.
-- **The exception is the flip's whip**, and it is not a tidy-up waiting to happen. Our curve is
-  Penner's easeOutBack; the library's `back_out` is AHEasing's, and they are different functions:
-  measured over the flip's half turn, ours overshoots by 18 degrees peaking at t=0.57 and
-  `back_out` by 68 peaking at t=0.47 — an overshoot in the middle of the journey rather than an
-  impulse at the end of it, which is exactly the version a playtest already threw out. It lives
-  in `render/player.odin` as `whip_ease` because it is not a generic curve, it is the shape of
-  this game's central gesture. Swapping it is a game feel decision, not a cleanup.
+- **There is no exception any more.** There was one — `whip_ease`, Penner's easeOutBack, the
+  curve the flip's half turn overshot on. It was kept out of the library deliberately, because
+  `back_out` is AHEasing's and a different function: measured over the flip's half turn, ours
+  overshot by 18 degrees peaking at t=0.57 and `back_out` by 68 peaking at t=0.47, an overshoot
+  in the middle of the journey rather than an impulse at the end of it. It went with the
+  rotation when the character became a block. The measurement is recorded here because the
+  two names still look interchangeable and are not.
 
 ### Save data and determinism
 
@@ -921,23 +964,25 @@ three curves turned out to be the library's to within 1e-7 and to have no caller
   just probably neutral.
 - **No hardcoded colours outside `core/palette.odin`.** Every colour is sampled from the palette
   system. A colour literal anywhere else is a bug, including in `ui/`.
-- **Nothing is filled but the background.** Since RL.3 the field is the only filled surface in
-  the game and `palette.silhouette` has no consumer left at all (kept for now — deleting a
-  palette field is easier than resurrecting one). What tells the worlds apart is the colour
-  *behind* the line, never the line: the character is drawn out of the **neutral** palette on
-  purpose, because a mark that changes colour between the worlds is the mild version of the
-  mistake that inverting body and rim was.
+- **Two things are filled: the field, and the character.** Everything else is line. The field
+  has been the only one since RL.3; the character joined it on 6 September and is the deliberate
+  exception, because the obstacles are squares too and fill is what says which square is you
+  (see "The character is a filled block"). `palette.silhouette` still has no consumer — the
+  block takes its lane's `light`, not the silhouette colour — and is kept because deleting a
+  palette field is harder than resurrecting one.
+  The rule that survives for everything else: what tells the worlds apart is the colour *behind*
+  the line, never the line. The character is the one mark allowed to break it, and only because
+  a filled block's colour is its identity rather than its decoration.
 - **The weight hierarchy is a rule, and it lives in the arithmetic.** `TERRAIN_STROKE_THICKNESS`
   is the rung everything else is expressed against: `render/player.odin`'s weight is a multiple
   of it and `TERRAIN_DORMANT_WEIGHT` a fraction, so tuning the world cannot silently invert the
   order. Do the same for anything new that joins the ladder. Live lane 2.80 px, dormant 1.96,
   parallax 1.18 / 0.95 / 0.78 at alphas 0.30 / 0.22 / 0.15.
-- **The character is the exception, by playtest, and the design doc has not caught up.** Section
-  10 asks for it to be the thickest stroke on screen; it is drawn at the *live lane's* weight
-  instead, because on a 45 px figure a heavier pen was not reading as "important", it was filling
-  the shape in — a notch narrower than the pen is a notch the pen swallows. The hierarchy moved
-  to the other channel: the whitest core on screen (0.62 against the terrain's 0.30) and full
-  opacity against the lane's 0.85. Measured in a real frame, character 255 against lane 238. If
+- **The character is not on the ladder at all, and the design doc has not caught up.** Section 10
+  asks for it to be the thickest stroke on screen. It is not a stroke: since 6 September it is a
+  filled block with no outline, so it has no weight to place in the hierarchy. What makes it
+  stand out is *fill* — it is the only filled thing in the corridor, everything else is line —
+  and brightness: measured in a real frame, block interior 0.85 against a field at 0.30. If
   it stops standing out, raise those before raising the weight.
 - **The parallax may never enter the corridor**, and since C1 that is arithmetic rather than a
   clamp: the corridor is fixed, so `core.TRACK_SKY` is exactly 165 px above the ceiling and below

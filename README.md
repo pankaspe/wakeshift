@@ -19,16 +19,19 @@ The twist is what happens when you get it wrong: **a mistake costs ground, not t
 
 ## What is in it
 
-**The corridor.** Two lanes that curve together and whose width opens and pinches. It is not
-scenery: the floor and the ceiling are two keyframed numbers, so they can never contradict each
-other, and a pattern authors the shape of the world along with the things standing on it.
+**The corridor.** A straight floor and a straight ceiling, a fixed distance apart, and all the
+relief between them made of **bricks**: towers, plateaus, staircases, canyons, ridges, and two
+facing towers wherever the world closes in. The corridor used to undulate and pinch on its own —
+one vocabulary for the ground and another for the things standing on it. There is one now.
 
 **The cube** — *do not be here, or you pay.* It does not kill; it **blocks**. You are stopped
 against its face and you lose ground for as long as you stay. Its shape is **data, not code**: a
-pattern writes a skyline of columns — `{1,2,3}` is a staircase, `{3,0,3}` two towers with a canyon
-between them — and the same numbers are what blocks you, what holds you up, and what gets drawn, so
-a step you can see is a step you can stand on. Welded into the floor's own line, read by its right
-angles. Because it is not lethal, it is the only danger allowed on both lanes at once, and a
+run of columns — `{1,2,3}` is a staircase, `{3,0,0,3}` two towers with a canyon between them — and
+the same numbers are what blocks you, what holds you up, and what gets drawn, so a step you can
+see is a step you can stand on. **A pattern does not write those numbers.** It declares a *form*
+and the bounds around it, and the run's own generator draws the columns inside them, so one
+authored moment is a different ridge on every seed. Welded into the floor's own line, read by its
+right angles. Because it is not lethal, it is the only danger allowed on both lanes at once, and a
 mirrored pair is a choice about which price to pay. Land on top of one and you ride it.
 
 **The hole** — *do not be here.* The line simply stops: the only discontinuity in the game. The
@@ -43,6 +46,13 @@ frays into dust as it arrives.
 **The pen.** Near the right edge, the world is being *written*: one x beyond which nothing is
 drawn, so obstacles do not appear, the line reaches them. Two mirrored fronts, one making and one
 unmaking.
+
+**The curve.** Difficulty is one continuous function of **distance travelled** — not a clock, and
+not a set of tiers. Two knobs move on deliberately different curves: the air between patterns is
+spent early, and the draw's lean toward the patterns that ask more bites late. On top of both,
+every pattern declares the distance it becomes available at, so a long run keeps meeting shapes it
+has not met before. Scroll speed is not part of it: it never worked as a difficulty knob and the
+code says so now.
 
 ---
 
@@ -63,15 +73,25 @@ Cavandoli](https://en.wikipedia.org/wiki/La_Linea_(TV_series)) — a man who wal
 continuous line that *is* his world, drawn ahead of him and rubbed out behind. That is not a
 reference bolted on: it is this game's premise, told by somebody else fifty years earlier.
 
-So there is one filled surface on the screen — the field — and everything else is a stroke. The
-field's colour *is* which world you are in, and it lags behind you by half a second so a burst of
-flips washes instead of strobing. The character rises out of the floor's own line and returns to
-it. And one rule keeps it readable now that everything is line:
+So almost everything on screen is a stroke, and exactly two things are filled: the field, and you.
+The field's colour *is* which world you are in, and it lags behind you by half a second so a burst
+of flips washes instead of strobing.
+
+**You are a small filled square in the colour of the lane you are standing on** — teal below,
+violet above — with no outline at all, so it reads as a piece of the lane rather than as something
+standing in front of it. It was a robed figure under a pointed hood, and a stick figure before
+that; both went the same way, because a shape this size drawn with a 4 px pen cannot hold detail
+and every feature that does not read is noise. All the character is in the movement now: it
+stretches as it launches and lands with a bounce, it pulses on a beat below and floats slowly
+above.
+
+One rule keeps the rest readable now that everything else is line:
 
 > **The world curves, the danger corners.**
 
-The corridor bends, the hood and the robe bend, the horizons bend. A right angle means *this costs
-you*, and nothing else on screen has one.
+The corridor's relief has right angles and means it; the horizons bend. Among the strokes, a right
+angle means *this costs you*. The player is a square too — and that is exactly why the player is
+the one filled thing in the corridor, because fill is what says which square is you.
 
 Everything is drawn from primitives — one neon polyline with a bright core and an additive halo,
 a palette, and a real frame-wide bloom pass. **There are no art assets in this repository and
@@ -113,8 +133,14 @@ not security. The real defence is replaying the manifest on a server.
 
 **Obstacles are events in time, never pixel positions.** Their place on screen is derived every
 frame from the world's clock and its speed, so scroll speed can change without a single authored
-pattern moving. Difficulty is measured in distance, so buying speed buys score and difficulty
+pattern moving. Difficulty is measured in distance, so buying speed will buy score and difficulty
 together.
+
+**The pattern pool is checked by arithmetic, not by care.** At startup every pattern and every
+ordered pair of patterns is walked: no two lethal windows may face each other across the corridor,
+a facing pair must be within its width bounds *on every seed it can draw*, two cubes on one lane
+may not overlap in x, and every pattern must contain its own windows — which is what makes any two
+patterns safe to string together at any spacing.
 
 ---
 

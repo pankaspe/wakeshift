@@ -183,11 +183,27 @@ morde tardi — più una distanza di sblocco per ogni pattern. Una curva sola sa
 il giocatore chiama "smette di diventare difficile". La velocità smette di essere una manopola: si
 scorre sempre a 270 finché non la compra il giocatore.
 
+**Il personaggio diventa un blocco** → Via la figura incappucciata: un quadrato **pieno**, del
+colore della corsia in cui sta. Gli ostacoli sono quadrati vuoti, quindi il pieno è tutto ciò che
+dice "questo sei tu". Niente rotazione — mezzo giro di un quadrato non si vede, resterebbe solo
+l'overshoot, cioè un attrito sul gesto centrale. Restano schiacciamento e allungamento, con
+l'atterraggio che molleggia: verificato a 0,0000 px di scivolamento dal terreno.
+
+**Due numeri corretti misurando** → Lo schiacciamento da 0,28 a 0,20: la stoffa può deformarsi di
+un terzo, un blocco no, e a 0,28 il quadrato atterrava come 51x32. E il battito da 58 px a 120: il
+ciclo di passo della veste erano nove appoggi al secondo, che su un blocco è una vibrazione.
+
+**Via il bordo, e il corpo scende a 38 px** → Senza contorno il blocco è un pezzo della corsia
+invece che un oggetto illuminato davanti. Per farlo coincidere serviva anche lo schiarimento del
+nucleo, non solo la tinta: senza, stava 22 valori su 255 sotto la linea; con, 4. La rimpicciolita
+tocca `PLAYER_SIZE`, non il disegno — un corpo disegnato più piccolo della sua scatola mostrerebbe
+un cubo che blocca senza toccare. Densità in calo di circa tre punti per banda, picco al 66,5%.
+
 ---
 
 ## Dove sta il gioco adesso
 
-A schermo non c'è niente di pieno tranne il fondo. Ci sono i **due ostacoli** (quadrato e buco), un
+A schermo ci sono due sole cose piene: il fondo e il personaggio. Ci sono i **due ostacoli** (quadrato e buco), un
 pavimento e un soffitto dritti su cui tutto il rilievo lo fanno le colonne — torri, altopiani,
 scale, canyon, creste, strozzature affacciate — la Corruzione che avanza da sinistra, il pennino
 che scrive il mondo a destra, e la parallasse.

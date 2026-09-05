@@ -60,8 +60,23 @@ import "../core"
 import "core:math"
 import rl "vendor:raylib/v55"
 
-// Player reference size in pixels (Design Doc, section 6: ~40-50px)
-PLAYER_SIZE :: 45
+// Player reference size in pixels (Design Doc, section 6: ~40-50px).
+//
+// It came down from 45 on 6 September, by playtest: with the character
+// drawn as a filled block rather than as a figure, 45 read as too much of
+// the corridor. **The simulation's box came down with it and not just the
+// drawing** — a body drawn smaller than the box that blocks it would show
+// a cube stopping the character before touching them, which is the "mark
+// and hitbox disagree" failure this project has already paid for twice.
+//
+// Four things are derived from it and all four stay legal at 38:
+// MIRROR_MIN_WIDTH (the legal band for a facing pair becomes [38, 54],
+// and SHAPE_FACING is 54), CUBE_MAX_HEIGHT (a 12-unit column tops out at
+// 231 against a hanging body ending at 203, so 28 px of daylight instead
+// of 21), the fairness windows (which get shorter, so a pool that was
+// legal stays legal), and "a body is never on one column" — 38 is still
+// comfortably over CUBE_UNIT's 27.
+PLAYER_SIZE :: 38
 
 // Player state machine (Design Doc, sections 3-4).
 PlayerState :: enum {
@@ -147,6 +162,11 @@ Player :: struct {
 new_player :: proc() -> Player {
 	player_size := rl.Vector2{PLAYER_SIZE, PLAYER_SIZE}
 
+	// settle_timer starts at zero, so a run opens with the landing bounce
+	// already playing (render/player.odin) and the character arrives
+	// rather than appearing. It is a consequence of the zero value rather
+	// than a line of code, and it is kept deliberately: the alternative is
+	// a block that is simply there on frame one.
 	return Player {
 		position = rl.Vector2{core.PLAYER_HOME_X, get_lane_y(.Real, player_size)},
 		size     = player_size,
