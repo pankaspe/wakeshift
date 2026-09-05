@@ -11,7 +11,7 @@ Operational rules for developing this project.
 - **How the world is built** → **`docs/inspiration/sketch.jpeg`**, the author's own, and binding
   the same way. Flat floor and flat ceiling with all the relief made of **bricks**: staircases,
   isolated towers, plateaus, canyons, facing constrictions, and one detached block that moves.
-  That is the world C1 and C2 are going to build (`TIMELINE.md`).
+  C1 built the flat lanes on 6 September; C2 builds the relief (`TIMELINE.md`).
 - `docs/` is deliberately **not tracked by git**: it is the author's working material and lives
   only on their disk, and everything under `docs/archive/` — the old design docs, the old roadmap,
   the superseded sketches — is history rather than instruction. Do not read it as binding and do
@@ -31,12 +31,12 @@ taken — and do not add new ones.
 Wake Shift is a one-button reflex arcade game in Odin + raylib. The character runs
 automatically while the world scrolls past. `SPACE` flips gravity between the floor (**Real
 world**) and the ceiling (**Dream world**) — one key, one gesture, two places to be. The world
-is a **track**: two lanes that curve together and whose corridor narrows and widens. Behind the
+is a **track**: two straight lanes a fixed corridor apart, with all the relief made of bricks
+standing on them — staircases, towers, plateaus, canyons, facing constrictions. Behind the
 player the **Corruption** advances from the left, and the distance between the two is the only
 health bar there is. **A mistake costs ground, not the run**: a cube blocks rather than kills,
-and while you are pinned the Corruption gains. Obstacles and track alike are authored as
-*events in time*, never as pixel positions, so scroll speed can change without redrawing a
-single pattern. The visual identity is **La Linea**: a filled, vignetted field that *is* the
+and while you are pinned the Corruption gains. Obstacles are authored as *events in time*, never
+as pixel positions, so scroll speed can change without redrawing a single pattern. The visual identity is **La Linea**: a filled, vignetted field that *is* the
 world you are in, one continuous glowing stroke drawn on it, and nothing else — the field
 changes colour with the world, the stroke never does.
 
@@ -93,21 +93,15 @@ floating cube **orbits** — bob and drift on one clock, a quarter turn apart. T
 the mirrored pair's bounds are absolute pixels and deliberately not multiples of the unit.
 
 **The next piece is decided and written down**, and it is the whole of what is left before the
-game can be judged: `TIMELINE.md` ends with five tasks (C1..C5) and the model each is tagged for.
-Read them there rather than re-deriving them. In one sentence: **the world gets built out of the
-bricks**, so the floor and the ceiling go straight and every piece of relief becomes a column
-profile — `docs/inspiration/sketch.jpeg` is the reference and it is binding.
+game can be judged: `TIMELINE.md` ends with the remaining tasks (C2..C5) and the model each is
+tagged for. Read them there rather than re-deriving them. In one sentence: **the world gets built
+out of the bricks** — `docs/inspiration/sketch.jpeg` is the reference and it is binding.
 
-Two things a cold session should know before starting on it:
-
-- **C1 deletes most of "The track is simulation" below.** That section is still accurate today and
-  will not be once the corridor stops undulating. What goes is the *keyframing* — `Pattern.track`,
-  `report_track_faults`, the spine and span moving at all. What must survive untouched is `Ground`
-  and `ground_time_at_x`: the scroll-to-time mapping is what makes an obstacle an event in time
-  rather than a position, and it is load-bearing for everything else. A constriction stops being a
-  narrowing span and becomes two facing columns, which is the same vocabulary as the rest.
-- **The pool is the content and it is nearly empty.** Not a mechanism problem: the generator works,
-  it has nothing good to generate. See the known issue below for the numbers.
+**C1 landed on 6 September**, and it is the half of that sentence about the *floor*: the corridor
+stopped undulating, spine and span became constants, and every piece of relief is now a column.
+What is left is the half about the *content*, and a cold session should know one thing before
+starting it: **the pool is the content and it is nearly empty.** Not a mechanism problem — the
+generator works, it has nothing good to generate. See the known issue below for the numbers.
 
 Why the design was rewritten in September 2026, measured rather than guessed: 200 simulated runs
 that never touched the key, **161 survived the whole first tier**, median death at 35 s; **86% of
@@ -228,65 +222,58 @@ split is **by level of abstraction, not by game entity** — `player`, `obstacle
 `world` live together inside `game/` because they reference each other constantly, and
 splitting them would force premature interfaces.
 
-### The track is simulation
-
-> **C1 is about to delete most of this.** The corridor stops undulating and the relief moves into
-> the column profiles, so `Pattern.track`, `report_track_faults` and the keyframing go. What must
-> survive is `Ground` and `ground_time_at_x` — the scroll-to-time mapping — plus the four rules
-> marked **Outlives C1** below. Read this section as still-true-today, not as a design to defend.
+### The track is two constants, and the relief is columns
 
 `core/track.odin` owns the shape of the world, because the player and the obstacles stand on it.
-It is **two numbers keyframed in world time**:
+Since C1 it is **two constants**: `TRACK_SPINE` and `TRACK_SPAN`, from which `TRACK_FLOOR_Y` (555)
+and `TRACK_CEILING_Y` (165) are derived so the two lanes cannot disagree with each other.
 
-- **spine** — where the corridor's centre sits vertically. Moving it makes the world undulate.
-- **span** — how tall the corridor is. Moving it tightens or opens the crossing, and it is a
-  difficulty knob the game never had before R3.
+It was keyframed in world time until then, and patterns authored it: the corridor sagged, lifted,
+pinched and opened, and `Pattern.track`, `report_track_faults`, `track_sample`, `track_clamp`,
+`track_prune`, `track_support_y` and the whole `[TRACK_CAPACITY]TrackPoint` machine are all gone
+with it. That was not a simplification of the world but a change of **material**: the world is
+built out of bricks now, so there is one vocabulary for every piece of relief instead of two that
+could disagree about what a moment was for. A pinch is two facing columns
+(`pattern_narrows`), a plateau is a run of equal ones, a canyon is a zero between two towers.
 
-Floor is `spine + span/2`, ceiling is `spine - span/2`, so the two lanes cannot disagree —
-coherence is a property of the representation rather than a rule someone has to remember.
+What survived, and why each one had to:
 
-- **Keyframes in time, not a function of scrolled pixels.** An obstacle is an event in time, and
-  a track anchored to pixels would slide against the patterns the moment scroll speed changed —
-  which in v2.0 it does, because the player buys it. The visible price is that the undulation
-  stretches as a run speeds up.
-- **Linear between keyframes, and that is load-bearing twice.** It is what makes
-  `track_support_y` exact rather than sampled (an extreme over a range can only sit at an end or
-  at a keyframe inside it), and it is why the legality clamp runs **on append, never on sample**:
-  clamp a keyframe and the function stays linear; clamp the sampler and it stops being.
-- **A `Track` is a plain value** — a fixed `[TRACK_CAPACITY]TrackPoint` inside `World`, not a
-  dynamic array beside it. So `interpolated_world` can copy the World forward by a fraction of a
-  step and read a track nobody owns. Measured: a long run peaks at 20 of the 64 slots.
-  **Outlives C1** as a habit: anything the presentation copies forward wants to be a value.
-- **A body rests on the highest ground under its whole width**, not under one chosen point.
-  Verified against a crest straddled by the player's box: the feet land on the crest, not in the
-  slope on either side of it. **Outlives C1**, and is now also the column rule — a body straddling
-  a staircase rests on the higher step.
-- **The flip's duration is constant in time whatever the span is.** The corridor changes width;
-  the gesture must not, or it stops being a reflex. Measured at 0.167 s across spans of 250, 340
-  and 430, crossing 205, 295 and 385 px respectively. **Outlives C1**: with the corridor fixed the
-  measurement stops mattering, but "the gesture never changes with the world" still binds.
-- **The sky used to ride the spine**, and phase RL deleted the sky. **Outlives C1.** The rule it
-  came from is
-  still worth knowing, because it will come up again for anything the world contains: a *world*
-  element nailed to the screen while the world slides underneath it reads as two pictures. What replaced the sky — a vignette — is not a world element but a property of the
-  lens looking at it, so it stays screen-fixed on purpose (`render/background.odin`).
+- **`Ground`, `ground_time_at_x` and `ground_x_at_time`** — the map between scrolled pixels and
+  world time, in both directions. It is what makes an obstacle an **event in time** rather than a
+  position, so scroll speed can change without redrawing a single pattern. C1 made it
+  load-bearing rather than merely surviving: `get_obstacle_position` now goes through
+  `ground_x_at_time` instead of holding its own copy of the formula, so there is exactly one
+  place the conversion lives. Verified as exact inverses to 1e-6 over 400 samples.
+- **A body rests on the highest ground under its whole width.** The track half of it is trivial
+  now, but the rule moved wholesale to the columns: a body straddling a staircase rests on the
+  higher step (`get_support_y`). It is 45 px and a column is 27, so it always straddles two.
+- **A `World` is a plain value**, and it stayed one when the `Track` field left it — so
+  `interpolated_world` still copies the world forward by a fraction of a step. The habit is the
+  point: anything the presentation copies forward wants to be a value.
+- **The gesture never changes with the world.** The flip was a constant 0.167 s across every span
+  the corridor could reach; with the span fixed it is now also a constant 390 px. The rule that
+  produced the measurement outlives the measurement.
+- **A *world* element nailed to the screen reads as two pictures.** That is why the old sky rode
+  the spine, and it will come up again for anything the world contains. The vignette that
+  replaced the sky is not a world element but a property of the lens, so it stays screen-fixed on
+  purpose (`render/background.odin`).
 
-**Patterns author the track** (`Pattern.track`), on the same clock and in the same file as the
-obstacles: the corridor sagging or pinching *is* content, and authoring it elsewhere would let
-the ground and the obstacles disagree about what a moment is for.
+Two things C1 changed that a later phase will meet:
 
-The rule that makes that composable is **every pattern opens and closes at the neutral corridor**
-(`TRACK_SPINE_DEFAULT`, `TRACK_SPAN_DEFAULT`), enforced by `validate_pattern_pool`. It is what
-replaces a seam check: whatever order the generator strings patterns in, the world is continuous
-and the stretch across a gap is flat, so no pair can be illegal together that is legal apart.
-A rhythm falls out of it for free — the track is flat for the whole gap between patterns, so as
-the tiers squeeze that gap the world undulates more and more continuously, with no line of code
-intending it.
+- **`CUBE_MAX_HEIGHT` went from 7 to 12.** It is derived from the corridor — a floor column tall
+  enough to reach a body on the ceiling would slide through it without blocking it — and it used
+  to be derived from `TRACK_SPAN_MIN` because the corridor could pinch to 250. Against a fixed
+  390 the arithmetic is `(390 - 45) / 27 = 12.7`. Twelve leaves 21 px of daylight and thirteen
+  overlaps by 6, so it is tight rather than comfortable, exactly as seven was. It is what makes
+  the sketch's towers legal.
+- **A flat lane costs no vertices.** `render/terrain.odin` used to spend one point per track
+  keyframe crossing the screen; it now spends points only on the columns standing on the lane.
+  Measured over 120 s of the current pool, the worst lane polyline is **16** points against
+  `STROKE_MAX_POINTS` of 256.
 
-The validator also enforces `TRACK_MAX_SPINE_RATE` / `TRACK_MAX_SPAN_RATE` on the authored
-numbers rather than clamping at runtime. The fix for a track that lurches is to author it
-differently; a sampler quietly disagreeing with what was written would also break the linearity
-above.
+**The profile validator is now the only place the world's shape is held to its limits**
+(`report_profile_faults`). It was one of two, the other being the track's rate limits and its
+endpoint rule; those are gone along with the thing they constrained.
 
 ### The player's screen x is game state
 
@@ -294,7 +281,8 @@ The most invasive change in v2.0, done in R2.1. The old `PLAYER_X` was doing two
 been split into two constants that happen to hold the same number:
 
 - **`core.WORLD_ANCHOR_X`** — the screen x that world time lands on. Constant, and the *only*
-  thing any space↔time conversion may read: the track sampler and obstacle positions both do.
+  thing any space↔time conversion may read: `ground_x_at_time` and `ground_time_at_x` are both
+  anchored to it, and every obstacle position goes through the first of them.
   A ground that followed the player would slide against the patterns every time they lost or won
   back a stride. Verified by moving the player to x=40 and confirming no obstacle moves.
 - **`core.PLAYER_HOME_X`** — where a free-running character settles. They lose x when a cube
@@ -494,13 +482,13 @@ all established by reading pixels back:
   at each vertex. A circle is used only where a mitre cannot exist.
 - **`STROKE_MAX_POINTS` is load-bearing, and it truncates in silence.** Since RL.2 a lane is one
   mark spanning the whole screen, so the longest polyline in the game is the world itself; a
-  polyline over the cap would be a line that stops in mid air with nothing to say so. Raised to
-  256 against a worst case measured at around fifty — but that was before the column profile, and
-  a column costs **two vertices**: an eight-column cube is 18 points instead of 4, and a screen
-  tiled with the widest legal ones comes to about 123. Still inside the cap, with much less room
-  than the number suggests, and C2 is about to fill the screen with skylines. **Re-measure it
-  there.** The same class of silent failure as the winding above: check a new kind of stroke by
-  reading the pixels back, not by looking at it.
+  polyline over the cap would be a line that stops in mid air with nothing to say so. The cap is
+  256. C1 made the lane much cheaper — a flat stretch costs nothing, and everything a lane spends
+  goes on the columns standing on it, two vertices each plus two per cube — so the worst lane over
+  120 s of the current pool is **16** points and a screen tiled with the widest legal cubes is
+  about 128. C2 is about to fill the screen with skylines: **re-measure it there.** The same class
+  of silent failure as the winding above: check a new kind of stroke by reading the pixels back,
+  not by looking at it.
 
 Since RL.3 it draws the character too, and one shape was worth building properly: the bulb is the
 outline of the **union** of two overlapping circles, not two circle outlines on top of each
@@ -866,11 +854,11 @@ three curves turned out to be the library's to within 1e-7 and to have no caller
   to the other channel: the whitest core on screen (0.62 against the terrain's 0.30) and full
   opacity against the lane's 0.85. Measured in a real frame, character 255 against lane 238. If
   it stops standing out, raise those before raising the weight.
-- **The parallax may never enter the corridor**, and `core.TRACK_SKY_MARGIN` is what makes that
-  checkable rather than believed: the track clamps every keyframe so both surfaces stay inside the
-  screen with that much to spare, so the bands above y=70 and below y=650 are the only two places
-  the world can never reach, and every parallax layer lives inside them, amplitude and all —
-  verified by sweeping every legal spine/span pair through `track_clamp` rather than by looking.
+- **The parallax may never enter the corridor**, and since C1 that is arithmetic rather than a
+  clamp: the corridor is fixed, so `core.TRACK_SKY` is exactly 165 px above the ceiling and below
+  the floor. `core.TRACK_SKY_MARGIN` is 70, the narrower band the background is actually allowed —
+  well clear of the corridor rather than up against it — and every parallax layer lives inside it,
+  amplitude and all.
   It is drawn **under** the vignette, because the thinnest mark on screen must not be the one
   thing the lens cannot reach; and it does **not** take the glow gain, because the background is
   the one thing that must not compete harder exactly where everything else is already brightest.
@@ -982,12 +970,14 @@ Tracked here so they are not rediscovered. Nothing here is scheduled — the use
   that. It was invisible while a cube was a filled mass. Closing it
   needs the pushback to exceed the world's speed while penetrating, which would also make
   `velocity_x` drop below `-scroll_speed` and force `score.odin` to clamp.
-- **The pool is still a placeholder**, twenty patterns over two obstacle types, and it is the next
-  piece of work. Measured after T3, over 8 seeds x 120 s with no player: at least one lane is
-  *threatened* 13.1% of the time, both at once 0.5%, at least one *lethal* 3.7% — against a
-  Definition of Done that asks for over 40%. No pattern uses a skyline of more than three columns
-  or a column of height zero, because they were all written when the shape was an enum: the
-  profile is available and unused.
+- **The pool is still a placeholder**, nineteen patterns over two obstacle types, and it is the
+  next piece of work (C2). Measured after T3, over 8 seeds x 120 s with no player: at least one
+  lane is *threatened* 13.1% of the time, both at once 0.5%, at least one *lethal* 3.7% — against
+  a Definition of Done that asks for over 40%. No pattern uses a skyline of more than three
+  columns or a column of height zero, because they were all written when the shape was an enum:
+  the profile is available and unused. C1 removed `pattern_swell`, whose whole content was the
+  ground moving, and turned `pattern_narrows` from a pinched corridor into two facing towers —
+  the measurement above predates both and is due a re-run as part of C2.
 - Menus, HUD and the options screen take their colours from the palette but still use raylib's
   default bitmap font. Everything drawn from primitives is crisp at native resolution and only
   the text is not (phase R7).

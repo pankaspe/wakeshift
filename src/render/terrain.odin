@@ -53,7 +53,16 @@
 * How the cutting works: the surface is a function of x, not a fixed list
 * of points, so the outline is built once across the whole screen and
 * then clipped to whatever the holes leave of it. Vertices land exactly
-* on the cut, so a hole is never snapped to a keyframe.
+* on the cut, so a hole is never snapped to a vertex somebody else chose.
+*
+* SINCE C1 THE LANE ITSELF IS A STRAIGHT LINE
+*
+* The corridor stopped undulating and every piece of relief became a
+* column (core/track.odin), so a stretch of lane with nothing on it is two
+* points and needs no sampling at all. Everything with a shape in it is a
+* step, and a step is read off the obstacle's own columns. The line is
+* flat where the world is empty and corners where it is not, which is the
+* readability rule stated in one polyline.
 */
 package render
 
@@ -108,14 +117,13 @@ CHASM_WALL_DEPTH :: 22
 // zero-length segment gives the stroke a rib with no direction.
 TERRAIN_EPSILON :: 0.01
 
-// The surface height at any screen x, from the shared profile.
+// The surface height of one lane, from the shared profile.
 //
-// A thin wrapper on core rather than a copy of it: a hole can begin
-// anywhere, so the spans on either side of it need a vertex exactly at
-// its edge, and asking for the surface as a function of x is what makes
-// that possible.
-terrain_surface_y :: proc(world: game.World, is_floor: bool, x: f32) -> f32 {
-	return game.get_surface_y(world, is_floor ? core.Lane.Real : core.Lane.Dream, x)
+// A thin wrapper on core rather than a copy of it: this file draws the
+// surface the simulation is already standing on, and there is exactly one
+// of it.
+terrain_surface_y :: proc(is_floor: bool) -> f32 {
+	return game.get_surface_y(is_floor ? core.Lane.Real : core.Lane.Dream)
 }
 
 // A range of screen x.
@@ -271,41 +279,6 @@ push_point :: proc(points: ^[dynamic]rl.Vector2, point: rl.Vector2) {
 	append(points, point)
 }
 
-// The surface between two x values, sampled at the track's own keyframes.
-//
-// The vertices are keyframes, spaced in time rather than in pixels, so
-// how far apart they land on screen is the scroll speed — the undulation
-// stretches as a run gets faster (core/track.odin). Nothing else is
-// needed, because the profile is linear between them.
-@(private)
-append_surface :: proc(
-	points: ^[dynamic]rl.Vector2,
-	world: game.World,
-	is_floor: bool,
-	from, to: f32,
-) {
-	if to <= from {
-		return
-	}
-	ground := game.get_ground(world)
-	start_time := core.ground_time_at_x(ground, from)
-	end_time := core.ground_time_at_x(ground, to)
-
-	for i in 0 ..< world.track.count {
-		point := world.track.points[i]
-		if point.time <= start_time {
-			continue
-		}
-		if point.time >= end_time {
-			break
-		}
-		x := from + (point.time - start_time) * max(ground.speed, 1)
-		if x > from && x < to {
-			push_point(points, rl.Vector2{x, terrain_surface_y(world, is_floor, x)})
-		}
-	}
-}
-
 // The far side of a step: the obstacle's own skyline, one column at a
 // time, two right angles each.
 //
@@ -352,20 +325,21 @@ build_lane_outline :: proc(
 		right = max(right, steps[len(steps) - 1].end)
 	}
 
-	points := make([dynamic]rl.Vector2, 0, 96, allocator)
-	push_point(&points, rl.Vector2{left, terrain_surface_y(world, is_floor, left)})
+	// The lane's own surface is one height, so the flat stretches between
+	// the steps need no points of their own: the segment from one step's
+	// far edge to the next step's near edge is already the line.
+	surface := terrain_surface_y(is_floor)
 
-	cursor := left
+	points := make([dynamic]rl.Vector2, 0, 96, allocator)
+	push_point(&points, rl.Vector2{left, surface})
+
 	for step in steps {
-		append_surface(&points, world, is_floor, cursor, step.start)
-		push_point(&points, rl.Vector2{step.start, terrain_surface_y(world, is_floor, step.start)})
+		push_point(&points, rl.Vector2{step.start, surface})
 		append_step(&points, step, is_floor)
-		push_point(&points, rl.Vector2{step.end, terrain_surface_y(world, is_floor, step.end)})
-		cursor = step.end
+		push_point(&points, rl.Vector2{step.end, surface})
 	}
 
-	append_surface(&points, world, is_floor, cursor, right)
-	push_point(&points, rl.Vector2{right, terrain_surface_y(world, is_floor, right)})
+	push_point(&points, rl.Vector2{right, surface})
 	return points
 }
 

@@ -136,28 +136,40 @@ PROFILE_WIDE := CubeProfile{1, 1}
 PROFILE_STACK := CubeProfile{3}
 PROFILE_PYRAMID := CubeProfile{1, 2, 3}
 
+// One half of a constriction: a squat tower two columns wide, meant to
+// stand opposite another one (pattern_narrows). Two columns rather than
+// one because a cube facing another across the corridor must be at least
+// as wide as the body (MIRROR_MIN_WIDTH), and two units tall so that the
+// pair reads as unequal rather than as one box cut in half.
+PROFILE_TOWER := CubeProfile{2, 2}
+
 // The bounds validate_pattern_pool holds an authored profile inside.
 //
 // **Height is the one with teeth.** An obstacle belongs to a lane, and
 // blocks_player only ever tests the lane it stands on — so a floor cube
 // tall enough to reach a body hanging from the ceiling would pass
 // straight through them without stopping them, which is a mark that lies
-// about what it does. The corridor is never narrower than TRACK_SPAN_MIN,
-// so the tallest column that always clears a body on the far lane is
-// (250 - 45) / 27 = 7.6 units.
+// about what it does.
 //
-// Seven is therefore the answer and it is **tight, not comfortable**:
-// replayed against a body hanging from the ceiling at TRACK_SPAN_MIN, a
-// seven-unit column leaves 16 px of daylight and an eight-unit one
-// overlaps it by 11. There is no room here for a shape that is "only a
-// bit taller".
+// It used to be seven, derived from TRACK_SPAN_MIN because the corridor
+// could pinch to 250 px and a column had to clear the far lane at its
+// tightest. C1 fixed the corridor at TRACK_SPAN, so the arithmetic is
+// simply (390 - 45) / 27 = 12.7 units and the answer is **twelve**. It is
+// not a loosening of the rule, it is the same rule against a corridor
+// that no longer moves — and it is what makes the sketch's towers legal:
+// twelve units is 324 px of a 390 px corridor.
+//
+// Tight rather than comfortable, as before. A twelve-unit floor column
+// tops out at y = 231 and a body hanging from the ceiling ends at y =
+// 210, so there are 21 px of daylight; thirteen units overlaps it by 6.
 //
 // Width is a softer bound and is here to keep the lane's polyline inside
 // STROKE_MAX_POINTS: a column costs two vertices, so eight columns make a
-// cube 18 points instead of 4, and a screen tiled with the widest legal
-// cubes comes to about 123 against a cap of 256 (render/stroke.odin).
+// cube 18 points instead of 4 (render/stroke.odin). C1 made that cheaper
+// rather than dearer — a flat lane spends no vertices at all on itself,
+// where it used to spend one per track keyframe crossing the screen.
 CUBE_MAX_COLUMNS :: 8
-CUBE_MAX_HEIGHT :: 7
+CUBE_MAX_HEIGHT :: 12
 
 // A FLOATING CUBE ORBITS
 //
@@ -460,20 +472,20 @@ get_obstacle_size :: proc(obstacle: Obstacle, world: World) -> rl.Vector2 {
 // Computes the obstacle's current on-screen position, derived from how
 // much time remains until (or has passed since) its arrival_time.
 //
-// The world scrolls; obstacles do not move through it. y comes from the
-// track, so an obstacle sits on the surface of its own lane however the
-// corridor is bending underneath it.
+// The world scrolls; obstacles do not move through it. x is the arrival
+// time run through the one map between world time and screen x
+// (core/track.odin) — the same map the terrain and the generator read, in
+// the same direction, so an obstacle authored as a moment lands where the
+// moment is. y is its lane's surface, which since C1 is a constant.
 get_obstacle_position :: proc(obstacle: Obstacle, world: World) -> rl.Vector2 {
-	time_until_arrival := obstacle.arrival_time - world.elapsed_time
+	x := core.ground_x_at_time(get_ground(world), obstacle.arrival_time)
 
-	// The drift is part of where the cube *is*, so it is added before the
-	// ground is sampled: a floating cube reads the surface under the x it
-	// has drifted to, not the one it was authored at.
-	x := core.WORLD_ANCHOR_X + time_until_arrival * world.scroll_speed
+	// The drift is part of where the cube *is*, so it is added to the x
+	// the orbit is measured from.
 	x += get_cube_drift(obstacle, world)
 	size := get_obstacle_size(obstacle, world)
 
-	y := get_lane_y(world, obstacle.lane, x, size)
+	y := get_lane_y(obstacle.lane, size)
 
 	// A lift is measured into the corridor, so it is upward on the floor
 	// and downward from the ceiling. Same number, mirrored, which is what

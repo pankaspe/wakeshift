@@ -147,14 +147,8 @@ Player :: struct {
 new_player :: proc() -> Player {
 	player_size := rl.Vector2{PLAYER_SIZE, PLAYER_SIZE}
 
-	// The opening world: flat, at the speed a run opens at.
-	opening := new_world()
-
 	return Player {
-		position = rl.Vector2 {
-			core.PLAYER_HOME_X,
-			get_lane_y(opening, .Real, core.PLAYER_HOME_X, player_size),
-		},
+		position = rl.Vector2{core.PLAYER_HOME_X, get_lane_y(.Real, player_size)},
 		size     = player_size,
 		lane     = .Real,
 		state    = .Real,

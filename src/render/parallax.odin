@@ -24,12 +24,13 @@
 * value, contrast and detail, and that the vignette exists to push the
 * eye to the middle where the game is played. So:
 *
-*   - **It never enters the corridor.** The track keeps TRACK_SKY_MARGIN
-*     of screen outside both lanes at every legal spine and span, so the
-*     bands above y = 70 and below y = 650 are the only two places on
-*     screen the world can never reach. Every layer lives inside them,
-*     amplitude included, which is checked by arithmetic rather than by
-*     eye — see PARALLAX_LAYERS.
+*   - **It never enters the corridor.** The corridor is fixed since C1
+*     (core/track.odin), so the sky outside it is 165 px on each side and
+*     the bands above y = 70 and below y = 650 are two places the world
+*     can never reach — with room to spare, where they used to be exactly
+*     the guarantee the track clamped its keyframes to. Every layer lives
+*     inside them, amplitude included, which is checked by arithmetic
+*     rather than by eye — see PARALLAX_LAYERS.
 *   - **It is drawn under the vignette**, not over it. A mark at the top
 *     of the screen that ignored the lens would pull the eye exactly where
 *     the lens is trying to stop it going, so the background pass draws
@@ -62,8 +63,10 @@ import rl "vendor:raylib/v55"
 // over; the cost is one stroke per layer per band.
 PARALLAX_SAMPLES :: 40
 
-// The band the world can never reach, measured from each screen edge:
-// TRACK_SKY_MARGIN, which core/track.odin clamps every keyframe against.
+// The band the background may use, measured from each screen edge. It is
+// narrower than the sky actually is (core.TRACK_SKY is 165), and stays so
+// on purpose: the parallax is meant to sit well clear of the corridor,
+// not up against it.
 PARALLAX_BAND :: core.TRACK_SKY_MARGIN
 
 ParallaxLayer :: struct {

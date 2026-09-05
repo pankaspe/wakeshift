@@ -75,12 +75,11 @@ tiers := []Tier {
 			pattern_stagger,
 			pattern_stagger_reverse,
 
-			// The two that are about the world rather than about what is
-			// standing on it. They arrive here rather than in the opening
-			// tier so that a run starts on a near-flat world and learns
-			// the ground can move once it already knows the controls.
+			// The constriction: two facing towers, the first thing in a
+			// run that holds both lanes at once. It waits until here for
+			// the same reason the mirrored pair does — a run should learn
+			// what a cube costs before it meets two it cannot dodge.
 			pattern_narrows,
-			pattern_swell,
 
 			// The three new questions (roadmap R4). They are held back
 			// from the opening tier for the same reason the track is: a

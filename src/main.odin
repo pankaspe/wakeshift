@@ -441,7 +441,7 @@ main :: proc() {
 				game.update_score(&score, world, player, core.FIXED_TIMESTEP)
 
 				// keep generating obstacles ahead of the player
-				game.generate_ahead(&generator, &obstacles, &world.track, world.elapsed_time)
+				game.generate_ahead(&generator, &obstacles, world.elapsed_time)
 
 				// out of room: the front caught up. Checked before the
 				// obstacles because it is the ending the whole design is

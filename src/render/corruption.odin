@@ -115,8 +115,8 @@ fray_points :: proc(
 	if x <= 0 {
 		return {}, {}, false
 	}
-	return rl.Vector2{x, game.get_surface_y(world, .Real, x)},
-		rl.Vector2{x, game.get_surface_y(world, .Dream, x)},
+	return rl.Vector2{x, game.get_surface_y(.Real)},
+		rl.Vector2{x, game.get_surface_y(.Dream)},
 		true
 }
 

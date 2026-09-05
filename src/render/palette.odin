@@ -36,8 +36,8 @@ get_world_t :: proc(player: game.Player, world: game.World) -> f32 {
 	half := player.size.y * 0.5
 
 	center := player.position.y + half
-	real_center := game.get_lane_y(world, .Real, player.position.x, player.size) + half
-	dream_center := game.get_lane_y(world, .Dream, player.position.x, player.size) + half
+	real_center := game.get_lane_y(.Real, player.size) + half
+	dream_center := game.get_lane_y(.Dream, player.size) + half
 
 	return clamp((real_center - center) / (real_center - dream_center), 0, 1)
 }

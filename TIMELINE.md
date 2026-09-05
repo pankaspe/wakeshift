@@ -159,11 +159,21 @@ strozzatura riguarda quanto spazio resta al corpo, e il corpo è 45 px assoluti.
 
 ---
 
+## 6 settembre 2026 — il pavimento diventa dritto
+
+**C1 — Via il keyframing** → Spina e apertura sono costanti: pavimento a 555, soffitto a 165.
+Cancellati `Pattern.track` e i 76 keyframe autorati, `report_track_faults`, il campionatore e la
+sua storia. Resta la mappa fra scroll e tempo, che ora usano anche gli ostacoli. La strozzatura
+sono due torri affacciate; `pattern_swell` sparisce con l'ondulazione e `CUBE_MAX_HEIGHT` sale da
+7 a 12, perché il corridoio non si stringe più.
+
+---
+
 ## Dove sta il gioco adesso
 
-A schermo non c'è niente di pieno tranne il fondo. Ci sono i **due ostacoli** (quadrato e buco), il
-tracciato che ondeggia e si strozza, la Corruzione che avanza da sinistra, il pennino che scrive il
-mondo a destra, e la parallasse.
+A schermo non c'è niente di pieno tranne il fondo. Ci sono i **due ostacoli** (quadrato e buco), un
+pavimento e un soffitto dritti su cui tutto il rilievo lo fanno le colonne, la Corruzione che
+avanza da sinistra, il pennino che scrive il mondo a destra, e la parallasse.
 
 Manca il gioco. Le venti pattern sono tutte scritte per il vecchio enum: **nessuna usa il
 vocabolario che T3 ha costruito** — niente skyline oltre le tre colonne, nessuna colonna a zero. E
@@ -187,7 +197,6 @@ a sorte la propria larghezza.
 
 | | Task | Modello |
 |---|---|---|
-| **C1** | **Il pavimento diventa dritto** → Spina e apertura diventano costanti: via `Pattern.track`, via `report_track_faults`, via l'ondulazione. La strozzatura non è più un'apertura che si stringe ma due colonne affacciate, cioè si autora con lo stesso vocabolario di tutto il resto. **Attenzione**: quello che se ne va è il *keyframing*, non `Ground` né `ground_time_at_x` — la mappa fra scroll e tempo è ciò che rende gli ostacoli eventi nel tempo e deve restare intatta. Da controllare chi legge il tracciato per l'orizzonte e la parallasse. | Opus |
 | **C2** | **Il pool vero, costruito a mattoncini** → Il contenuto: le skyline dello sketch, profili pescati dentro limiti dichiarati dall'evento e verificati staticamente come già si fa per la larghezza del buco. Densità molto su. Obiettivo misurato: **oltre il 40%** di tempo con almeno una corsia minacciata, contro il 13,1% di oggi. Ogni regola nuova va controllata contro "stare fermi sopravvive a questo?", che è la misura che ha chiuso la v1.3. | Opus |
 | **C3** | **La curva continua, in distanza** → Via i tre tier discreti, dentro una funzione continua. **La variabile è la distanza, non il tempo**: così comprare velocità compra punteggio e difficoltà insieme, e rallentare non è una strategia. Cresce la densità (l'aria fra i pattern) e cresce la parzialità del sorteggio verso i pattern che chiedono di più. La velocità smette di essere una manopola del tier. | Opus |
 | **C4** | **Il feedback dello scalino** → Ogni tot distanza un burst particellare dice "sei salito di un gradino", senza scriverlo. Da far percepire, non da spiegare. `fx/particles.odin` c'è già: il pool è fisso, ha un generatore di casualità proprio che **non è quello della run** — e non deve diventarlo, o due replay della stessa run divergerebbero. Emesso dal clock del frame, mai dentro uno step. | Sonnet |
@@ -195,5 +204,3 @@ a sorte la propria larghezza.
 
 **Decisioni ancora aperte (C5)**: quanto dura l'intro, e se si ripete a ogni run o solo alla prima.
 
-**Nota per C1**: l'allargamento di ieri ha traslato 76 `span` autorati che C1 cancellerà insieme al
-resto del keyframing. Non è lavoro buttato — la costante che conta, l'apertura del corridoio, resta.

@@ -49,11 +49,16 @@ import rl "vendor:raylib/v55"
 // strokes, and most of them are short.
 //
 // One of them is not, since phase RL.2: a lane is a single mark running
-// the width of the screen, carrying a keyframe every few dozen pixels
-// and four more points for every cube welded into it. A polyline longer
-// than this is silently truncated, which would be a line that stops in
-// mid air, so the headroom is deliberate — a measured worst case is
-// around fifty.
+// the width of the screen with every cube welded into it. A polyline
+// longer than this is silently truncated, which would be a line that
+// stops in mid air, so the headroom is deliberate.
+//
+// C1 made that cheaper rather than dearer. The lane used to carry a track
+// keyframe every few dozen pixels; the corridor is flat now, so a stretch
+// with nothing on it costs no points at all and everything a lane spends
+// goes on the columns standing on it — two per column plus two per cube.
+// Replayed over 120 s of the current pool, the worst lane came to **16**
+// points; a screen tiled with the widest legal cubes is about 128.
 STROKE_MAX_POINTS :: 256
 
 // How many ribs a round end is tessellated into. Five is smooth at any
