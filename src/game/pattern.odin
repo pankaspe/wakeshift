@@ -124,9 +124,9 @@ DEMAND_LEVELS :: 4
 pattern_cube_real := Pattern {
 	events   = []PatternEvent{{time_offset = 0.9, lane = .Real, obstacle_type = .Cube}},
 	track    = []core.TrackPoint{
-		{time = 0, spine = 360, span = 340},
-		{time = 0.9, spine = 392, span = 340},
-		{time = 1.9, spine = 360, span = 340},
+		{time = 0, spine = 360, span = 390},
+		{time = 0.9, spine = 392, span = 390},
+		{time = 1.9, spine = 360, span = 390},
 	},
 	duration = 1.9,
 	demand   = 0,
@@ -135,9 +135,9 @@ pattern_cube_real := Pattern {
 pattern_cube_dream := Pattern {
 	events   = []PatternEvent{{time_offset = 0.9, lane = .Dream, obstacle_type = .Cube}},
 	track    = []core.TrackPoint{
-		{time = 0, spine = 360, span = 340},
-		{time = 0.9, spine = 328, span = 340},
-		{time = 1.9, spine = 360, span = 340},
+		{time = 0, spine = 360, span = 390},
+		{time = 0.9, spine = 328, span = 390},
+		{time = 1.9, spine = 360, span = 390},
 	},
 	duration = 1.9,
 	demand   = 0,
@@ -148,9 +148,9 @@ pattern_cube_dream := Pattern {
 pattern_gap_real := Pattern {
 	events   = []PatternEvent{{time_offset = 0.9, lane = .Real, obstacle_type = .Gap}},
 	track    = []core.TrackPoint{
-		{time = 0, spine = 360, span = 340},
-		{time = 0.9, spine = 384, span = 376},
-		{time = 1.9, spine = 360, span = 340},
+		{time = 0, spine = 360, span = 390},
+		{time = 0.9, spine = 384, span = 426},
+		{time = 1.9, spine = 360, span = 390},
 	},
 	duration = 1.9,
 	demand   = 0,
@@ -159,9 +159,9 @@ pattern_gap_real := Pattern {
 pattern_gap_dream := Pattern {
 	events   = []PatternEvent{{time_offset = 0.9, lane = .Dream, obstacle_type = .Gap}},
 	track    = []core.TrackPoint{
-		{time = 0, spine = 360, span = 340},
-		{time = 0.9, spine = 336, span = 376},
-		{time = 1.9, spine = 360, span = 340},
+		{time = 0, spine = 360, span = 390},
+		{time = 0.9, spine = 336, span = 426},
+		{time = 1.9, spine = 360, span = 390},
 	},
 	duration = 1.9,
 	demand   = 0,
@@ -175,10 +175,10 @@ pattern_alternate := Pattern {
 		{time_offset = 1.7, lane = .Dream, obstacle_type = .Cube},
 	},
 	track    = []core.TrackPoint{
-		{time = 0, spine = 360, span = 340},
-		{time = 0.8, spine = 360, span = 286},
-		{time = 1.7, spine = 360, span = 286},
-		{time = 2.6, spine = 360, span = 340},
+		{time = 0, spine = 360, span = 390},
+		{time = 0.8, spine = 360, span = 336},
+		{time = 1.7, spine = 360, span = 336},
+		{time = 2.6, spine = 360, span = 390},
 	},
 	duration = 2.6,
 	demand   = 1,
@@ -190,10 +190,10 @@ pattern_alternate_reverse := Pattern {
 		{time_offset = 1.7, lane = .Real, obstacle_type = .Cube},
 	},
 	track    = []core.TrackPoint{
-		{time = 0, spine = 360, span = 340},
-		{time = 0.8, spine = 330, span = 286},
-		{time = 1.7, spine = 330, span = 286},
-		{time = 2.6, spine = 360, span = 340},
+		{time = 0, spine = 360, span = 390},
+		{time = 0.8, spine = 330, span = 336},
+		{time = 1.7, spine = 330, span = 336},
+		{time = 2.6, spine = 360, span = 390},
 	},
 	duration = 2.6,
 	demand   = 1,
@@ -207,10 +207,10 @@ pattern_gap_then_cube := Pattern {
 		{time_offset = 2.0, lane = .Dream, obstacle_type = .Cube},
 	},
 	track    = []core.TrackPoint{
-		{time = 0, spine = 360, span = 340},
-		{time = 0.9, spine = 392, span = 382},
-		{time = 2.0, spine = 336, span = 318},
-		{time = 2.9, spine = 360, span = 340},
+		{time = 0, spine = 360, span = 390},
+		{time = 0.9, spine = 392, span = 432},
+		{time = 2.0, spine = 336, span = 368},
+		{time = 2.9, spine = 360, span = 390},
 	},
 	duration = 2.9,
 	demand   = 1,
@@ -222,10 +222,10 @@ pattern_gap_then_cube_reverse := Pattern {
 		{time_offset = 2.0, lane = .Real, obstacle_type = .Cube},
 	},
 	track    = []core.TrackPoint{
-		{time = 0, spine = 360, span = 340},
-		{time = 0.9, spine = 328, span = 382},
-		{time = 2.0, spine = 384, span = 318},
-		{time = 2.9, spine = 360, span = 340},
+		{time = 0, spine = 360, span = 390},
+		{time = 0.9, spine = 328, span = 432},
+		{time = 2.0, spine = 384, span = 368},
+		{time = 2.9, spine = 360, span = 390},
 	},
 	duration = 2.9,
 	demand   = 1,
@@ -240,11 +240,11 @@ pattern_stagger := Pattern {
 		{time_offset = 2.2, lane = .Real, obstacle_type = .Cube},
 	},
 	track    = []core.TrackPoint{
-		{time = 0, spine = 360, span = 340},
-		{time = 0.8, spine = 392, span = 320},
-		{time = 1.5, spine = 328, span = 320},
-		{time = 2.2, spine = 392, span = 320},
-		{time = 3.0, spine = 360, span = 340},
+		{time = 0, spine = 360, span = 390},
+		{time = 0.8, spine = 392, span = 370},
+		{time = 1.5, spine = 328, span = 370},
+		{time = 2.2, spine = 392, span = 370},
+		{time = 3.0, spine = 360, span = 390},
 	},
 	duration = 3.0,
 	demand   = 2,
@@ -257,11 +257,11 @@ pattern_stagger_reverse := Pattern {
 		{time_offset = 2.2, lane = .Dream, obstacle_type = .Cube},
 	},
 	track    = []core.TrackPoint{
-		{time = 0, spine = 360, span = 340},
-		{time = 0.8, spine = 328, span = 320},
-		{time = 1.5, spine = 392, span = 320},
-		{time = 2.2, spine = 328, span = 320},
-		{time = 3.0, spine = 360, span = 340},
+		{time = 0, spine = 360, span = 390},
+		{time = 0.8, spine = 328, span = 370},
+		{time = 1.5, spine = 392, span = 370},
+		{time = 2.2, spine = 328, span = 370},
+		{time = 3.0, spine = 360, span = 390},
 	},
 	duration = 3.0,
 	demand   = 2,
@@ -275,10 +275,10 @@ pattern_gap_pair := Pattern {
 		{time_offset = 2.2, lane = .Dream, obstacle_type = .Gap},
 	},
 	track    = []core.TrackPoint{
-		{time = 0, spine = 360, span = 340},
-		{time = 0.9, spine = 360, span = 412},
-		{time = 2.2, spine = 360, span = 412},
-		{time = 3.1, spine = 360, span = 340},
+		{time = 0, spine = 360, span = 390},
+		{time = 0.9, spine = 360, span = 462},
+		{time = 2.2, spine = 360, span = 462},
+		{time = 3.1, spine = 360, span = 390},
 	},
 	duration = 3.1,
 	demand   = 2,
@@ -293,10 +293,10 @@ pattern_burst := Pattern {
 		{time_offset = 2.6, lane = .Dream, obstacle_type = .Cube},
 	},
 	track    = []core.TrackPoint{
-		{time = 0, spine = 360, span = 340},
-		{time = 0.7, spine = 360, span = 264},
-		{time = 2.7, spine = 360, span = 264},
-		{time = 3.4, spine = 360, span = 340},
+		{time = 0, spine = 360, span = 390},
+		{time = 0.7, spine = 360, span = 314},
+		{time = 2.7, spine = 360, span = 314},
+		{time = 3.4, spine = 360, span = 390},
 	},
 	duration = 3.4,
 	demand   = 3,
@@ -308,10 +308,10 @@ pattern_burst := Pattern {
 pattern_narrows := Pattern {
 	events   = []PatternEvent{{time_offset = 1.4, lane = .Real, obstacle_type = .Cube}},
 	track    = []core.TrackPoint {
-		{time = 0, spine = 360, span = 340},
-		{time = 1.0, spine = 360, span = 254},
-		{time = 1.8, spine = 360, span = 254},
-		{time = 2.6, spine = 360, span = 340},
+		{time = 0, spine = 360, span = 390},
+		{time = 1.0, spine = 360, span = 304},
+		{time = 1.8, spine = 360, span = 304},
+		{time = 2.6, spine = 360, span = 390},
 	},
 	duration = 2.6,
 	demand   = 1,
@@ -326,10 +326,10 @@ pattern_swell := Pattern {
 		{time_offset = 2.6, lane = .Real, obstacle_type = .Gap},
 	},
 	track    = []core.TrackPoint {
-		{time = 0, spine = 360, span = 340},
-		{time = 1.1, spine = 286, span = 300},
-		{time = 2.2, spine = 434, span = 300},
-		{time = 3.2, spine = 360, span = 340},
+		{time = 0, spine = 360, span = 390},
+		{time = 1.1, spine = 286, span = 350},
+		{time = 2.2, spine = 434, span = 350},
+		{time = 3.2, spine = 360, span = 390},
 	},
 	duration = 3.2,
 	demand   = 2,
@@ -344,9 +344,9 @@ pattern_swell := Pattern {
 pattern_stack := Pattern {
 	events   = []PatternEvent{{time_offset = 0.9, lane = .Real, obstacle_type = .Cube, profile = PROFILE_STACK}},
 	track    = []core.TrackPoint {
-		{time = 0, spine = 360, span = 340},
-		{time = 0.9, spine = 376, span = 340},
-		{time = 2.0, spine = 360, span = 340},
+		{time = 0, spine = 360, span = 390},
+		{time = 0.9, spine = 376, span = 390},
+		{time = 2.0, spine = 360, span = 390},
 	},
 	duration = 2.0,
 	demand   = 0,
@@ -359,10 +359,10 @@ pattern_stack := Pattern {
 pattern_pyramid := Pattern {
 	events   = []PatternEvent{{time_offset = 1.2, lane = .Dream, obstacle_type = .Cube, profile = PROFILE_PYRAMID}},
 	track    = []core.TrackPoint {
-		{time = 0, spine = 360, span = 340},
-		{time = 1.0, spine = 344, span = 340},
-		{time = 1.8, spine = 344, span = 340},
-		{time = 2.6, spine = 360, span = 340},
+		{time = 0, spine = 360, span = 390},
+		{time = 1.0, spine = 344, span = 390},
+		{time = 1.8, spine = 344, span = 390},
+		{time = 2.6, spine = 360, span = 390},
 	},
 	duration = 2.6,
 	demand   = 1,
@@ -384,10 +384,10 @@ pattern_bump_and_wall := Pattern {
 		{time_offset = 1.9, lane = .Dream, obstacle_type = .Cube, profile = PROFILE_WIDE},
 	},
 	track    = []core.TrackPoint {
-		{time = 0, spine = 360, span = 340},
-		{time = 0.9, spine = 376, span = 340},
-		{time = 1.9, spine = 336, span = 340},
-		{time = 2.8, spine = 360, span = 340},
+		{time = 0, spine = 360, span = 390},
+		{time = 0.9, spine = 376, span = 390},
+		{time = 1.9, spine = 336, span = 390},
+		{time = 2.8, spine = 360, span = 390},
 	},
 	duration = 2.8,
 	demand   = 1,
@@ -418,10 +418,10 @@ pattern_mirror := Pattern {
 		{time_offset = 1.0, lane = .Dream, obstacle_type = .Cube, profile = PROFILE_WIDE},
 	},
 	track    = []core.TrackPoint {
-		{time = 0, spine = 360, span = 340},
-		{time = 0.9, spine = 360, span = 400},
-		{time = 1.5, spine = 360, span = 400},
-		{time = 2.3, spine = 360, span = 340},
+		{time = 0, spine = 360, span = 390},
+		{time = 0.9, spine = 360, span = 450},
+		{time = 1.5, spine = 360, span = 450},
+		{time = 2.3, spine = 360, span = 390},
 	},
 	duration = 2.3,
 	demand   = 2,
@@ -442,9 +442,9 @@ pattern_float_open := Pattern {
 		},
 	},
 	track    = []core.TrackPoint {
-		{time = 0, spine = 360, span = 340},
-		{time = 1.2, spine = 360, span = 300},
-		{time = 2.4, spine = 360, span = 340},
+		{time = 0, spine = 360, span = 390},
+		{time = 1.2, spine = 360, span = 350},
+		{time = 2.4, spine = 360, span = 390},
 	},
 	duration = 2.4,
 	demand   = 1,
@@ -465,10 +465,10 @@ pattern_float_pair := Pattern {
 		{time_offset = 2.1, lane = .Dream, obstacle_type = .Cube, floating = true},
 	},
 	track    = []core.TrackPoint {
-		{time = 0, spine = 360, span = 340},
-		{time = 1.0, spine = 360, span = 310},
-		{time = 2.2, spine = 360, span = 310},
-		{time = 3.0, spine = 360, span = 340},
+		{time = 0, spine = 360, span = 390},
+		{time = 1.0, spine = 360, span = 360},
+		{time = 2.2, spine = 360, span = 360},
+		{time = 3.0, spine = 360, span = 390},
 	},
 	duration = 3.0,
 	demand   = 2,
@@ -638,11 +638,31 @@ generate_ahead :: proc(
 // Deliberately measured at the *slowest* speed a run ever uses and with
 // the *widest* width a type can roll: both make the window longer, so a
 // pool that passes here passes at every speed and on every seed.
+//
+// **A floating cube drifts along its lane, so its window is wider at both
+// ends by the swing.** This is the whole reason the horizontal drift
+// needed the validator touched at all. Redo the arithmetic with a drift
+// d in [-A, A] added to the obstacle's x and the two conditions become
+// (a - t)v + d < PLAYER_SIZE and (a - t)v + d + w > 0; the worst case of
+// the first is d = -A and of the second is d = +A, which pushes the start
+// back by A/v and the end out by A/v. Leave it out and two events that
+// never overlap where they were authored can overlap where they actually
+// are — legal apart, illegal together, and nothing would say so.
+//
+// Checked against the truth rather than derived and trusted: sweeping
+// sixty authored phases and asking when a floating cube's x-span really
+// overlaps a body at the anchor gives [-0.3147, +0.2480] around the
+// arrival, the widened window gives [-0.3148, +0.2481], and the old one
+// gave [-0.1667, +0.1000] — too narrow at *both* ends. The widening is
+// exact to a ten-thousandth of a second, so it is the right bound and not
+// padding.
 @(private)
 event_window :: proc(event: PatternEvent) -> (start, end: f32) {
 	v := f32(INITIAL_SCROLL_SPEED)
 	w := get_max_width(event.obstacle_type, event.profile)
-	return event.time_offset - f32(PLAYER_SIZE) / v, event.time_offset + w / v
+	swing: f32 = event.floating ? CUBE_FLOAT_DRIFT : 0
+	return event.time_offset - (f32(PLAYER_SIZE) + swing) / v,
+		event.time_offset + (w + swing) / v
 }
 
 // Do two half-open intervals overlap?

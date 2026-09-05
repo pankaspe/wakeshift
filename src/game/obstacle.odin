@@ -159,15 +159,60 @@ PROFILE_PYRAMID := CubeProfile{1, 2, 3}
 CUBE_MAX_COLUMNS :: 8
 CUBE_MAX_HEIGHT :: 7
 
-// How high a floating cube rises above the surface of its lane, and how
-// long a full rise-and-fall takes.
+// A FLOATING CUBE ORBITS
+//
+// It rises and falls off the surface of its lane, and it drifts along the
+// lane at the same time, on one clock: lift is CUBE_FLOAT_LIFT/2 *
+// (1 - cos), drift is CUBE_FLOAT_DRIFT * sin, both of the same angle. Two
+// axes at one frequency and a quarter turn apart is an **ellipse**, so
+// the cube travels a closed orbit rather than doing two unrelated things,
+// which is what keeps it learnable (pillar 3): watch it once and you know
+// where it will be.
 //
 // The lift is comfortably over the player's own height, so at the top of
 // its travel the box is entirely clear of the body and the character
 // runs under it (over it, hanging from the ceiling — same picture with
 // the mirror applied). Anything under PLAYER_SIZE blocks.
+//
+// **Where the phases sit is load-bearing twice, and neither is taste.**
+//
+// The drift is zero at the top and the bottom of the orbit, so the cube
+// is at exactly the x its pattern authored at both moments the author
+// cares about — fully down and blocking, fully up and open. The arrival
+// time keeps meaning what it meant.
+//
+// And the cube never closes on the player faster than the world *while it
+// is able to block*. Its horizontal velocity is CUBE_FLOAT_DRIFT * 2pi /
+// PERIOD * cos, which is at its most positive — moving right, away from a
+// player it is approaching from the right — exactly where the lift is
+// least, which is the only place it can touch anybody. That matters
+// because the pin's pushback is capped at one step's scroll
+// (advance_ground): a face closing faster than the world would eat into
+// the body instead of pushing it, and the overlap would never close.
+//
+// **Measured, and it is tight rather than comfortable.** Swept over both
+// lanes and forty phases: the fastest a face approaches while blocking is
+// 260.3 px/s against a scroll of 270, so the cap has 9.7 px/s of margin;
+// anywhere in the orbit, blocking or not, it peaks at 427.2. Replayed
+// against a real pin, a body caught from the side takes 0 px of
+// interpenetration over 214 pinned steps.
+//
+// That margin is **borrowed from CUBE_FLOAT_LIFT being well over the
+// body**, and the two constants are coupled because of it. Blocking stops
+// at lift = PLAYER_SIZE, which at a lift of 96 is cos = 0.0625 — still
+// positive, which is the whole property. Drop the lift toward the body's
+// own height and that angle goes past the quarter turn, cos goes
+// negative, and the cube starts closing faster than the world. Re-measure
+// this if either number moves.
 CUBE_FLOAT_LIFT :: 96
+CUBE_FLOAT_DRIFT :: 40
 CUBE_FLOAT_PERIOD :: 1.6
+
+// The drift may never outrun the world, or the cube would swim upstream:
+// a shape crossing the screen rightward reads as another object entirely,
+// and it could re-enter a player it had already passed. The bound is the
+// slowest a run ever scrolls, so it holds for the whole game.
+#assert(CUBE_FLOAT_DRIFT * 2 * math.PI / CUBE_FLOAT_PERIOD < INITIAL_SCROLL_SPEED)
 
 // True for the type that is an *absence* rather than a thing. It is also
 // exactly the set the terrain draws rather than draw_obstacle: only the
@@ -373,9 +418,38 @@ get_cube_lift :: proc(obstacle: Obstacle, world: World) -> f32 {
 	if obstacle.obstacle_type != .Cube || !obstacle.floating {
 		return 0
 	}
+	return CUBE_FLOAT_LIFT * 0.5 * (1 - math.cos(cube_orbit_angle(obstacle, world)))
+}
+
+// How far along its lane a floating cube has drifted from the x its
+// pattern authored. Zero for every cube that rests on the surface.
+//
+// The other half of the orbit above, on the same clock and a quarter turn
+// out of phase, so the two are one motion rather than two. Positive is
+// toward the right of the screen, which is *later*: a cube drifting
+// forward arrives after its own arrival_time, and one drifting back
+// arrives before it. That is the whole of why the fairness windows have
+// to be widened by this amplitude (event_window in pattern.odin) — an
+// obstacle that moves in x changes when it reaches you, so two events
+// that never overlap where they were authored can overlap where they
+// actually are.
+get_cube_drift :: proc(obstacle: Obstacle, world: World) -> f32 {
+	if obstacle.obstacle_type != .Cube || !obstacle.floating {
+		return 0
+	}
+	return CUBE_FLOAT_DRIFT * math.sin(cube_orbit_angle(obstacle, world))
+}
+
+// Where a floating cube is in its orbit, in radians.
+//
+// A function of the obstacle's **own age** and its authored phase, never
+// of the global clock — so the same pattern presents the same face every
+// time it is generated, and the display can evaluate it a fraction of a
+// step ahead and get the answer the simulation would.
+@(private)
+cube_orbit_angle :: proc(obstacle: Obstacle, world: World) -> f32 {
 	age := world.elapsed_time - obstacle.arrival_time
-	turns := age / CUBE_FLOAT_PERIOD + obstacle.float_phase
-	return CUBE_FLOAT_LIFT * 0.5 * (1 - math.cos(turns * 2 * math.PI))
+	return (age / CUBE_FLOAT_PERIOD + obstacle.float_phase) * 2 * math.PI
 }
 
 // An obstacle's size right now.
@@ -391,7 +465,12 @@ get_obstacle_size :: proc(obstacle: Obstacle, world: World) -> rl.Vector2 {
 // corridor is bending underneath it.
 get_obstacle_position :: proc(obstacle: Obstacle, world: World) -> rl.Vector2 {
 	time_until_arrival := obstacle.arrival_time - world.elapsed_time
+
+	// The drift is part of where the cube *is*, so it is added before the
+	// ground is sampled: a floating cube reads the surface under the x it
+	// has drifted to, not the one it was authored at.
 	x := core.WORLD_ANCHOR_X + time_until_arrival * world.scroll_speed
+	x += get_cube_drift(obstacle, world)
 	size := get_obstacle_size(obstacle, world)
 
 	y := get_lane_y(world, obstacle.lane, x, size)

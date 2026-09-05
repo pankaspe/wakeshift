@@ -126,68 +126,74 @@ x ne dura 0.167, per un raggio di larghezza qualsiasi, zero compreso.
 
 ---
 
-## Dove sta il gioco adesso
+## 5 settembre 2026 — gli ostacoli si riducono a due
 
-A schermo non c'è niente di pieno tranne il fondo. Ci sono i **due ostacoli** (quadrato e buco),
-il tracciato che ondeggia e si strozza, la Corruzione che avanza da sinistra, il pennino che
-scrive il mondo a destra, e la parallasse.
+**T1 — Via la Sentinella** → Cancellata da sei file: il tipo, le costanti, i tre pattern e i loro
+riferimenti nei tier, `draw_sentinel`, le clausole del validatore. Con lei se ne va
+`is_lethal_to_both_lanes`, e la regola di equità torna a una frase sola.
 
-Manca la **curva di difficoltà costruita sui due ostacoli** — il pool vero — che è il pezzo che
-serve per avere la quadra sul gioco. Le venti pattern attuali sono state scritte quando la forma
-era un enum: nessuna usa ancora una skyline di più di tre colonne né una colonna di altezza zero.
+**T2 — Il quadrato dimezzato, il buco slegato** → Buchi a 65/103/140 px assoluti, poi l'unità da
+54 a **27**. Assoluti anche i limiti della coppia specchiata: erano scritti come multipli
+dell'unità, e dimezzandola la banda legale diventava vuota. Misurato: dimezzare la larghezza non
+dimezza il prezzo, perché a essere pagato è il tempo passato bloccati.
+
+**Il buco è un buco anche in alto** → Il soffitto non si dissolve più: si spezza come il
+pavimento, stesso segno specchiato. Via la coda sfumata e l'alone, scambiato a schermo per un
+emettitore. Con due ostacoli soli ognuno deve dire una cosa sola.
+
+**T3 — La forma diventa dato** → `CubeForm` non esiste più: il pattern scrive la skyline in
+colonne, e le stesse cifre sono ciò che blocca, ciò che regge e ciò che viene disegnato. Prima la
+piramide era disegnata a gradini e collideva come scatola piena. Il fluttuante diventa un flag.
+
+**T4 — Il fluttuante orbita** → Deriva orizzontale sfasata di un quarto di giro dal bob: due assi
+così sono un'ellisse. Le finestre di equità crescono dell'ampiezza, perché un ostacolo che si
+muove in x cambia quando ti raggiunge.
 
 ---
 
-## In corso — gli ostacoli si riducono a due
+## 5 settembre 2026 — il corridoio si allarga
 
-**Stato: T1, T2 e T3 fatti; resta T4.** Restano **quadrato** e **buco**. Il buco funziona già ed è intoccabile: ci
-cadi dentro, ti dissolvi, muori. Il quadrato diventa più piccolo, così le forme possono crescere.
-La curva di difficoltà sui due elementi è lo step **dopo** questo.
+Le due corsie erano troppo vicine per leggersi come due posti. Apertura di default da 340 a
+**390**, massimo a 470, e tutti i 76 `span` autorati traslati di +50 invece che scalati: una
+strozzatura riguarda quanto spazio resta al corpo, e il corpo è 45 px assoluti.
+
+---
+
+## Dove sta il gioco adesso
+
+A schermo non c'è niente di pieno tranne il fondo. Ci sono i **due ostacoli** (quadrato e buco), il
+tracciato che ondeggia e si strozza, la Corruzione che avanza da sinistra, il pennino che scrive il
+mondo a destra, e la parallasse.
+
+Manca il gioco. Le venti pattern sono tutte scritte per il vecchio enum: **nessuna usa il
+vocabolario che T3 ha costruito** — niente skyline oltre le tre colonne, nessuna colonna a zero. E
+si vede nella misura: una corsia è minacciata il **13,1%** del tempo, letale il 3,7%, contro un
+obiettivo di oltre il 40%. Il mondo è per lo più aria.
+
+---
+
+## In corso — il mondo di mattoncini e la curva di difficoltà
+
+**Riferimento visivo: `sketch.jpeg` in root.** Il mondo si costruisce con i quadrati, che sono i
+mattoncini di gioco: **pavimento e soffitto diventano dritti** e tutto il rilievo lo fanno le
+colonne — scale, torri isolate, altopiani, canyon, strozzature affacciate. Il blocco staccato che
+si muove è il fluttuante, che c'è già.
+
+La forma dei pattern resta autorata, la forma dei blocchi no: il pattern autora il **ritmo**
+(quando, quale corsia, cosa chiede) e il generatore pesca la **skyline** dentro limiti che il
+pattern dichiara. È nella grana del progetto — `get_max_width` esiste già apposta per far ragionare
+il validatore su un evento prima che le sue scelte casuali siano fatte, ed è così che il buco tira
+a sorte la propria larghezza.
 
 | | Task | Modello |
 |---|---|---|
-| **T1** | **Rimuovere Sentinella e pulsar** → Cancellazione meccanica: il tipo `.Sentinel`, le costanti `SENTINEL_*`, i tre pattern che la usano e i loro riferimenti nei tier, `draw_sentinel`, le clausole del validatore che la nominano, `is_lethal_to_both_lanes` che resta senza chiamanti, e la sezione *The curtain* nel README. Verifica: compila, il pool valida senza warning, nessun riferimento morto. | Sonnet |
-| **T2** | **Il quadrato più piccolo, e il buco slegato da lui** → Oggi `GAP_WIDTH_*` sono multipli di `CUBE_UNIT`: rimpicciolire l'unità rimpicciolirebbe anche i buchi, che devono restare come sono. Prima si staccano le due scale (buchi a 65/103/140 px assoluti), poi l'unità scende da 54 a **27**. Misurare: quanto terreno costa un blocco alla nuova taglia, e se un singolo si legge ancora contro un personaggio di 45 px. | Opus |
-| **T3** | **La forma diventa dato** → `CubeForm` da enum cablato a **profilo di colonne** autorato nel pattern, così ogni skyline è dato e non codice. Tocca blocco (contro quale colonna ti fermi), appoggio (su quale poggi) e disegno (il terreno emette il profilo invece della piramide cablata). Proposta: profilo libero più un validatore che rifiuta quelli illegali. | Opus |
-| **T4** | **Il fluttuante, orizzontale e verticale** → Il verticale c'è già come funzione dell'età dell'ostacolo. L'orizzontale è la stessa matematica su x, ma **cambia quando ti raggiunge**, quindi la finestra che il validatore usa per l'equità va allargata dell'ampiezza dell'oscillazione o due ostacoli legali separatamente diventano illegali insieme. | Opus |
+| **C1** | **Il pavimento diventa dritto** → Spina e apertura diventano costanti: via `Pattern.track`, via `report_track_faults`, via l'ondulazione. La strozzatura non è più un'apertura che si stringe ma due colonne affacciate, cioè si autora con lo stesso vocabolario di tutto il resto. **Attenzione**: quello che se ne va è il *keyframing*, non `Ground` né `ground_time_at_x` — la mappa fra scroll e tempo è ciò che rende gli ostacoli eventi nel tempo e deve restare intatta. Da controllare chi legge il tracciato per l'orizzonte e la parallasse. | Opus |
+| **C2** | **Il pool vero, costruito a mattoncini** → Il contenuto: le skyline dello sketch, profili pescati dentro limiti dichiarati dall'evento e verificati staticamente come già si fa per la larghezza del buco. Densità molto su. Obiettivo misurato: **oltre il 40%** di tempo con almeno una corsia minacciata, contro il 13,1% di oggi. Ogni regola nuova va controllata contro "stare fermi sopravvive a questo?", che è la misura che ha chiuso la v1.3. | Opus |
+| **C3** | **La curva continua, in distanza** → Via i tre tier discreti, dentro una funzione continua. **La variabile è la distanza, non il tempo**: così comprare velocità compra punteggio e difficoltà insieme, e rallentare non è una strategia. Cresce la densità (l'aria fra i pattern) e cresce la parzialità del sorteggio verso i pattern che chiedono di più. La velocità smette di essere una manopola del tier. | Opus |
+| **C4** | **Il feedback dello scalino** → Ogni tot distanza un burst particellare dice "sei salito di un gradino", senza scriverlo. Da far percepire, non da spiegare. `fx/particles.odin` c'è già: il pool è fisso, ha un generatore di casualità proprio che **non è quello della run** — e non deve diventarlo, o due replay della stessa run divergerebbero. Emesso dal clock del frame, mai dentro uno step. | Sonnet |
+| **C5** | **L'intro e il tutorial** → I primi secondi: un testo in fadeIn insegna `SPACE`, poi il gioco entra. **Rischio noto**: l'aria morta è esattamente ciò che ha chiuso la v1.3, e dieci secondi in cui non succede niente sono lunghissimi alla seconda run. Tenere l'intro corta e far arrivare il primo ostacolo presto. | Sonnet |
 
-**Decisione presa (T3)**: profilo libero, più un validatore che rifiuta quelli illegali.
+**Decisioni ancora aperte (C5)**: quanto dura l'intro, e se si ripete a ogni run o solo alla prima.
 
-**Restano da fare: T4.** T1, T2 e T3 sono chiusi — le voci in fondo.
-
----
-
-## 5 settembre 2026 — T1: la Sentinella è rimossa
-
-Cancellazione meccanica in sei file: il tipo `.Sentinel`, le sue costanti, i tre pattern che la
-usavano e i loro riferimenti nei tier, `draw_sentinel`, le clausole del validatore che la
-nominavano, `is_lethal_to_both_lanes` (rimasta senza chiamanti) e la sezione *The curtain* nel
-README. Restano cubo e buco. Compila, il pool valida senza warning, il gioco si avvia senza crash.
-
----
-
-## 5 settembre 2026 — T2: il quadrato dimezzato, il buco slegato
-
-Buchi a 65/103/140 px assoluti con un'altezza propria, poi l'unità da 54 a **27**. Assoluti anche i
-limiti della coppia specchiata, che erano scritti come multipli dell'unità e non lo sono mai stati:
-dimezzandola la banda legale diventava vuota. La coppia passa a `Wide` (54 px, il vecchio
-quadrato), perché il primitivo ora è più stretto del corpo e sparirebbe dentro di lui.
-
----
-
-## 5 settembre 2026 — il buco è un buco anche in alto
-
-Il soffitto non si dissolve più: si spezza come il pavimento, con la linea che esce dal corridoio
-al labbro e due angoli retti, lo stesso segno specchiato. Via la coda sfumata e l'alone
-dell'apertura, che a schermo era stato scambiato per un emettitore. Con due soli ostacoli ognuno
-deve essere un segno solo che dice una cosa sola, da qualsiasi parte lo incontri.
-
----
-
-## 5 settembre 2026 — T3: la forma diventa dato
-
-`CubeForm` non esiste più. Il pattern scrive la skyline in colonne — `{1,2,3}` è una scala,
-`{3,0,3}` due torri e un canyon — e le stesse cifre sono ciò che blocca, ciò che regge e ciò che
-viene disegnato: una funzione sola, `get_cube_column`. Prima la piramide era *disegnata* a gradini
-e *collideva* come scatola piena, cioè mostrava uno scalino su cui non ti lasciava salire. Il
-fluttuante smette di essere una forma e diventa un flag. Un validatore rifiuta i profili illegali.
+**Nota per C1**: l'allargamento di ieri ha traslato 76 `span` autorati che C1 cancellerà insieme al
+resto del keyframing. Non è lavoro buttato — la costante che conta, l'apertura del corridoio, resta.

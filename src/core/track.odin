@@ -57,9 +57,20 @@ TRACK_HISTORY :: 3.0
 // The corridor's limits. Below the minimum two cubes facing each other
 // would leave no room to be anywhere; above the maximum a flip crosses so
 // much screen in 0.16 s that it stops reading as a movement.
+//
+// The default opened at 340 until the two lanes were judged too close
+// together to read as two places. It moved to 390 and every authored span
+// moved with it by the same **+50**, not by a ratio: a pinch is about how
+// much room the body has left and the body is an absolute 45 px, so
+// shifting keeps every pattern's pinch worth exactly what it was worth
+// before. The rate limits are differences, so nothing had to be retimed.
+//
+// The minimum stays where it was. Nothing authored comes near it any more
+// — the tightest is now 304 — and CUBE_MAX_HEIGHT is derived from it
+// (game/obstacle.odin), so moving it would move the tallest legal column.
 TRACK_SPAN_MIN :: 250
-TRACK_SPAN_MAX :: 430
-TRACK_SPAN_DEFAULT :: 340
+TRACK_SPAN_MAX :: 470
+TRACK_SPAN_DEFAULT :: 390
 
 // How much sky is always left outside the corridor, so the background has
 // somewhere to be and the world does not read as a box.

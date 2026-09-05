@@ -84,15 +84,26 @@ The obstacle set came down to two over T1–T3 in September 2026: the Sentinel d
 unit halved to 27 with the hole's widths cut loose from it, and the cube's shape turned from a
 hardcoded enum into a **column profile authored in the pattern**. `TIMELINE.md` has the entries.
 
-**T4 is the one task of that group still open**: the floating cube gaining horizontal movement
-alongside its vertical bob. What it needs to know before it starts: the vertical bob is already a
-pure function of the obstacle's own age (`get_cube_lift`), and the horizontal is the same
-arithmetic on x — but a cube that moves in x **changes when it reaches you**, so the window
-`event_window` computes for the fairness check has to be widened by the swing's amplitude, or two
-obstacles that are legal apart become illegal together.
+T4 closed the group: the floating cube now **orbits**, its vertical bob and a horizontal drift on
+one clock a quarter turn apart, and `event_window` grew by the swing's amplitude because an
+obstacle that moves in x changes when it reaches you.
 
-After that, and not before: **a difficulty curve built on the two obstacles**, which means the
-real pattern pool. That is the piece the user is waiting on to judge whether the 27 px cube reads.
+**The next piece is decided and written down**, and it is the whole of what is left before the
+game can be judged: `TIMELINE.md` ends with five tasks (C1..C5) and the model each is tagged for.
+Read them there rather than re-deriving them. In one sentence: **the world gets built out of the
+bricks**, so the floor and the ceiling go straight and every piece of relief becomes a column
+profile — the author's `sketch.jpeg` in the repo root is the reference.
+
+Two things a cold session should know before starting on it:
+
+- **C1 deletes most of "The track is simulation" below.** That section is still accurate today and
+  will not be once the corridor stops undulating. What goes is the *keyframing* — `Pattern.track`,
+  `report_track_faults`, the spine and span moving at all. What must survive untouched is `Ground`
+  and `ground_time_at_x`: the scroll-to-time mapping is what makes an obstacle an event in time
+  rather than a position, and it is load-bearing for everything else. A constriction stops being a
+  narrowing span and becomes two facing columns, which is the same vocabulary as the rest.
+- **The pool is the content and it is nearly empty.** Not a mechanism problem: the generator works,
+  it has nothing good to generate. See the known issue below for the numbers.
 
 Why the design was rewritten in September 2026, measured rather than guessed: 200 simulated runs
 that never touched the key, **161 survived the whole first tier**, median death at 35 s; **86% of
@@ -940,6 +951,15 @@ Tracked here so they are not rediscovered. Nothing here is scheduled — the use
   nothing where it used to cost the cube's whole width in dragged ground. A cube still charges
   when it arrives at the character's *side*, which is the case the design was written around, but
   a mirrored pair is much cheaper than the v2.0 measurements assumed.
+- **A floating cube descending onto a body underneath it drags them backwards.** Found by replay
+  in T4 and **not caused by it**: the cube's blocking face is *behind* a character who has run
+  under it, so the pin clamps them to a position they have already passed and the one-step floor
+  in `advance_ground` walks them back a step at a time. Measured over twenty authored phases, 67
+  px at `CUBE_FLOAT_DRIFT = 0` and 66 px with the swing, so the horizontal drift very slightly
+  *improves* it. Caught from the side — the case the design is written around — it is 0 px over
+  214 pinned steps. The fix is a rule about what a descending surface does to a body below it,
+  which the game has never needed before; the pool does not currently author a float that lands
+  on the player, so nothing on screen hits it today.
 - **A body landing exactly as a tall cube arrives keeps up to 18 px of side contact**, 40% of its
   width. It is the documented "move first, resolve second" cap doing its job: whatever overlap
   the landing frame starts with is kept, because the pushback is limited to one step's scroll and
