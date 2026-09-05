@@ -17,18 +17,18 @@
 *   stopped against its face and dragged backwards with it, losing ground
 *   to the Corruption for as long as they stay there.
 *
-*   **what forbids.** A Sentinel. It is the only danger that asks what
-*   the character is *doing*: it takes the middle of the corridor, so a
-*   settled body on either lane is clear of it and a crossing one is not.
-*   For its length the flip is what kills you, which means committing to
-*   a lane before it arrives.
+*   **what times you.** A Sentinel. It is the only danger that asks
+*   *when*: a pulsar on one lane fires a ray across the corridor to the
+*   other, the ray kills what it touches, and the lane it starts on is
+*   the one that clears first. Standing still does not survive it, which
+*   is the point — it is the one obstacle that requires a press.
 *
 * That split is what makes the three read differently. A cube is a price:
 * be elsewhere when it goes by, or pay. A gap is a stretch not to be
 * standing in, and it is answered by being anywhere else at all. A
-* Sentinel is a stretch not to be *moving* in. One asks "move now or
-* pay", the second says "do not be down here", the third says "do not
-* move".
+* Sentinel is a crossing to be made behind the ray. One asks "move now or
+* pay", the second says "do not be down here", the third says "move, and
+* on the beat".
 *
 * And it is what makes the design's centrepiece legal. Because a cube is
 * not lethal, **both lanes may hold one at the same time** — a mirrored
@@ -78,10 +78,21 @@ check_player_obstacle_collision :: proc(player: Player, obstacle: Obstacle, worl
 		return player.state != .Transitioning && player.lane == obstacle.lane
 
 	case .Sentinel:
-		// It has no lane, and it does not care which one you came from:
-		// the middle of the corridor is the only place it occupies and
-		// crossing is the only way to be there.
-		return player.state == .Transitioning
+		// The ray is a thing travelling across the corridor and it kills
+		// what it touches, so this is a plain overlap — the only one in
+		// the file, because it is the only danger that is neither an
+		// absence nor a wall.
+		//
+		// Not forgiven by the grace period. That exists to excuse the flip
+		// started at the last possible instant against a hole, where being
+		// mid-journey is the answer; here being mid-journey is the answer
+		// *and* the risk, and a tenth of a second of free passage through
+		// a moving ray would be handed to exactly the player who left it
+		// too late.
+		return rl.CheckCollisionRecs(
+			to_rect(player.position, player.size),
+			get_obstacle_rect(obstacle, world),
+		)
 
 	case .Cube:
 		return false // it costs, it does not kill — see blocks_player

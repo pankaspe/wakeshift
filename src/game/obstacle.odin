@@ -19,9 +19,11 @@
 *                 still resting on that lane when it passes, so being
 *                 mid-flip answers it as completely as being on the other
 *                 lane does (see collision.odin).
-*   the Sentinel  a beam across the middle of the corridor. It asks what
-*                 you are *doing* rather than where you are: standing on
-*                 either lane is safe, crossing is death.
+*   the Sentinel  a pulsar on one lane that sweeps a ray across the
+*                 corridor toward the other, stopping short of it. It
+*                 asks what you are *doing*: the ray fills the space a
+*                 flip would cross, so a settled body on the far lane is
+*                 clear of it and a crossing one is not.
 *
 * THE CUBE IS ONE PRIMITIVE AT SIX SIZES
 *
@@ -86,19 +88,40 @@ CubeForm :: enum {
 CUBE_FLOAT_LIFT :: 96
 CUBE_FLOAT_PERIOD :: 1.6
 
-// The beam's width: about 0.7 s at the opening speed, long enough that
-// "hold still" is a commitment rather than a flinch.
+// THE SENTINEL SWEEPS, AND IT STOPS SHORT
 //
-// It has no height of its own. It **crosses the corridor from side to
-// side** (Design Doc, section 10), which is what it has always meant: the
-// collision test is `horizontally_overlapping` plus "are you moving", and
-// it has never once looked at the beam's height (collision.odin). Until 5
-// September it was *drawn* as a horizontal band taking a fraction of the
-// span, on the theory that a settled body had to be clear of it — but
-// nothing was ever clear of it, because the rule is about time and not
-// about where you are standing. The band was a picture of a rule the game
-// does not have.
+// A pulsar sits on one lane and sweeps a ray of SENTINEL_BEAM_HEIGHT
+// across the corridor toward the other — **stopping SENTINEL_CLEARANCE
+// short of a body settled there**. So the far lane is always safe, the
+// pulsar's own lane is lethal the moment it fires, and everything between
+// is swept: which is to say the ray fills exactly the space a flip would
+// have to cross.
+//
+// The rule that comes out of that is the one this obstacle always had —
+// standing on the right lane is safe, crossing is death — and what the
+// sweep buys is that the picture now *shows* why. A static band in the
+// middle of the corridor said "do not be here" while the rule said "do
+// not move here", and once the drawing touched both lanes the two
+// disagreed out loud.
+//
+// **It has to stop short, and that is arithmetic rather than taste.**
+// Measured: a flip crosses the corridor at about 2100 px/s and a ray that
+// crossed the whole of it inside its own window would travel at 450, head
+// on. Two things closing on each other from opposite ends always meet, so
+// a ray that reached the far lane while it could still touch you would
+// have no answer at all — not a hard obstacle, an unsurvivable one.
+
+// The ray's window in x — about 0.7 s at the opening speed — how thick
+// the ray is, and how much room it leaves at the far end.
+//
+// The thickness is a real number rather than a fraction of the span
+// because the ray is a *thing travelling*, not a share of the corridor:
+// it has to look the same width wherever the corridor happens to be at
+// its narrowest or widest. The clearance is a body plus a margin, so a
+// settled character is clear of it at every legal span.
 SENTINEL_WIDTH :: CUBE_UNIT * 3.5
+SENTINEL_BEAM_HEIGHT :: 20
+SENTINEL_CLEARANCE :: PLAYER_SIZE + 14
 
 // True for the type that is an *absence* rather than a thing. It is also
 // exactly the set the terrain draws rather than draw_obstacle: only the
@@ -115,10 +138,11 @@ is_lethal :: proc(obstacle_type: ObstacleType) -> bool {
 	return obstacle_type == .Gap || obstacle_type == .Sentinel
 }
 
-// True for a danger that is lethal to *both* lanes at once rather than to
-// the one it stands on. Only the Sentinel is, and it is why the fairness
-// rule has a second sentence: nothing lethal may share its window, on
-// either lane (Design Doc, section 6).
+// True for a danger that is lethal to *both* lanes over its window rather
+// than to the one it stands on. Only the Sentinel is — it visits both
+// while it crosses — and it is why the fairness rule has a second
+// sentence: nothing lethal may share its window, on either lane (Design
+// Doc, section 6).
 is_lethal_to_both_lanes :: proc(obstacle_type: ObstacleType) -> bool {
 	return obstacle_type == .Sentinel
 }
@@ -267,10 +291,46 @@ get_obstacle_size :: proc(obstacle: Obstacle, world: World) -> rl.Vector2 {
 	if obstacle.obstacle_type != .Sentinel {
 		return obstacle.size
 	}
+	return rl.Vector2{SENTINEL_WIDTH, SENTINEL_BEAM_HEIGHT}
+}
+
+// How far the ray has crossed the corridor: 0 on the lane its pulsar sits
+// on, 1 on the opposite one.
+//
+// A ratio of the obstacle's own window against the anchor, so it is a
+// pure function of where the obstacle is and needs no clock of its own —
+// and, being a ratio of two lengths, it is the same crossing whatever the
+// scroll speed is doing, which is what every other obstacle in the game
+// promises too.
+//
+// The ray is therefore at the pulsar's lane exactly when its leading edge
+// reaches the anchor and at the far lane when its trailing edge leaves,
+// which is the whole of the timing: while the ray can touch you it is
+// travelling, and the lane it started on is the one that clears first.
+get_sentinel_sweep :: proc(obstacle: Obstacle, world: World) -> f32 {
 	time_until_arrival := obstacle.arrival_time - world.elapsed_time
-	x := core.WORLD_ANCHOR_X + time_until_arrival * world.scroll_speed
-	_, span := get_track_at_x(world, x)
-	return rl.Vector2{obstacle.size.x, span}
+	left := core.WORLD_ANCHOR_X + time_until_arrival * world.scroll_speed
+	return clamp((core.WORLD_ANCHOR_X - left) / SENTINEL_WIDTH, 0, 1)
+}
+
+// Where the ray is at a given x: from the pulsar's own lane toward the
+// other, stopping a body's height short of it. It bends with the corridor
+// rather than cutting across it, because the two ends are lane surfaces
+// and those are what the corridor is.
+get_sentinel_beam_y :: proc(obstacle: Obstacle, world: World, x: f32) -> f32 {
+	sweep := get_sentinel_sweep(obstacle, world)
+	from := get_surface_y(world, obstacle.lane, x)
+	to := get_surface_y(world, obstacle.lane == .Real ? .Dream : .Real, x)
+
+	// Toward the far lane, but never into the room a settled body needs.
+	reach := to - from
+	short := f32(SENTINEL_CLEARANCE + SENTINEL_BEAM_HEIGHT * 0.5)
+	if abs(reach) > short {
+		reach -= reach > 0 ? short : -short
+	} else {
+		reach = 0
+	}
+	return from + reach * sweep
 }
 
 // Computes the obstacle's current on-screen position, derived from how
@@ -286,8 +346,10 @@ get_obstacle_position :: proc(obstacle: Obstacle, world: World) -> rl.Vector2 {
 	size := get_obstacle_size(obstacle, world)
 
 	if obstacle.obstacle_type == .Sentinel {
-		spine, _ := get_track_at_x(world, x)
-		return rl.Vector2{x, spine - size.y * 0.5}
+		// Measured at the middle of its own window, so the box the
+		// collision uses is where the ray is drawn.
+		centre := get_sentinel_beam_y(obstacle, world, x + size.x * 0.5)
+		return rl.Vector2{x, centre - size.y * 0.5}
 	}
 
 	y := get_lane_y(world, obstacle.lane, x, size)

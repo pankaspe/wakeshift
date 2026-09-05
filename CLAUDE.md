@@ -336,7 +336,7 @@ reproduces it.
 |---|---|---|---|
 | **Cube** | *do not be here, or you pay* | no — it **blocks** | ✅ |
 | **Gap** | *do not be here* | yes | ✅ |
-| **Sentinel** | *do not move right now* | yes | ✅ |
+| **Sentinel** | *do not move right now* — a pulsar sweeps a ray across the space a flip would cross | yes | ✅ |
 
 The cube is **one primitive at six sizes** (`CubeForm`): standard, small, wide, stack, pyramid,
 and the floating one. Mechanically only the width matters — and, on the floating one, whether
@@ -376,17 +376,22 @@ Three rules the implementation established, all found by replaying the simulatio
   and it is the first thing in the project's history that turns "where do I go" into "which
   price do I pay". The v1.x design could never do it: two lethal lanes is an unsolvable pattern.
   What a cube costs is its **width**, because width is how long you stay pinned.
-- **The Sentinel is the only danger that asks what you are *doing* rather than where you are**,
-  and since 5 September it is drawn as what it has always been: a beam **crossing the corridor**,
-  floor to ceiling. Nothing forbids the press — the flip is simply what it kills, which means
-  committing to a lane in advance. It used to be drawn as a horizontal band taking 42% of the
-  span, on the theory that a settled body had to be clear of it; nothing was ever clear of it,
-  because `check_player_obstacle_collision` tests `horizontally_overlapping` plus "are you
-  moving" and has never once looked at the beam's height. The band was a picture of a rule the
-  game does not have. Three vertical marks now: a bright one down the middle of the window and
-  two faint ones at its edges, which are what say the ban lasts 0.7 s — a single line could not.
-  It has no lane, so it is drawn out of the **neutral** palette: it belongs to neither world, and
-  the one thing it must never look like is a threat to only one of them.
+- **The Sentinel is a pulsar that sweeps a ray**, and since 5 September the ray is a real thing
+  that kills what it touches rather than a state flag. A pulsar sits on one lane and the ray
+  travels toward the other, **stopping `SENTINEL_CLEARANCE` short of a body settled there**. So
+  the far lane is always safe, the pulsar's own lane is lethal the moment it fires, and
+  everything between is swept — which is to say the ray fills exactly the space a flip would have
+  to cross. The rule is the one this obstacle always had; what the sweep buys is that the picture
+  finally shows *why*.
+- **It has to stop short, and that is arithmetic rather than taste.** Measured: a flip crosses
+  the corridor at about 2100 px/s and a ray crossing the whole of it inside its own window
+  travels at 450, head on. Two things closing from opposite ends always meet, so a ray that
+  reached the far lane while it could still touch you would have no answer at all — the harness
+  found zero surviving presses out of two hundred. Not a hard obstacle: an unsurvivable one.
+- It is drawn out of the **neutral** palette: it belongs to neither world, and the one thing it
+  must never look like is a threat to only one of them. Both marks are the game's own stroke —
+  the pulsar a heavy round one on the lane, the ray a stroke whose *thickness* is the height that
+  kills, so the mark and the hitbox are the same thing.
 - **Invulnerability is decided per type, not once at the top of the collision check.** The grace
   period exists to forgive the flip started at the last possible instant against a hole — but
   against a Sentinel the flip *is* the mistake, so forgiving the first tenth of a second of
