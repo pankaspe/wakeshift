@@ -177,6 +177,12 @@ rende la giunzione sicura a qualunque gap: sostituisce la vecchia regola del cor
 C1 aveva cancellato. E due cubi sulla stessa corsia non possono sovrapporsi in x, perché il
 terreno ne scarta uno e la collisione lo terrebbe — un pericolo che non si vede.
 
+**C3 — La curva continua, in distanza** → Via i tre tier: `get_difficulty(scroll_offset)` è tutto.
+Due manopole su curve diverse — l'aria fra i pattern si spende presto, la pendenza del sorteggio
+morde tardi — più una distanza di sblocco per ogni pattern. Una curva sola satura, ed è quello che
+il giocatore chiama "smette di diventare difficile". La velocità smette di essere una manopola: si
+scorre sempre a 270 finché non la compra il giocatore.
+
 ---
 
 ## Dove sta il gioco adesso
@@ -186,23 +192,23 @@ pavimento e un soffitto dritti su cui tutto il rilievo lo fanno le colonne — t
 scale, canyon, creste, strozzature affacciate — la Corruzione che avanza da sinistra, il pennino
 che scrive il mondo a destra, e la parallasse.
 
-Il mondo non è più aria. Misurato su 8 semi x 120 s senza giocatore: una corsia è minacciata il
-**40,9%** del tempo contro il 13,1% di prima, e su 200 run che non toccano mai il tasto la morte
-mediana è a **3,4 s**, nessuna supera il primo tier — contro 35 s e 161 su 200 della v1.3. Un bot
-avido che guarda una mossa avanti tiene 49,5 s di mediana e muore sempre per Corruzione, mai in un
-buco.
+Il mondo non è più aria e la difficoltà è una curva. Misurato senza giocatore, in bande da 5000 px:
+una corsia è minacciata dal **24,7%** della prima banda al **68,7%** della dodicesima, e sale sempre.
+Su 200 run che non toccano mai il tasto la morte mediana è a **3,4 s** — contro 35 s e 161 su 200
+della v1.3. Un bot avido che guarda una mossa avanti arriva a 23 700 px (depth 2375) e muore sempre
+per Corruzione, mai in un buco; in cima alla curva, 40 su 40 sopravvivono un minuto ai soli buchi.
 
-Manca la **curva**: i tre tier sono ancora tre scalini su un orologio.
+Manca il **feedback** — niente dice al giocatore che è salito di un gradino — e manca l'ingresso.
 
 ---
 
-## In corso — la curva di difficoltà
+## In corso — il feedback e l'ingresso
 
-Il mondo di mattoncini è costruito (C1 e C2). Quello che resta è come cresce, e come si entra.
+Il mondo è costruito e la curva c'è (C1, C2, C3). Quello che resta non è meccanica: è dire al
+giocatore cosa sta succedendo, e insegnargli il tasto.
 
 | | Task | Modello |
 |---|---|---|
-| **C3** | **La curva continua, in distanza** → Via i tre tier discreti, dentro una funzione continua. **La variabile è la distanza, non il tempo**: così comprare velocità compra punteggio e difficoltà insieme, e rallentare non è una strategia. Cresce la densità (l'aria fra i pattern) e cresce la parzialità del sorteggio verso i pattern che chiedono di più. La velocità smette di essere una manopola del tier. | Opus |
 | **C4** | **Il feedback dello scalino** → Ogni tot distanza un burst particellare dice "sei salito di un gradino", senza scriverlo. Da far percepire, non da spiegare. `fx/particles.odin` c'è già: il pool è fisso, ha un generatore di casualità proprio che **non è quello della run** — e non deve diventarlo, o due replay della stessa run divergerebbero. Emesso dal clock del frame, mai dentro uno step. | Sonnet |
 | **C5** | **L'intro e il tutorial** → I primi secondi: un testo in fadeIn insegna `SPACE`, poi il gioco entra. **Rischio noto**: l'aria morta è esattamente ciò che ha chiuso la v1.3, e dieci secondi in cui non succede niente sono lunghissimi alla seconda run. Tenere l'intro corta e far arrivare il primo ostacolo presto. | Sonnet |
 

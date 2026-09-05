@@ -14,11 +14,13 @@ import "../core"
 import "../game"
 import "core:math"
 
-// Depth is measured in seconds rather than in score, so the convergence
-// lands on the same beat as the difficulty tiers and, later, the layers
-// (Design Doc, section 3): the two worlds start blurring together as the
-// run leaves the first layer, and are nearly one by the time it reaches
-// what the doc calls Dissolution.
+// Depth is measured in seconds rather than in score. It used to be so
+// that the convergence landed on the same beat as the difficulty tiers;
+// C3 put difficulty on distance, so the two are only in step while speed
+// is constant, which it is until the player can buy it (roadmap R6.3).
+// Moving this onto scroll_offset would be a no-op today and correct
+// afterwards, but it changes the look, so it waits for a playtest to ask
+// for it (Design Doc, section 3).
 CONVERGENCE_START_TIME :: 30
 CONVERGENCE_FULL_TIME :: 100
 

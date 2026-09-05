@@ -35,8 +35,9 @@
 * R6.3) buy difficulty along with the score, automatically and without a
 * line of code that knows it does.
 *
-* The tiers still measure themselves in seconds until roadmap R5.3, which
-* moves them onto the same clock as this.
+* The rest of the game caught up in C3: the difficulty curve is a function
+* of scroll_offset now, on exactly the clock this has always used
+* (difficulty.odin).
 */
 package game
 

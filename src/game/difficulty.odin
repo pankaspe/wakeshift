@@ -1,210 +1,125 @@
 /*
 * Difficulty
-* Discrete difficulty tiers (Design Doc, section 18).
+* One continuous function of **distance**, and that is the whole file
+* (Design Doc, section 18).
 *
-* WHY SPEED IS NOT THE CURVE
+* WHY DISTANCE AND NOT TIME
 *
-* A tier used to be a scroll speed and a few unlocked patterns, and the
-* curve came almost entirely from the speed. Working out what speed
-* actually buys showed why that felt flat:
+* It used to be three tiers on a clock: at 25 seconds the world got
+* faster, at 55 it got faster again, and each step unlocked a handful of
+* patterns. C3 replaced all of it with `get_difficulty(scroll_offset)`.
 *
-* Obstacles are events in time, not positions (obstacle.odin). A Block
-* authored at time_offset 1.0 arrives one second after its pattern starts
-* at 270 px/s and at 400 px/s alike, so *reaction time inside a pattern
-* does not move with speed at all*. Replaying every pattern at all three
-* speeds says the same thing: the set of answers that survive does not
-* change.
+* Distance is what makes buying speed honest. From roadmap R6 the player
+* buys Slancio, and depth is the distance travelled (score.odin) — so a
+* faster run earns score and meets difficulty at exactly the same rate,
+* automatically and with no line of code that knows it does. On a clock
+* the two would come apart: going faster would buy score for free, and
+* going slower would be a way to farm an easy world. It also puts the
+* curve on the same measure the Corruption already used, which was the
+* only part of the game that had it right (corruption.odin).
 *
-* What speed does change is two things that pull in opposite directions.
-* The player can see 1080 px ahead (SCREEN_WIDTH - PLAYER_X), which is
-* 4.0 seconds of warning at 270 and 2.7 at 400 — harder. And a wide
-* obstacle passes in width/speed seconds, so the longest chasm blocks the
-* floor for 0.69s at 270 and 0.46s at 400 — easier. Speed is a real knob,
-* but it is a *reading* knob, and it partly cancels itself.
+* WHY SPEED IS NOT A KNOB HERE ANY MORE
 *
-* So a tier moves three things, and speed is the smallest of them:
+* Because it never worked as one, and that was measured long before C3.
+* Obstacles are events in time, so reaction time *inside* a pattern does
+* not move with speed at all: replaying every pattern at 270, 330 and 400
+* px/s gives the same set of surviving answers. What speed does change is
+* two things that pull against each other — you can see 920 px ahead,
+* which is 3.4 s of warning at 270 and 2.5 at 370, harder; and a wide
+* obstacle passes in width/speed seconds, which is easier. A run scrolls
+* at INITIAL_SCROLL_SPEED now and only the player moves it.
 *
-*   scroll_speed    how long you get to look at what is coming
-*   gap             empty air between patterns — the density knob, and
-*                   the only one that is honestly monotonic
-*   demand_weights  which patterns get drawn, not merely which are legal
+* THE TWO KNOBS
 *
-* The third is the one that was missing entirely. Unlocking a pattern is
-* not the same as meeting it: an even draw over a growing pool serves the
-* newest patterns about as rarely as on the day they became possible.
+*   gap    seconds of empty air after each pattern. The density knob, and
+*          since C2 the *only* one — a pattern holds its own windows and
+*          carries no lead-in, so all the air in the game is here.
+*   bias   how hard the draw leans on patterns that ask more. A pattern
+*          of demand d is drawn with weight bias^d, so one number covers
+*          the whole range: under 1 it prefers the quiet ones, at 1 the
+*          draw is even, and at 4 a burst is sixty-four times likelier
+*          than a bump.
 *
-* **Two things here are placeholders until roadmap R5.3.** Speed will
-* stop rising with the tier altogether and become something the player
-* buys, and the thresholds will be measured in *distance* rather than in
-* time — which is what makes buying speed buy difficulty along with it,
-* for free and without a line of code that knows it does.
+* They are deliberately on **different curves**, because a single curve
+* saturates and a saturated curve is what a player calls "it stops
+* getting harder". The air is spent early (quadratic out) so the opening
+* minute changes fast; the bias bites late (quadratic in) so there is
+* still something moving when the air has run out. On top of both, every
+* pattern declares the distance it becomes available at (Pattern.min_depth),
+* spread across the whole curve, so a long run keeps meeting things it
+* has not met before.
 */
 package game
 
-import "../core"
-import "core:fmt"
+import "core:math"
+import "core:math/ease"
 
-Tier :: struct {
-	name:           string,
-	start_time:     f32, // world.elapsed_time at which this tier begins
-	scroll_speed:   f32, // target speed once this tier is reached (world eases toward it)
-	gap:            f32, // seconds of empty air after each pattern
-	demand_weights: [DEMAND_LEVELS]int, // how often a pattern of each demand is drawn
-	added_patterns: []Pattern, // extra patterns available from this tier onward
-}
+// Pixels of world scrolled at which the curve tops out. About three
+// minutes at the opening speed, and comfortably past where a good run
+// ends — a curve that finishes while the player is still alive is the
+// thing C3 exists to fix.
+DIFFICULTY_FULL_DISTANCE :: 50000
 
-tiers := []Tier {
-	// Awake opens with a lot of air between patterns, and the pool it can
-	// draw from is the one-thing-at-a-time half of the set.
-	{
-		name = "Awake",
-		start_time = 0,
-		scroll_speed = INITIAL_SCROLL_SPEED,
-		gap = 0.8,
-		demand_weights = {6, 2, 1, 1},
-		added_patterns = nil,
-	},
-	{
-		name = "Drifting",
-		start_time = 25,
-		scroll_speed = 320,
-		gap = 0.25,
-		demand_weights = {3, 4, 3, 2},
-		added_patterns = []Pattern {
-			// The shapes that say something rather than only stand there:
-			// a flat top you can be on, a middle you can be in, a hole
-			// answered on the far wall.
-			pattern_plateau_real,
-			pattern_plateau_dream,
-			pattern_canyon_real,
-			pattern_canyon_dream,
-			pattern_gap_then_cube,
-			pattern_gap_then_cube_reverse,
-			pattern_stagger,
-			pattern_stagger_reverse,
-			pattern_bump_and_ridge,
+// The air between patterns, at the opening and at the top. Zero at the
+// top means patterns run back to back, which C2's containment rule makes
+// safe: a pattern holds its own windows, so no gap is too small to be
+// fair (pattern.odin).
+DIFFICULTY_GAP_OPEN :: 0.90
+DIFFICULTY_GAP_TOP :: 0.0
 
-			// The constriction: two facing towers, the first thing in a
-			// run that holds both lanes at once. It waits until here
-			// because a run should learn what a cube costs before it
-			// meets two it cannot dodge — and should have flipped a few
-			// dozen times before something floats at it.
-			pattern_narrows,
-			pattern_float_open,
-		},
-	},
-	// The air is nearly gone and the draw is inverted: a breather is now
-	// roughly one pattern in ten rather than six in ten.
-	{
-		name = "Deep Dream",
-		start_time = 55,
-		scroll_speed = 370,
-		gap = 0.1,
-		demand_weights = {1, 2, 4, 7},
-		added_patterns = []Pattern {
-			pattern_gap_pair,
-			pattern_burst,
-			pattern_ridge_run,
-			pattern_ravine_real,
-			pattern_ravine_dream,
-			pattern_gauntlet,
-			pattern_float_pair,
-		},
-	},
-}
-
-// Points the generator at everything a tier changes, in one call, so that
-// the main loop never has to know a tier has more than one knob — and so
-// that adding a fourth knob later touches this file only.
-set_generator_tier :: proc(generator: ^PatternGenerator, tier_index: int) {
-	generator.pool = get_pool_for_tier(tier_index)
-	generator.gap = tiers[tier_index].gap
-	generator.weights = tiers[tier_index].demand_weights
-}
-
-// Returns the index of the current tier, given how much time has passed.
-// Assumes tiers is sorted by start_time ascending.
-get_current_tier_index :: proc(elapsed_time: f32) -> int {
-	index := 0
-	for tier, i in tiers {
-		if elapsed_time >= tier.start_time {
-			index = i
-		}
-	}
-	return index
-}
-
-// One cumulative pool per tier, built once at startup: tier_pools[i]
-// contains every pattern from tiers[0..i], including the base pool.
-tier_pools: [dynamic][dynamic]Pattern
-
-build_tier_pools :: proc() {
-	cumulative := make([dynamic]Pattern)
-	for pattern in all_patterns {
-		append(&cumulative, pattern)
-	}
-
-	for tier in tiers {
-		for pattern in tier.added_patterns {
-			append(&cumulative, pattern)
-		}
-
-		// snapshot the cumulative pool as it stands after this tier's additions
-		snapshot := make([dynamic]Pattern, len(cumulative))
-		copy(snapshot[:], cumulative[:])
-		append(&tier_pools, snapshot)
-	}
-}
-
-get_pool_for_tier :: proc(tier_index: int) -> []Pattern {
-	return tier_pools[tier_index][:]
-}
-
-// Validates every tier's cumulative pool, not just the base one — a
-// pattern added at a higher tier still has to obey the fairness rule, and
-// so does every seam it can now form with the patterns already there.
-validate_tier_pools :: proc() {
-	for _, i in tiers {
-		validate_pattern_pool(get_pool_for_tier(i))
-	}
-}
-
-// Warns when a tier weights a demand level it has nothing to serve.
+// How the draw leans, as the base of bias^demand.
 //
-// The v1.x version of this check was about something subtler that no
-// longer exists: back when patterns chained on bands, the pool was
-// entered from a wall and the two walls had separate stocks, so a tier
-// could lean hard on demand 3 while having no demand-3 pattern a player
-// standing on the floor could be given. Half the run got the curve and
-// half got what was left. Nothing failed; the late game was simply only
-// half as hard as authored, which never shows up as a bug and only ever
-// shows up as "it feels uneven".
+// Under one at the opening, so a run starts on the quiet half of the pool
+// without anything having to be locked: at 0.45 a burst is drawn a
+// tenth as often as a bump. Four at the top, where it is sixty-four times
+// as often.
+DIFFICULTY_BIAS_OPEN :: 0.45
+DIFFICULTY_BIAS_TOP :: 4.0
+
+// Everything a run's current difficulty is, as one value.
 //
-// Patterns no longer chain (game/pattern.odin), so a tier's whole pool is
-// reachable from anywhere and the check collapses to counting.
-validate_tier_balance :: proc() {
-	for tier, tier_index in tiers {
-		pool := get_pool_for_tier(tier_index)
+// A plain struct computed from one number, so the generator can be handed
+// its knobs without knowing what a curve is, and a test can make one up.
+Difficulty :: struct {
+	t:     f32, // 0..1, how far along the curve this run is
+	depth: f32, // pixels of world scrolled, for the unlock thresholds
+	gap:   f32,
+	bias:  f32,
+}
 
-		peak_demand := 0
-		for weight, demand in tier.demand_weights {
-			if weight > tier.demand_weights[peak_demand] {
-				peak_demand = demand
-			}
-		}
+// The curve. A pure function of distance, which is what lets a replay
+// reach the same difficulty at the same point without storing anything.
+get_difficulty :: proc(scroll_offset: f32) -> Difficulty {
+	t := clamp(scroll_offset / DIFFICULTY_FULL_DISTANCE, 0, 1)
 
-		best := -1
-		for pattern in pool {
-			best = max(best, pattern.demand)
-		}
-		if best < peak_demand {
-			fmt.printf(
-				"WARNING: tier %d (%s) weights demand %d most heavily, but its pool tops out at demand %d\n",
-				tier_index,
-				tier.name,
-				peak_demand,
-				best,
-			)
-		}
+	// Curves from core:math/ease rather than hand-rolled ones (CLAUDE.md).
+	// Both are pure and contextless, so they are safe inside a step.
+	air := ease.quadratic_out(t)
+	lean := ease.quadratic_in(t)
+
+	return Difficulty {
+		t = t,
+		depth = scroll_offset,
+		gap = DIFFICULTY_GAP_OPEN + (DIFFICULTY_GAP_TOP - DIFFICULTY_GAP_OPEN) * air,
+		bias = DIFFICULTY_BIAS_OPEN + (DIFFICULTY_BIAS_TOP - DIFFICULTY_BIAS_OPEN) * lean,
 	}
+}
+
+// How likely one pattern is to be drawn, relative to the others.
+//
+// bias^demand, so a single number says how hard the game is leaning. It
+// is the exponent that makes it a *lean* rather than a threshold: no
+// pattern is ever excluded, the easy ones simply become rare, which is
+// what keeps a late run varied instead of collapsing onto the four
+// hardest things in the pool.
+pattern_weight :: proc(pattern: Pattern, bias: f32) -> f32 {
+	return math.pow(bias, f32(clamp(pattern.demand, 0, DEMAND_LEVELS - 1)))
+}
+
+// Points the generator at everything the curve changes, in one call, so
+// that the main loop never has to know difficulty has more than one knob.
+set_generator_difficulty :: proc(generator: ^PatternGenerator, difficulty: Difficulty) {
+	generator.gap = difficulty.gap
+	generator.bias = difficulty.bias
+	generator.depth = difficulty.depth
 }

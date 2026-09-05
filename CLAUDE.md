@@ -95,19 +95,26 @@ turn apart. The hole's widths and the mirrored pair's bounds are absolute pixels
 not multiples of the unit.
 
 **The next piece is decided and written down**: `TIMELINE.md` ends with the remaining tasks
-(C3..C5) and the model each is tagged for. Read them there rather than re-deriving them.
+(C4, C5) and the model each is tagged for. Read them there rather than re-deriving them.
 
-**C1 and C2 both landed on 6 September**, and between them they are the world of
-`docs/inspiration/sketch.jpeg`. C1 made the floor and the ceiling straight and moved every piece
-of relief into the columns. C2 filled it: a pattern now declares a *form and its bounds* and the
-generator draws the skyline, the pool is the sketch's vocabulary — bumps, towers, plateaus,
-staircases, canyons, ridges, facing constrictions — and the dead air inside patterns is gone.
-Measured over 8 seeds x 120 s with no player, at least one lane is threatened **40.9%** of the
-time against 13.1% before, and 200 runs that never touch the key have a median death at **3.4 s**
-with none surviving the first tier, against 35 s and 161 of 200 in v1.x.
+**C1, C2 and C3 all landed on 6 September**, and between them they are the world of
+`docs/inspiration/sketch.jpeg` and the shape of a run through it.
 
-What is left is the *curve*, which is C3: the tiers are still three discrete steps on a clock,
-and they should be one continuous function of distance.
+- **C1** made the floor and the ceiling straight and moved every piece of relief into columns.
+- **C2** filled it: a pattern declares a *form and its bounds* and the generator draws the
+  skyline, the pool is the sketch's vocabulary — bumps, towers, plateaus, staircases, canyons,
+  ridges, facing constrictions — and the dead air inside patterns is gone.
+- **C3** replaced the three tiers with one continuous function of **distance**, on the same
+  measure the Corruption always used. Two knobs on deliberately different curves plus a per
+  pattern unlock distance; speed stopped being a difficulty knob at all.
+
+Measured with no player, in 5000 px bands: at least one lane is threatened **24.7%** of the time
+over the first band and **68.7%** over the twelfth, rising monotonically. 200 runs that never
+touch the key had a median death at 3.4 s against 35 s in v1.x, with none surviving the opening
+where 161 of 200 used to.
+
+The remaining pieces are **feedback and onboarding**, not mechanics: C4 makes the curve
+perceptible with a particle burst every step of it, C5 is the intro that teaches `SPACE`.
 
 Why the design was rewritten in September 2026, measured rather than guessed: 200 simulated runs
 that never touched the key, **161 survived the whole first tier**, median death at 35 s; **86% of
@@ -498,12 +505,45 @@ Two things the old contract taught that are still worth knowing:
 - **A contract that guarantees you start safe is a contract that rewards standing still.** That
   is literally what killed v1.x. Any future rule must be checked against "does doing nothing
   survive this".
-- **Difficulty is not speed.** Obstacles are events in time, so reaction time *inside* a pattern
-  does not move with scroll speed at all — replaying every pattern at 270, 330 and 400 px/s gave
-  the same set of surviving answers. Speed changes how long you get to *look*, and pulling the
-  other way, how briefly a wide obstacle blocks a lane. In v2.0 speed is therefore not a
-  difficulty knob at all: it is something the player buys, and difficulty thresholds are
-  measured in **distance**, so buying speed buys score and difficulty together for free.
+- **Difficulty is not speed**, and since C3 the code says so. Obstacles are events in time, so
+  reaction time *inside* a pattern does not move with scroll speed at all — replaying every
+  pattern at 270, 330 and 400 px/s gave the same set of surviving answers. Speed changes how long
+  you get to *look*, and pulling the other way, how briefly a wide obstacle blocks a lane. A run
+  now scrolls at `INITIAL_SCROLL_SPEED` from the first metre to the last and only the player
+  moves it (roadmap R6.3); the curve is measured in **distance**, so buying speed will buy score
+  and difficulty together for free.
+
+### The curve is one function of distance
+
+`game/difficulty.odin`, rewritten by C3. `get_difficulty(scroll_offset)` is the whole of it: a
+pure function of how far the run has come, so a replay reaches the same difficulty at the same
+point with nothing stored. It replaced three tiers on a clock that each moved a speed, a gap and
+a weight table.
+
+- **Distance, because it is what makes buying speed honest.** Depth is the distance travelled
+  (`score.odin`), so a faster run earns score and meets difficulty at the same rate, with no line
+  of code that knows it does. On a clock the two come apart: speed would buy score for free and
+  slowing down would farm an easy world. It also puts the curve on the measure the Corruption
+  already used, which was the only part of the game that had it right.
+- **Two knobs on deliberately different curves.** `gap` is the air after each pattern and is the
+  only density knob there is, since C2 left patterns with no lead-in of their own; `bias` is how
+  hard the draw leans, as `bias^demand`, so one number covers "prefers the quiet ones" (under 1)
+  through "a burst is sixty-four times likelier than a bump" (4). The air is spent early
+  (`quadratic_out`) and the lean bites late (`quadratic_in`), because **one curve saturates and
+  a saturated curve is what a player calls "it stops getting harder"** — which is exactly the
+  playtest report that produced C3.
+- **A third knob is per pattern: `Pattern.min_depth`.** It replaced the tiers' `added_patterns`,
+  which unlocked in three jumps; spread across the whole curve, a long run keeps meeting shapes
+  it has not met before. Unlocking and being met stay separate — everything unlocked is still
+  subject to the lean, which is the mistake the old tier list made.
+- **`bias^demand` is a lean, never a threshold.** No pattern is ever excluded, so a deep run
+  stays varied instead of collapsing onto the four hardest things in the pool.
+- **The pool is validated once, as one pool.** Per-tier validation existed because a tier held a
+  different set; with continuous unlocks every pair can meet eventually, so the whole pool is the
+  thing to check — simpler and stricter than what it replaced.
+- **Zero gap is legal**, and that is C2's containment rule paying off: a pattern holds its own
+  windows, so no gap is too small to be fair and the top of the curve can run patterns back to
+  back.
 
 ### The neon stroke
 
@@ -1017,10 +1057,19 @@ Tracked here so they are not rediscovered. Nothing here is scheduled — the use
   `velocity_x` drop below `-scroll_speed` and force `score.odin` to clamp.
 - **The pool reached its density target and has not been played.** 28 patterns, measured over 8
   seeds x 120 s with no player: at least one lane threatened **40.9%** (the Definition of Done
-  asks for over 40), both at once 1.2%, at least one lethal 4.3%. Per tier, 28.7 / 40.7 / 45.6%.
-  A greedy one-move-lookahead bot has a median run of **49.5 s** and never reaches 120 s, dying
-  60 times out of 60 to the Corruption and never to a hole — which is pillar 7 working as
-  written, but it is a floor measured by a machine and the feel is the user's call.
+  asks for over 40), both at once 1.2%, at least one lethal 4.3%. C3 then spread that along a
+  curve: measured in 5000 px bands with no player, threatened runs 24.7 / 36.2 / 42.5 / 45.0 /
+  48.5 / 53.9 / 56.0 / 62.1 / 66.7 / 71.1 / 67.4 / 68.7%, and lethal 6.0 / 4.2 / 8.0 / 7.6 /
+  10.1 / 14.9 / 11.5 / 12.3 / 10.8 / 8.8 / 8.3 / 7.3%. **The lethal share is the one that is not
+  monotone**, and it is a consequence of the lean rather than an oversight: the deep pool holds
+  more high-demand patterns without a hole in them than with one, so a very deep run is busier
+  and slightly less deadly than its own middle. Raising `pattern_gap_pair` to demand 3 nearly
+  halved the dip; closing it properly means authoring more late patterns that carry a hole.
+  A greedy one-move-lookahead bot has a median run of **23700 px (depth 2375)**, dying 60 times
+  out of 60 to the Corruption and never to a hole — which is pillar 7 working as written, but it
+  is a floor measured by a machine and the feel is the user's call. At the top of the curve,
+  pinned there with the Corruption switched off, 40 of 40 bots survive a full minute: the endgame
+  kills by ground loss, not by being unanswerable.
 - **The runway is 360 px and a pin spends it at full scroll speed.** Not new and not C2's doing,
   but C2 made it matter: at 40% density a player who does not answer is pushed off the left edge
   in about 1.3 seconds of continuous pinning, which is why 177 of 200 idle runs end at the

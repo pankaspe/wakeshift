@@ -50,15 +50,20 @@ get_surface_y :: proc(lane: core.Lane) -> f32 {
 	return core.track_surface_y(lane)
 }
 
-// How quickly scroll_speed eases toward a new target when the tier
-// changes, in seconds — smaller is snappier, larger is smoother.
+// How quickly scroll_speed eases toward a new target, in seconds —
+// smaller is snappier, larger is smoother.
+//
+// Nothing moves the target today: C3 took speed out of the difficulty
+// curve, so a run scrolls at INITIAL_SCROLL_SPEED from the first metre to
+// the last. The easing is kept for the thing that will move it, which is
+// the player buying Slancio (roadmap R6.3) — a purchase that snapped the
+// world to a new speed would slide every obstacle already on screen.
 SCROLL_SPEED_EASE_TIME :: 1.0
 
 // Advances the scroll offset and the run timer by exactly one simulation
 // step. scroll_speed eases toward target_scroll_speed rather than
 // snapping, so obstacles already generated (Section 8's time-based
-// positioning) don't visibly jump when a difficulty tier changes
-// (Section 18).
+// positioning) don't visibly jump when the target moves (Section 18).
 //
 // delta_time is always core.FIXED_TIMESTEP in the running game; it stays
 // a parameter so a test can step the world at whatever rate it wants.

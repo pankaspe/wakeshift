@@ -103,7 +103,8 @@ TERRAIN_RIM_ALIVE :: 0.85
 
 // How far past each screen edge the terrain is built, so a hole whose
 // edge is just off screen still cuts correctly. Comfortably more than one
-// profile entry at the fastest tier, which is 74 px wide.
+// column, which is CUBE_UNIT wide; a whole cube may reach further and the
+// outline is extended to cover it explicitly (build_lane_outline).
 TERRAIN_MARGIN :: 100
 
 // How far a broken lane turns out of the corridor at the lip, in pixels.

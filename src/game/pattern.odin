@@ -113,8 +113,8 @@ Pattern :: struct {
 	duration: f32, // total length of the pattern, in seconds
 
 	// How much this pattern asks of the player, 0..DEMAND_LEVELS-1. Not a
-	// difficulty score for its own sake: it is what a tier draws on to
-	// change *what the player meets* rather than only how fast it arrives
+	// difficulty score for its own sake: it is what the curve leans on to
+	// change *what the player meets* rather than only how often it arrives
 	// (see difficulty.odin).
 	//
 	//   0  one obstacle, one decision, and time to make it
@@ -122,10 +122,24 @@ Pattern :: struct {
 	//   2  three decisions, or two that arrive close together
 	//   3  a burst: no time to settle between answers
 	demand:   int,
+
+	// Pixels of world scrolled before this pattern can be drawn at all.
+	//
+	// The third thing the curve moves, and the only one that is per
+	// pattern (difficulty.odin has the other two). It replaced the tiers'
+	// `added_patterns`, which unlocked patterns in three jumps; spread
+	// across the whole curve instead, a long run keeps meeting shapes it
+	// has not met before, which is the part of "it gets harder" that
+	// density and draw bias cannot say.
+	//
+	// Zero is the opening set. Everything unlocked is still subject to the
+	// lean, so arriving in the pool and being met are two different
+	// things — which is exactly the mistake the old tier list made.
+	min_depth: f32,
 }
 
-// How many demand levels a pattern can carry. Tiers weight the pool by
-// this (Tier.demand_weights).
+// How many demand levels a pattern can carry. The curve leans on this
+// (pattern_weight in difficulty.odin).
 DEMAND_LEVELS :: 4
 
 // --- The pool ---
@@ -152,24 +166,24 @@ DEMAND_LEVELS :: 4
 // second of either end is how two patterns that are fair apart become
 // unanswerable together, so none of them are.
 
-// --- Awake: one thing at a time ---
+// --- From the first metre: one thing at a time ---
 
 // The floor of the pool: a single brick. It is narrower than the body, so
 // it reads as a bump rather than as a wall, and the answer is one flip.
 pattern_bump_real := Pattern {
-	events   = []PatternEvent {
+	events    = []PatternEvent {
 		{time_offset = 0.2, lane = .Real, obstacle_type = .Cube, shape = SHAPE_BUMP},
 	},
-	duration = 0.3,
-	demand   = 0,
+	duration  = 0.3,
+	demand    = 0,
 }
 
 pattern_bump_dream := Pattern {
-	events   = []PatternEvent {
+	events    = []PatternEvent {
 		{time_offset = 0.2, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_BUMP},
 	},
-	duration = 0.3,
-	demand   = 0,
+	duration  = 0.3,
+	demand    = 0,
 }
 
 // A hole asks a different question from a cube — not "move now" but "do
@@ -183,15 +197,15 @@ pattern_bump_dream := Pattern {
 // than the last. A demand level is what a tier draws on, so it is also
 // where "how often" is said.
 pattern_gap_real := Pattern {
-	events   = []PatternEvent{{time_offset = 0.2, lane = .Real, obstacle_type = .Gap}},
-	duration = 0.72,
-	demand   = 1,
+	events    = []PatternEvent{{time_offset = 0.2, lane = .Real, obstacle_type = .Gap}},
+	duration  = 0.72,
+	demand    = 1,
 }
 
 pattern_gap_dream := Pattern {
-	events   = []PatternEvent{{time_offset = 0.2, lane = .Dream, obstacle_type = .Gap}},
-	duration = 0.72,
-	demand   = 1,
+	events    = []PatternEvent{{time_offset = 0.2, lane = .Dream, obstacle_type = .Gap}},
+	duration  = 0.72,
+	demand    = 1,
 }
 
 // An isolated tower: tall enough to read from across the screen, narrow
@@ -199,19 +213,19 @@ pattern_gap_dream := Pattern {
 // gets and the width is what the hand gets, and they are deliberately
 // different sizes.
 pattern_tower_real := Pattern {
-	events   = []PatternEvent {
+	events    = []PatternEvent {
 		{time_offset = 0.2, lane = .Real, obstacle_type = .Cube, shape = SHAPE_TOWER},
 	},
-	duration = 0.5,
-	demand   = 0,
+	duration  = 0.5,
+	demand    = 0,
 }
 
 pattern_tower_dream := Pattern {
-	events   = []PatternEvent {
+	events    = []PatternEvent {
 		{time_offset = 0.2, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_TOWER},
 	},
-	duration = 0.5,
-	demand   = 0,
+	duration  = 0.5,
+	demand    = 0,
 }
 
 // A staircase presenting its low step first — the one form that can be
@@ -219,62 +233,68 @@ pattern_tower_dream := Pattern {
 // becomes the next column along; a body is 45 px and a column is 27, so
 // it always straddles two and rests on the higher.
 pattern_stairs_real := Pattern {
-	events   = []PatternEvent {
+	events    = []PatternEvent {
 		{time_offset = 0.2, lane = .Real, obstacle_type = .Cube, shape = SHAPE_STAIRS_UP},
 	},
-	duration = 0.7,
-	demand   = 1,
+	duration  = 0.7,
+	demand    = 1,
+	min_depth = 1500,
 }
 
 pattern_stairs_dream := Pattern {
-	events   = []PatternEvent {
+	events    = []PatternEvent {
 		{time_offset = 0.2, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_STAIRS_UP},
 	},
-	duration = 0.7,
-	demand   = 1,
+	duration  = 0.7,
+	demand    = 1,
+	min_depth = 1500,
 }
 
 // Two threats on opposite lanes: whichever lane you start on you move at
 // least once, and if you start on the wrong one you move twice.
 pattern_alternate := Pattern {
-	events   = []PatternEvent {
+	events    = []PatternEvent {
 		{time_offset = 0.2, lane = .Real, obstacle_type = .Cube, shape = SHAPE_TOWER},
 		{time_offset = 1, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_TOWER},
 	},
-	duration = 1.3,
-	demand   = 1,
+	duration  = 1.3,
+	demand    = 1,
+	min_depth = 3000,
 }
 
 pattern_alternate_reverse := Pattern {
-	events   = []PatternEvent {
+	events    = []PatternEvent {
 		{time_offset = 0.2, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_TOWER},
 		{time_offset = 1, lane = .Real, obstacle_type = .Cube, shape = SHAPE_TOWER},
 	},
-	duration = 1.3,
-	demand   = 1,
+	duration  = 1.3,
+	demand    = 1,
+	min_depth = 3000,
 }
 
-// --- Drifting: the shapes start meaning things ---
+// --- From 5000 px: the shapes start meaning things ---
 
 // A plateau: flat on top and wide enough that flipping onto it is a real
 // answer rather than an accident. The bump after it is on the same lane,
 // so the pattern is read along one wall instead of across the corridor.
 pattern_plateau_real := Pattern {
-	events   = []PatternEvent {
+	events    = []PatternEvent {
 		{time_offset = 0.2, lane = .Real, obstacle_type = .Cube, shape = SHAPE_PLATEAU},
 		{time_offset = 1.1, lane = .Real, obstacle_type = .Cube, shape = SHAPE_BUMP},
 	},
-	duration = 1.2,
-	demand   = 1,
+	duration  = 1.2,
+	demand    = 1,
+	min_depth = 5000,
 }
 
 pattern_plateau_dream := Pattern {
-	events   = []PatternEvent {
+	events    = []PatternEvent {
 		{time_offset = 0.2, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_PLATEAU},
 		{time_offset = 1.1, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_BUMP},
 	},
-	duration = 1.2,
-	demand   = 1,
+	duration  = 1.2,
+	demand    = 1,
+	min_depth = 5000,
 }
 
 // A canyon: two towers with the lane's own surface between them. The
@@ -282,61 +302,67 @@ pattern_plateau_dream := Pattern {
 // the whole shape is wide enough that the answer is "be somewhere for a
 // while" rather than "move once".
 pattern_canyon_real := Pattern {
-	events   = []PatternEvent {
+	events    = []PatternEvent {
 		{time_offset = 0.2, lane = .Real, obstacle_type = .Cube, shape = SHAPE_CANYON},
 	},
-	duration = 0.9,
-	demand   = 1,
+	duration  = 0.9,
+	demand    = 1,
+	min_depth = 7000,
 }
 
 pattern_canyon_dream := Pattern {
-	events   = []PatternEvent {
+	events    = []PatternEvent {
 		{time_offset = 0.2, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_CANYON},
 	},
-	duration = 0.9,
-	demand   = 1,
+	duration  = 0.9,
+	demand    = 1,
+	min_depth = 7000,
 }
 
 // A hole then a shape on the other side: the answer to the first is the
 // place the second is waiting.
 pattern_gap_then_cube := Pattern {
-	events   = []PatternEvent {
+	events    = []PatternEvent {
 		{time_offset = 0.2, lane = .Real, obstacle_type = .Gap},
 		{time_offset = 1.1, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_TOWER},
 	},
-	duration = 1.4,
-	demand   = 1,
+	duration  = 1.4,
+	demand    = 1,
+	min_depth = 9000,
 }
 
 pattern_gap_then_cube_reverse := Pattern {
-	events   = []PatternEvent {
+	events    = []PatternEvent {
 		{time_offset = 0.2, lane = .Dream, obstacle_type = .Gap},
 		{time_offset = 1.1, lane = .Real, obstacle_type = .Cube, shape = SHAPE_TOWER},
 	},
-	duration = 1.4,
-	demand   = 1,
+	duration  = 1.4,
+	demand    = 1,
+	min_depth = 9000,
 }
 
 // Three in a row, tighter: the first answer has to be the setup for the
 // second, because there is no room to settle in between.
 pattern_stagger := Pattern {
-	events   = []PatternEvent {
+	events    = []PatternEvent {
 		{time_offset = 0.2, lane = .Real, obstacle_type = .Cube, shape = SHAPE_BUMP},
 		{time_offset = 0.9, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_TOWER},
 		{time_offset = 1.6, lane = .Real, obstacle_type = .Cube, shape = SHAPE_TOWER},
 	},
-	duration = 1.9,
-	demand   = 2,
+	duration  = 1.9,
+	demand    = 2,
+	min_depth = 11000,
 }
 
 pattern_stagger_reverse := Pattern {
-	events   = []PatternEvent {
+	events    = []PatternEvent {
 		{time_offset = 0.2, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_BUMP},
 		{time_offset = 0.9, lane = .Real, obstacle_type = .Cube, shape = SHAPE_TOWER},
 		{time_offset = 1.6, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_TOWER},
 	},
-	duration = 1.9,
-	demand   = 2,
+	duration  = 1.9,
+	demand    = 2,
+	min_depth = 11000,
 }
 
 // A bump, then a ridge on the other lane. The two ends of what a cube can
@@ -347,12 +373,13 @@ pattern_stagger_reverse := Pattern {
 // these two are here for the eye, not the hand, and that is a legitimate
 // job. They are how the set stops looking like one object repeated.
 pattern_bump_and_ridge := Pattern {
-	events   = []PatternEvent {
+	events    = []PatternEvent {
 		{time_offset = 0.2, lane = .Real, obstacle_type = .Cube, shape = SHAPE_BUMP},
 		{time_offset = 1, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_RIDGE},
 	},
-	duration = 1.8,
-	demand   = 1,
+	duration  = 1.8,
+	demand    = 1,
+	min_depth = 13000,
 }
 
 // **The constriction.** Two facing towers of unequal height, which is
@@ -366,12 +393,13 @@ pattern_bump_and_ridge := Pattern {
 // not, and a lopsided pair reads as a place where the world closes in
 // rather than as one object cut in half.
 pattern_narrows := Pattern {
-	events   = []PatternEvent {
+	events    = []PatternEvent {
 		{time_offset = 0.3, lane = .Real, obstacle_type = .Cube, shape = SHAPE_FACING},
 		{time_offset = 0.3, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_FACING},
 	},
-	duration = 0.5,
-	demand   = 2,
+	duration  = 0.5,
+	demand    = 2,
+	min_depth = 15000,
 }
 
 // A cube that floats: it is up when it reaches the anchor, so a character
@@ -379,7 +407,7 @@ pattern_narrows := Pattern {
 // meets it on the way down. The only obstacle in the game whose answer
 // depends on how much room you have left.
 pattern_float_open := Pattern {
-	events   = []PatternEvent {
+	events    = []PatternEvent {
 		{
 			time_offset = 0.35,
 			lane = .Dream,
@@ -389,33 +417,44 @@ pattern_float_open := Pattern {
 		},
 		{time_offset = 1.3, lane = .Real, obstacle_type = .Cube, shape = SHAPE_TOWER},
 	},
-	duration = 1.6,
-	demand   = 1,
+	duration  = 1.6,
+	demand    = 1,
+	min_depth = 18000,
 }
 
-// --- Deep Dream: no room to settle ---
+// --- From 21000 px: no room to settle ---
 
 // Two holes on alternating lanes: long stretches rather than instants, so
 // the answer is to be somewhere for a while rather than to move once.
+//
+// **Demand 3, and that is about the endgame's teeth.** Measured with it at
+// 2: the lean toward high demand squeezes the hole-carrying patterns out
+// of a deep run, and the share of time a lane was lethal peaked at 13.7%
+// around 27000 px and fell to 3.9% by 47000. A late game that is busier
+// and *safer* than its middle is not a curve. Two holes back to back
+// genuinely is "no room to settle", so the level was wrong as well as the
+// consequence.
 pattern_gap_pair := Pattern {
-	events   = []PatternEvent {
+	events    = []PatternEvent {
 		{time_offset = 0.2, lane = .Real, obstacle_type = .Gap},
 		{time_offset = 1.1, lane = .Dream, obstacle_type = .Gap},
 	},
-	duration = 1.62,
-	demand   = 2,
+	duration  = 1.62,
+	demand    = 3,
+	min_depth = 21000,
 }
 
 // The burst: four answers, no room at all.
 pattern_burst := Pattern {
-	events   = []PatternEvent {
+	events    = []PatternEvent {
 		{time_offset = 0.2, lane = .Real, obstacle_type = .Cube, shape = SHAPE_BUMP},
 		{time_offset = 0.75, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_BUMP},
 		{time_offset = 1.3, lane = .Real, obstacle_type = .Cube, shape = SHAPE_TOWER},
 		{time_offset = 1.85, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_TOWER},
 	},
-	duration = 2.15,
-	demand   = 3,
+	duration  = 2.15,
+	demand    = 3,
+	min_depth = 24000,
 }
 
 // A ridge on one lane and a ridge on the other, far enough apart in time
@@ -424,12 +463,13 @@ pattern_burst := Pattern {
 // most looks like the sketch: a skyline you read rather than a thing you
 // dodge.
 pattern_ridge_run := Pattern {
-	events   = []PatternEvent {
+	events    = []PatternEvent {
 		{time_offset = 0.2, lane = .Real, obstacle_type = .Cube, shape = SHAPE_RIDGE},
 		{time_offset = 1.25, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_RIDGE},
 	},
-	duration = 2.05,
-	demand   = 3,
+	duration  = 2.05,
+	demand    = 3,
+	min_depth = 31000,
 }
 
 // A staircase down into a canyon and back up, all on one wall. Three
@@ -437,43 +477,46 @@ pattern_ridge_run := Pattern {
 // is read along one side of the corridor — the answer is to leave, and
 // the question is when.
 pattern_ravine_real := Pattern {
-	events   = []PatternEvent {
+	events    = []PatternEvent {
 		{time_offset = 0.2, lane = .Real, obstacle_type = .Cube, shape = SHAPE_STAIRS_DOWN},
 		{time_offset = 1, lane = .Real, obstacle_type = .Cube, shape = SHAPE_CANYON},
 		{time_offset = 1.9, lane = .Real, obstacle_type = .Cube, shape = SHAPE_STAIRS_UP},
 	},
-	duration = 2.4,
-	demand   = 3,
+	duration  = 2.4,
+	demand    = 3,
+	min_depth = 35000,
 }
 
 pattern_ravine_dream := Pattern {
-	events   = []PatternEvent {
+	events    = []PatternEvent {
 		{time_offset = 0.2, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_STAIRS_DOWN},
 		{time_offset = 1, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_CANYON},
 		{time_offset = 1.9, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_STAIRS_UP},
 	},
-	duration = 2.4,
-	demand   = 3,
+	duration  = 2.4,
+	demand    = 3,
+	min_depth = 35000,
 }
 
 // The constriction, then a hole, then somewhere to land. The hardest
 // thing the pool says: pay, move, and be right about which side.
 pattern_gauntlet := Pattern {
-	events   = []PatternEvent {
+	events    = []PatternEvent {
 		{time_offset = 0.3, lane = .Real, obstacle_type = .Cube, shape = SHAPE_FACING},
 		{time_offset = 0.3, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_FACING},
 		{time_offset = 1.2, lane = .Real, obstacle_type = .Gap},
 		{time_offset = 2.1, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_PLATEAU},
 	},
-	duration = 2.7,
-	demand   = 3,
+	duration  = 2.7,
+	demand    = 3,
+	min_depth = 40000,
 }
 
 // Two of them, out of phase: the first is up as it passes and the second
 // is down. Same obstacle, opposite answers, and the only way to tell is
 // to watch them.
 pattern_float_pair := Pattern {
-	events   = []PatternEvent {
+	events    = []PatternEvent {
 		{
 			time_offset = 0.35,
 			lane = .Dream,
@@ -484,10 +527,14 @@ pattern_float_pair := Pattern {
 		{time_offset = 1.2, lane = .Dream, obstacle_type = .Cube, floating = true},
 		{time_offset = 2.1, lane = .Real, obstacle_type = .Cube, shape = SHAPE_PLATEAU},
 	},
-	duration = 2.7,
-	demand   = 2,
+	duration  = 2.7,
+	demand    = 2,
+	min_depth = 27000,
 }
 
+// The whole pool, in the order it unlocks. There is one list since C3:
+// what a run has available is Pattern.min_depth against the distance it
+// has covered, not membership of a tier (difficulty.odin).
 all_patterns := []Pattern {
 	pattern_bump_real,
 	pattern_bump_dream,
@@ -499,49 +546,86 @@ all_patterns := []Pattern {
 	pattern_stairs_dream,
 	pattern_alternate,
 	pattern_alternate_reverse,
+	pattern_plateau_real,
+	pattern_plateau_dream,
+	pattern_canyon_real,
+	pattern_canyon_dream,
+	pattern_gap_then_cube,
+	pattern_gap_then_cube_reverse,
+	pattern_stagger,
+	pattern_stagger_reverse,
+	pattern_bump_and_ridge,
+	pattern_narrows,
+	pattern_float_open,
+	pattern_gap_pair,
+	pattern_burst,
+	pattern_float_pair,
+	pattern_ridge_run,
+	pattern_ravine_real,
+	pattern_ravine_dream,
+	pattern_gauntlet,
 }
+
 
 // --- Generation ---
 
-// Picks a random pattern from the pool, biased by each pattern's demand.
+// Picks a pattern from the part of the pool this depth has unlocked,
+// leaning on the ones that ask more.
 //
-// There is no longer anything to satisfy at the seam (see the file
-// header), so this is a weighted draw and nothing more. The weighting is
-// how a tier changes the *texture* of a run rather than only its speed:
-// unlocking a hard pattern is not the same as meeting it, and an even
-// draw over a growing pool serves the newest patterns about as rarely as
-// on the day they became possible.
+// There is nothing to satisfy at the seam (see the file header), so this
+// is a weighted draw and nothing more. Two things decide it, and they are
+// deliberately separate: **min_depth** says what exists yet, and the
+// **lean** says how often it is met. Unlocking a hard pattern is not the
+// same as meeting it — an even draw over a growing pool serves the newest
+// patterns about as rarely as on the day they became possible, which is
+// the mistake the old tier list made and the reason the lean exists.
+//
+// The whole pool is walked rather than a filtered copy being built: a
+// draw happens a few times a second at most, the pool is tens of entries,
+// and a filtered copy would be an allocation inside a simulation step.
 //
 // Draws from the caller's generator rather than the global one, so the
 // same seed always yields the same sequence of patterns.
 pick_next_pattern :: proc(
 	pool: []Pattern,
-	weights: [DEMAND_LEVELS]int,
+	depth: f32,
+	bias: f32,
 	rng: rand.Generator,
 ) -> Pattern {
-	total := 0
+	total: f32 = 0
 	for pattern in pool {
-		total += weights[clamp(pattern.demand, 0, DEMAND_LEVELS - 1)]
+		if pattern.min_depth <= depth {
+			total += pattern_weight(pattern, bias)
+		}
 	}
 
-	// A tier whose weights happen to zero out its whole pool falls back to
-	// an even draw rather than to no pattern at all.
+	// Before the first unlock there is nothing to draw from. It cannot
+	// happen with a pool that has an opening set, but a pool is data and
+	// this is the one place a mistake in it would be a crash.
 	if total <= 0 {
-		index := int(rand.float32(rng) * f32(len(pool)))
-		return pool[min(index, len(pool) - 1)]
+		return pool[0]
 	}
 
-	roll := int(rand.float32(rng) * f32(total))
-	if roll >= total {
-		roll = total - 1
-	}
+	roll := rand.float32(rng) * total
 	for pattern in pool {
-		roll -= weights[clamp(pattern.demand, 0, DEMAND_LEVELS - 1)]
-		if roll < 0 {
+		if pattern.min_depth > depth {
+			continue
+		}
+		roll -= pattern_weight(pattern, bias)
+		if roll <= 0 {
 			return pattern
 		}
 	}
-	return pool[len(pool) - 1]
+
+	// Float rounding can leave the roll a hair above the total it was
+	// drawn from. Fall back to the last unlocked pattern rather than to
+	// pool[0], which would quietly bias the draw toward the opening set.
+	for i := len(pool) - 1; i >= 0; i -= 1 {
+		if pool[i].min_depth <= depth {
+			return pool[i]
+		}
+	}
+	return pool[0]
 }
 
 // How far ahead (in seconds of game time) we keep obstacles generated.
@@ -552,11 +636,12 @@ PatternGenerator :: struct {
 	pool:            []Pattern,
 	generated_until: f32, // world time up to which obstacles already exist
 
-	// The current tier's two shaping knobs, kept here rather than looked
-	// up, so that generation depends on nothing outside the generator.
-	// set_generator_tier (difficulty.odin) is what moves them.
+	// The curve's three shaping numbers, kept here rather than looked up,
+	// so that generation depends on nothing outside the generator.
+	// set_generator_difficulty (difficulty.odin) is what moves them.
 	gap:             f32, // seconds of empty air after each pattern
-	weights:         [DEMAND_LEVELS]int, // draw bias by pattern demand
+	bias:            f32, // the draw leans as bias^demand
+	depth:           f32, // pixels scrolled, against Pattern.min_depth
 
 	// Every random choice a run makes — which pattern comes next, how wide
 	// a hole is — comes from here and nowhere else. Two runs given the
@@ -570,8 +655,8 @@ new_pattern_generator :: proc(pool: []Pattern, start_time: f32, seed: u64) -> Pa
 	return PatternGenerator {
 		pool = pool,
 		generated_until = start_time,
-		gap = tiers[0].gap,
-		weights = tiers[0].demand_weights,
+		gap = DIFFICULTY_GAP_OPEN,
+		bias = DIFFICULTY_BIAS_OPEN,
 		seed = seed,
 		rng_state = rand.create(seed),
 	}
@@ -598,7 +683,7 @@ generate_ahead :: proc(
 	rng := generator_rng(generator)
 
 	for generator.generated_until < current_time + GENERATION_LOOKAHEAD {
-		pattern := pick_next_pattern(generator.pool, generator.weights, rng)
+		pattern := pick_next_pattern(generator.pool, generator.depth, generator.bias, rng)
 
 		for event in pattern.events {
 			append(
@@ -678,13 +763,16 @@ overlapping :: proc(a_start, a_end, b_start, b_end: f32) -> bool {
 // It checks the seam as well as the pattern. The containment rule in the
 // file header means a seam *cannot* conflict, but that is a property of
 // what is authored rather than of the type, so it is verified rather than
-// assumed. The seam is checked at the *smallest* gap any tier uses, since
-// a smaller gap can only bring the two closer together.
+// assumed. The seam is checked at the smallest gap the curve ever reaches,
+// which since C3 is zero: patterns run back to back at the top of it.
+//
+// **One pool, checked once.** Until C3 this ran per tier, because a tier
+// held a different set and a pair that never met needed no check. The
+// curve unlocks patterns continuously, so every pair can meet eventually
+// and the whole pool is the thing to validate — which is both simpler and
+// stricter than what it replaced.
 validate_pattern_pool :: proc(pool: []Pattern) {
-	smallest_gap := tiers[0].gap
-	for tier in tiers {
-		smallest_gap = min(smallest_gap, tier.gap)
-	}
+	smallest_gap := f32(DIFFICULTY_GAP_TOP)
 
 	for pattern, index in pool {
 		if len(pattern.events) == 0 {

@@ -182,12 +182,11 @@ main :: proc() {
 	background := render.new_background()
 	defer render.destroy_background(background)
 
-	// build the cumulative per-tier pattern pools, then catch any
-	// pattern-authoring mistakes immediately at startup — for every tier,
-	// not just the base one
-	game.build_tier_pools()
-	game.validate_tier_pools()
-	game.validate_tier_balance()
+	// catch any pattern-authoring mistakes immediately at startup: one
+	// pool, every ordered pair, every seam (game/pattern.odin). It is one
+	// pool since C3 — the curve unlocks patterns continuously, so every
+	// pair can meet eventually and there is no per-tier set to check.
+	game.validate_pattern_pool(game.all_patterns)
 
 	// --- Persistent state (survives across runs, not reset by reset_run) ---
 
@@ -404,23 +403,22 @@ main :: proc() {
 					core.record_flip(&recorder, world.tick)
 				}
 
-				// figure out the current difficulty tier (based on the previous
-				// step's elapsed_time — one step of lag here is irrelevant)
-				tier_index := game.get_current_tier_index(world.elapsed_time)
+				// where this run is on the difficulty curve, from the
+				// distance it has covered (based on the previous step's
+				// scroll_offset — one step of lag here is irrelevant)
+				difficulty := game.get_difficulty(world.scroll_offset)
 
-				// point the generator at everything this tier changes:
-				// the unlocked pool, the gap between patterns, and how
-				// the draw is weighted by demand (difficulty.odin)
-				game.set_generator_tier(&generator, tier_index)
+				// point the generator at everything the curve moves: the
+				// air between patterns, how hard the draw leans on the
+				// ones that ask more, and which are unlocked at all
+				game.set_generator_difficulty(&generator, difficulty)
 
-				// update the world (scroll, easing toward this tier's target
-				// speed) — must run before update_player, since update_player
-				// now reads world.elapsed_time (section 17)
-				game.update_world(
-					&world,
-					core.FIXED_TIMESTEP,
-					game.tiers[tier_index].scroll_speed,
-				)
+				// update the world — must run before update_player, since
+				// update_player reads world.elapsed_time (section 17).
+				// Speed is no longer a difficulty knob: a run scrolls at
+				// the opening speed until the player buys more (roadmap
+				// R6.3), which is why this is a constant here.
+				game.update_world(&world, core.FIXED_TIMESTEP, game.INITIAL_SCROLL_SPEED)
 
 				// update the player: the press, the journey it starts, and
 				// the ground held or lost against the cubes already on

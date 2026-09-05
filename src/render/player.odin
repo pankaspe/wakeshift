@@ -196,7 +196,7 @@ PLAYER_HEAD_CENTER :: rl.Vector2{0.015, -0.170}
 //
 // Pixels of world scroll per full two-step cycle. Tying it to distance
 // rather than to time means the cadence speeds up with the world on its
-// own, through every tier change, with nothing to keep in sync.
+// own, whatever moves the speed, with nothing to keep in sync.
 //
 // A plain number again since the robe arrived. It used to be derived from
 // the leg's length, because feet that cover less ground than the world
