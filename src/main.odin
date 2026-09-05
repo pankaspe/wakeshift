@@ -80,6 +80,28 @@ draw_gameplay :: proc(
 	render.draw_corruption(corruption, player, palettes)
 }
 
+// Returns a copy of the player advanced by the same leftover fraction of
+// a step the world is, for drawing only.
+//
+// Without it the picture is **asymmetric**, and that is a bug you can
+// see: the cube is drawn where it will be a fraction of a step from now
+// and the character where they were at the last whole one, so a body
+// pinned against a face is drawn up to one step's scroll *inside* it —
+// 4.5 px at 60 Hz and the opening speed. The simulation was always right;
+// only the drawing was late. It went unnoticed for as long as a cube was
+// a filled mass that hid the overlap, and stopped being invisible in RL.2
+// when the cube became an outline with the character standing in it.
+//
+// Exact rather than a guess in the one case that matters. A pinned
+// character's velocity_x is exactly -scroll_speed, which is exactly what
+// the face they are pinned against is doing, so the two move together and
+// the contact is drawn where the simulation put it: touching.
+interpolated_player :: proc(player: game.Player, accumulator: f32) -> game.Player {
+	ahead := player
+	ahead.position.x += player.velocity_x * accumulator
+	return ahead
+}
+
 // Returns a copy of the world advanced by the leftover fraction of a
 // simulation step, for drawing only. Terrain scroll and every obstacle
 // position derive from world time, so nudging that one value forward
@@ -592,7 +614,7 @@ main :: proc() {
 			draw_gameplay(
 				interpolated_world(world, accumulator),
 				obstacles[:],
-				player,
+				interpolated_player(player, accumulator),
 				corruption,
 				palettes,
 				particles,

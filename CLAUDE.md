@@ -870,12 +870,31 @@ Tracked here so they are not rediscovered. Each is scheduled in `ROADMAP.md`.
   up at the opening speed — a rhythm break rather than a price, because a mashing character is
   mid-flip ten steps out of eleven and mid-flip nothing on a lane can reach them. Whether that
   is enough is a tuning question for R5.3 and the knob is `PLAYER_RECOVERY_RATIO`, not a bug.
-- **Working through a mirrored pair draws the body inside a box.** Up to 45 px, which is 83% of
-  a standard cube, for about three frames of the encounter. It is the unavoidable price of the
-  no-backwards rule above: the character has to end up past the box, and the only way through
-  is through. Whether it reads as *wedged* or as *phasing* is the R4.6 playtest's call — and RL.2
-  changed the picture without meaning to, because the box is now a hollow step in the ground
-  rather than a filled mass, so the body is inside an outline instead of behind one.
+- **A flip onto an occupied lane leaves the character standing inside the cube, and it is not
+  cosmetic.** Measured on 5 September, replaying the real step order: **100% of every cube form**,
+  for **up to 2.5 seconds** — until the obstacle is culled. Once inside, the character is dragged
+  at exactly the scroll speed, which is also what the cube is doing, so they hold station relative
+  to it and never come out; the only escape is to flip away.
+
+  The cause is not a collision bug, it is three correct rules meeting. Mid-flip nothing on a lane
+  may block the character (that is what makes a tap the escape from a pin), so a cube **scrolls
+  over their x while they are crossing** — 43 px of world travel in a 0.16 s flip. They then land
+  on a surface computed from the track alone, which knows nothing about obstacles. And the
+  pushback is capped at one step's scroll so a landing cannot be yanked backwards — which means
+  the character loses ground at exactly the rate the cube does, and the penetration never closes.
+
+  Two fixes were tried against the harness and neither is the answer. Letting the rectangle test
+  run mid-flip (removing the `.Transitioning` early-out) changes almost nothing: a 54 px cube only
+  occupies the bottom sixth of the corridor, so by the time the descending body is low enough to
+  touch it, it is already horizontally inside. Pushing back faster than the world would restore
+  contact but spends exactly what the flip won, which is the teleport `advance_ground` documents
+  and rejects, and it makes a mirrored pair unescapable.
+
+  **What is left is a design decision, not a repair**, and it is open: either the character stands
+  *on top* of a cube they came down onto (which needs `get_lane_y` to know about obstacles, and
+  makes landing on one free unless something else charges for it), or the press is refused into an
+  occupied lane (which breaks "nothing forbids the press"), or the cost stays as it is and only
+  the picture changes. It was invisible while a cube was a filled mass and RL.2 made it plain.
 - **The pool is still a placeholder**, now nineteen patterns over three obstacle types. The real
   pool is R5.2. The last measurement of the number that condemned v1.3 — how much of the time at
   least one lane is lethal — was 19.9%, against a Definition of Done that asks for over 40%, and
