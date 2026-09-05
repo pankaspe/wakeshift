@@ -391,14 +391,20 @@ Three rules the implementation established, all found by replaying the simulatio
   period exists to forgive the flip started at the last possible instant against a hole — but
   against a Sentinel the flip *is* the mistake, so forgiving the first tenth of a second of
   every journey would hand a free crossing to exactly the player it is aimed at.
-- **The floor breaks, the ceiling dissolves**, and the floor's break now has **teeth**. The
-  line still stops — a hole is the only discontinuity in the game and that is unchanged, the
-  surface never crosses its own gap — but a row of spikes fills the break, drawn as one zig-zag
-  polyline so the turns weld and the halo does not bead at every point. It fits the grammar
-  rather than fighting it: *the world curves, the danger corners*, and teeth are all corner on a
-  screen where everything else bends. The ceiling keeps its dissolve, because an absence overhead
-  is a way through rather than a fall, and giving both sides teeth would delete the one asymmetry
-  that tells the two worlds apart by shape.
+- **The floor breaks, the ceiling dissolves.** Carried entirely by what the line does: the
+  floor's stroke **turns down** into the break, which puts two more right angles in it, and the
+  ceiling's **runs on past the lip and tapers to nothing** while the opening glows. Same cut,
+  opposite reading. Spikes across the break were tried on 5 September and taken out the same day:
+  the hole is the only discontinuity in the game, and filling it with a mark makes it a thing
+  rather than an absence.
+- **A hole kills by being an absence, so the character has to be seen going into it.** Until 5
+  September a run ended with the figure standing on nothing, which was the only moment in the
+  game where the picture said something the rules did not. They now drop through and fade out —
+  away from the corridor, so down off the floor and up through the ceiling, because an absence
+  overhead is a way out rather than a fall. It is drawn and never simulated: the run is already
+  over when it starts, it runs on the frame clock in `main` beside the other presentation state,
+  and no step can see it. The Corruption's ending gets none of it — there is nothing to fall
+  through.
 - **The track owns the holes, and since RL.2 it owns the cubes too.** `render/terrain.odin` is
   the only code that knows where its own surface is. It builds each lane as **one polyline across
   the whole screen** — cubes welded in as steps, read off the obstacle's own rectangle so the
@@ -653,17 +659,13 @@ fixed x near the right edge and scrolls toward the player from under the pen (De
   finished. The path now starts at the pen, runs away from it and comes back, so the loose ends
   are where the ink stops.
 
-### The grid is the one background element allowed into the corridor
-
-`render/parallax.odin` also draws a tunnel: spokes running out from a vanishing point and rings
-expanding along them, each ring a fixed multiple of the one inside it, because a constant spacing
-reads as a target rather than as distance. It is the exception to the rule above, and the licence
-is specific: it has no edge to be mistaken for a lane, it moves on a different axis from
-everything else (outward from the middle, not right to left), and it is the faintest thing on
-screen — measured, it moves the picture by at most 17 levels between two moments. The spokes are
-fainter than the rings because a radial line crossing the corridor is the most competing shape
-the background has. If it ever fights the play line it is the first thing to turn down: pillar 2
-says readability wins.
+**Nothing in the background may cross the corridor, and that was tested.** A receding grid —
+spokes from a vanishing point, rings expanding along them — was built on 5 September at the
+faintest alpha on screen, moving on its own axis, and measured at 17 levels of difference between
+two moments. Playtest still called it distracting, and it came out the same day. That is the
+answer pillar 2 gives every time the background and the play line disagree, and it is worth
+knowing before the next background idea: the two bands outside `TRACK_SKY_MARGIN` are not a
+limitation to work around, they are the whole licence.
 
 ### The glow is a third channel, and it is the one that survives depth
 

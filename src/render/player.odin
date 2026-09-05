@@ -291,6 +291,21 @@ PLAYER_STROKE_SPREAD :: 2.3
 // by the time it lands — on its own line, not inside a disc around it.
 PLAYER_FLIP_GLOW_BOOST :: 0.22
 
+// --- Falling out of the world ---
+//
+// A gap kills by being an absence, so the one honest way to show it is to
+// let the character keep going: they drop through the hole they were
+// standing over and fade out on the way down. Without it the run ends
+// with the figure standing on nothing, which is the only moment in the
+// game where the picture says something the rules do not.
+//
+// It is drawn, never simulated. The run is already over when this starts,
+// so it runs on the frame clock in main next to the other presentation
+// state, and no step of the simulation can see it.
+PLAYER_DEATH_FALL_TIME :: 1.1
+PLAYER_DEATH_FALL_DISTANCE :: 225
+PLAYER_DEATH_SPIN :: 1.6 // radians over the whole fall
+
 // --- Light ---
 
 // One eye, not two (art direction, T7.5.3). More readable at 45 px, and
@@ -697,11 +712,16 @@ draw_player_marks :: proc(
 // cube the character came down onto is something they stand on
 // (game/world.odin), and the drawn body has to be placed on the same
 // ground the simulation put it on.
+// `falling` is 0 for a living character and runs to 1 over
+// PLAYER_DEATH_FALL_TIME once they have gone through a hole. It is the
+// only argument here that is not a fact about the simulation: the run has
+// ended by the time it is anything but zero.
 draw_player :: proc(
 	player: game.Player,
 	world: game.World,
 	obstacles: []game.Obstacle,
 	palettes: core.PaletteSet,
+	falling: f32 = 0,
 ) {
 	// The terrain is drawn against the world nudged forward by the
 	// leftover fraction of a simulation step (main/interpolated_world),
@@ -760,9 +780,31 @@ draw_player :: proc(
 		hat_lean = lean,
 	)
 
+	// Through the hole. Away from the corridor — down off the floor, up
+	// through the ceiling — because a hole in the Dream is a way out
+	// rather than a fall, and the mirror says so on its own.
+	fall := clamp(falling, 0, 1)
+	if fall > 0 {
+		away: f32 = player.lane == .Real ? 1 : -1
+		pose.origin.y += fall * fall * PLAYER_DEATH_FALL_DISTANCE * away
+		pose.rotation += fall * PLAYER_DEATH_SPIN * away * mirror
+	}
+
 	gain := glow_gain(palettes.world_t)
-	draw_player_marks(pose, figure, palettes.neutral, whip, gain)
-	draw_player_eye(pose, figure, palettes.current.accent, gain)
+	// The mark thins out as it goes: it is being taken by the absence, so
+	// it stops rather than gets covered.
+	palette := palettes.neutral
+	palette.light = core.with_alpha(palette.light, 1 - fall)
+
+	draw_player_marks(pose, figure, palette, whip, gain)
+	if fall < 0.6 {
+		draw_player_eye(
+			pose,
+			figure,
+			core.with_alpha(palettes.current.accent, 1 - fall / 0.6),
+			gain,
+		)
+	}
 }
 
 // The one point of light inside the figure, set toward the front.

@@ -58,6 +58,7 @@ draw_gameplay :: proc(
 	corruption: game.Corruption,
 	palettes: core.PaletteSet,
 	particles: fx.Particles,
+	falling: f32 = 0,
 ) {
 	// The world exists between the two fronts: written by the pen on the
 	// right, eaten by the Corruption on the left. Both are a clip, and
@@ -73,7 +74,7 @@ draw_gameplay :: proc(
 	// with the world because it *is* the world, a moment later.
 	fx.draw_particles(particles)
 
-	render.draw_player(player, world, obstacles, palettes)
+	render.draw_player(player, world, obstacles, palettes, falling)
 
 	// Last, over everything: the front is in front of the world it is
 	// eating. This is the edge; the fraying is the dust above.
@@ -280,6 +281,15 @@ main :: proc() {
 	// between the two worlds, which is where the menu's drift lives.
 	background_t: f32 = 0.5
 
+	// The run's ending, for drawing only. A gap kills by being an absence,
+	// so the character has to be seen going through it rather than
+	// standing on nothing (render/player.odin) — and that is presentation:
+	// the run is already over, it runs on the frame clock, and no
+	// simulation step can see it. The Corruption's ending gets none of
+	// this: nothing to fall through.
+	fell_through: bool
+	fall_started: f32
+
 	// Simulation input waiting for a step to consume it. Needed because a
 	// frame and a step are no longer the same thing: a frame that runs no
 	// step would otherwise drop the press, and one that runs two would
@@ -347,8 +357,8 @@ main :: proc() {
 				case 0:
 					run_seed = rand.uint64()
 					game.reset_run(&player, &world, &score, &obstacles, &generator, &corruption, run_seed)
-				fx.clear_particles(&particles)
 					fx.clear_particles(&particles)
+					fell_through = false
 					accumulator = 0
 					pending_input = core.Input{}
 					core.destroy_run_recorder(&recorder)
@@ -455,6 +465,8 @@ main :: proc() {
 					}
 					if game.check_player_obstacle_collision(player, obstacle, world) {
 						game_state = .GameOver
+						fell_through = game.is_gap(obstacle.obstacle_type)
+						fall_started = display_time
 
 						// the run just ended: this is the one moment we check
 						// and persist a new personal best
@@ -529,6 +541,7 @@ main :: proc() {
 				run_seed = rand.uint64()
 				game.reset_run(&player, &world, &score, &obstacles, &generator, &corruption, run_seed)
 				fx.clear_particles(&particles)
+				fell_through = false
 				accumulator = 0
 				pending_input = core.Input{}
 				core.destroy_run_recorder(&recorder)
@@ -628,7 +641,11 @@ main :: proc() {
 			ui.draw_pause_overlay(pause_menu, palettes)
 
 		case .GameOver:
-			draw_gameplay(world, obstacles[:], player, corruption, palettes, particles)
+			fall: f32 = 0
+			if fell_through {
+				fall = (display_time - fall_started) / render.PLAYER_DEATH_FALL_TIME
+			}
+			draw_gameplay(world, obstacles[:], player, corruption, palettes, particles, fall)
 			ui.draw_game_over(score, high_score, palettes)
 
 		case .Options:

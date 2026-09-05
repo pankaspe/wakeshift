@@ -4,20 +4,19 @@
 * screen (Design Doc, section 10 — the character, then the live lane,
 * then the dormant one, then this).
 *
-* Two things, both of them the same idea at the same weight: distant
-* horizons in the two bands the world can never reach, and a **grid**
-* receding to a vanishing point behind everything. Anticipated from phase
-* R7, and with this art direction it costs a tenth of what it would have:
-* there is no silhouette to fill and no texture to author, only the same
-* stroke at a weight nothing else uses.
+* Distant horizons, drawn as a few long shallow curves that scroll at a
+* fraction of the world's speed. Anticipated from phase R7, and with this
+* art direction it costs a tenth of what it would have: there is no
+* silhouette to fill and no texture to author, only the same stroke at a
+* weight nothing else uses.
 *
-* The grid is the one part of the background that *does* cross the
-* corridor, which the horizons are forbidden to do. It is allowed because
-* it is not a horizon: it has no edge to be mistaken for a lane, it moves
-* on a different axis from everything else (outward from the middle, not
-* right to left), and it is drawn at the faintest alpha on screen. If it
-* ever competes with the play line, it is the first thing to turn down —
-* pillar 2 says readability wins.
+* A receding grid was tried here on 5 September and taken out again the
+* same day: a tunnel of spokes and rings, drawn at the faintest alpha on
+* screen and moving on its own axis, and still the one background element
+* that crossed the corridor. Playtest called it distracting, which is the
+* answer pillar 2 gives whenever the background and the play line
+* disagree. Whatever replaces it should stay out of the corridor like the
+* horizons do.
 *
 * THREE RULES, AND ALL THREE ARE ABOUT NOT COMPETING
 *
@@ -102,32 +101,6 @@ PARALLAX_MIRROR_OFFSET :: 703
 PARALLAX_GLOW :: 0.16
 PARALLAX_SPREAD :: 3.0
 
-// --- The grid ---
-//
-// A tunnel receding to a vanishing point at the middle of the screen:
-// spokes running out to the edges, and rings expanding along them. The
-// rings are spaced so that each one is a fixed multiple of the last, which
-// is what perspective does — a constant spacing reads as a target, not as
-// distance.
-GRID_SPOKES :: 26
-GRID_RINGS :: 7
-GRID_RING_RATIO :: 1.62 // how much bigger each ring is than the one inside it
-GRID_INNER :: 0.055 // the innermost ring, as a fraction of the screen's half-height
-GRID_PERIOD :: 5.4 // seconds for a ring to travel from the inside to the outside
-
-// The vanishing point, in fractions of the screen. Level with the
-// corridor's neutral spine and a little behind the player, so the tunnel
-// is receding away from where they are looking.
-GRID_VANISH :: rl.Vector2{0.44, 0.5}
-
-// Faintest on screen, and the spokes fainter still than the rings: a
-// radial line crossing the corridor is the most competing shape the
-// background has.
-GRID_RING_ALPHA :: 0.13
-GRID_SPOKE_ALPHA :: 0.07
-GRID_WEIGHT :: 0.30 // fraction of the live lane's stroke
-
-
 @(private)
 parallax_y :: proc(layer: ParallaxLayer, x, travel, sign: f32) -> f32 {
 	phase := (x + travel) / layer.wavelength * 2 * math.PI
@@ -177,80 +150,3 @@ draw_parallax :: proc(palette: core.Palette, scroll: f32) {
 	}
 }
 
-// One ring of the tunnel, as a rectangle around the vanishing point —
-// rectangles rather than circles because a rectangle's corners run out to
-// the screen's own, which is what makes it read as a room rather than as
-// a target.
-@(private)
-draw_grid_ring :: proc(palette: core.Palette, scale: f32, alpha: f32) {
-	if alpha <= 0.004 {
-		return
-	}
-	centre := rl.Vector2 {
-		GRID_VANISH.x * core.SCREEN_WIDTH,
-		GRID_VANISH.y * core.SCREEN_HEIGHT,
-	}
-	half := rl.Vector2 {
-		scale * core.SCREEN_HEIGHT * 0.5 * (f32(core.SCREEN_WIDTH) / core.SCREEN_HEIGHT),
-		scale * core.SCREEN_HEIGHT * 0.5,
-	}
-
-	ring := [4]rl.Vector2 {
-		{centre.x - half.x, centre.y - half.y},
-		{centre.x + half.x, centre.y - half.y},
-		{centre.x + half.x, centre.y + half.y},
-		{centre.x - half.x, centre.y + half.y},
-	}
-	line := new_stroke(
-		core.with_alpha(palette.light, alpha),
-		TERRAIN_STROKE_THICKNESS * GRID_WEIGHT,
-	)
-	line.glow = 0
-	line.core_light = 0
-	line.closed = true
-	draw_stroke(ring[:], line)
-}
-
-// The tunnel behind everything: rings travelling outward from a vanishing
-// point, and the spokes they travel along.
-//
-// A pure function of the clock, like the horizons are of the scroll. The
-// rings fade in at the vanishing point and out past the screen's corner,
-// so nothing ever pops.
-draw_grid :: proc(palette: core.Palette, time: f32) {
-	centre := rl.Vector2 {
-		GRID_VANISH.x * core.SCREEN_WIDTH,
-		GRID_VANISH.y * core.SCREEN_HEIGHT,
-	}
-
-	// The spokes, out to well past the corner so none of them stops short.
-	reach := f32(core.SCREEN_WIDTH + core.SCREEN_HEIGHT)
-	spoke := new_stroke(
-		core.with_alpha(palette.light, GRID_SPOKE_ALPHA),
-		TERRAIN_STROKE_THICKNESS * GRID_WEIGHT,
-	)
-	spoke.glow = 0
-	spoke.core_light = 0
-	for i in 0 ..< GRID_SPOKES {
-		angle := f32(i) / f32(GRID_SPOKES) * 2 * math.PI
-		line := [2]rl.Vector2 {
-			centre,
-			{centre.x + math.cos(angle) * reach, centre.y + math.sin(angle) * reach},
-		}
-		draw_stroke(line[:], spoke)
-	}
-
-	// The rings. Their travel is exponential, so a ring is always the same
-	// multiple of the one inside it however far along the cycle they are.
-	phase := time / GRID_PERIOD
-	phase -= math.floor(phase)
-	for i in 0 ..< GRID_RINGS {
-		step := f32(i) + phase
-		scale := GRID_INNER * math.pow(f32(GRID_RING_RATIO), step)
-
-		// In at the vanishing point, out past the corner.
-		near := clamp(step / 1.2, 0, 1)
-		far := 1 - clamp((scale - 1.0) / 0.8, 0, 1)
-		draw_grid_ring(palette, scale, GRID_RING_ALPHA * near * far)
-	}
-}
