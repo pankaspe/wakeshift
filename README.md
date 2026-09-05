@@ -31,14 +31,9 @@ at once, and a mirrored pair is a choice about which price to pay. Land on top o
 it.
 
 **The hole** — *do not be here.* The line simply stops: the only discontinuity in the game. The
-floor breaks, turning down into the void; the ceiling dissolves and glows, because up there an
-absence is a way through rather than a fall. It takes you when there is nothing under your centre,
-and you see yourself go in.
-
-**The curtain** — *not this lane, not now.* An emitter fires a wall of light across the corridor,
-stopping just short of the far lane. On its own it says where not to stand. In **facing pairs** it
-is the one obstacle in the game that standing still does not survive: cross in the gap between the
-two shots, on the beat.
+lane turns out of the corridor at the lip and the stroke ends — down off the floor, up off the
+ceiling, the same mark mirrored. It takes you when there is nothing under your centre, and you see
+yourself go in.
 
 **The Corruption.** A front advancing from the left, faster the deeper you go. It is not a timer —
 it stops short of a clean runner — it is how expensive your mistakes have become. The world's line

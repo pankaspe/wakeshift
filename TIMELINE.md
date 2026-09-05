@@ -152,3 +152,30 @@ La curva di difficoltà sui due elementi è lo step **dopo** questo.
 
 **Decisione ancora aperta (T3)**: profilo libero, o un set chiuso di forme composte? Il primo dà
 più varietà e più modi di sbagliare un pattern, il secondo è più sicuro e più povero.
+
+---
+
+## 5 settembre 2026 — T1: la Sentinella è rimossa
+
+Cancellazione meccanica in sei file: il tipo `.Sentinel`, le sue costanti, i tre pattern che la
+usavano e i loro riferimenti nei tier, `draw_sentinel`, le clausole del validatore che la
+nominavano, `is_lethal_to_both_lanes` (rimasta senza chiamanti) e la sezione *The curtain* nel
+README. Restano cubo e buco. Compila, il pool valida senza warning, il gioco si avvia senza crash.
+
+---
+
+## 5 settembre 2026 — T2: il quadrato dimezzato, il buco slegato
+
+Buchi a 65/103/140 px assoluti con un'altezza propria, poi l'unità da 54 a **27**. Assoluti anche i
+limiti della coppia specchiata, che erano scritti come multipli dell'unità e non lo sono mai stati:
+dimezzandola la banda legale diventava vuota. La coppia passa a `Wide` (54 px, il vecchio
+quadrato), perché il primitivo ora è più stretto del corpo e sparirebbe dentro di lui.
+
+---
+
+## 5 settembre 2026 — il buco è un buco anche in alto
+
+Il soffitto non si dissolve più: si spezza come il pavimento, con la linea che esce dal corridoio
+al labbro e due angoli retti, lo stesso segno specchiato. Via la coda sfumata e l'alone
+dell'apertura, che a schermo era stato scambiato per un emettitore. Con due soli ostacoli ognuno
+deve essere un segno solo che dice una cosa sola, da qualsiasi parte lo incontri.

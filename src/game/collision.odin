@@ -17,18 +17,10 @@
 *   stopped against its face and dragged backwards with it, losing ground
 *   to the Corruption for as long as they stay there.
 *
-*   **what times you.** A Sentinel. It is the only danger that asks
-*   *when*: a pulsar on one lane fires a ray across the corridor to the
-*   other, the ray kills what it touches, and the lane it starts on is
-*   the one that clears first. Standing still does not survive it, which
-*   is the point — it is the one obstacle that requires a press.
-*
-* That split is what makes the three read differently. A cube is a price:
+* That split is what makes the two read differently. A cube is a price:
 * be elsewhere when it goes by, or pay. A gap is a stretch not to be
-* standing in, and it is answered by being anywhere else at all. A
-* Sentinel is a crossing to be made behind the ray. One asks "move now or
-* pay", the second says "do not be down here", the third says "move, and
-* on the beat".
+* standing in, and it is answered by being anywhere else at all. One asks
+* "move now or pay", the other says "do not be down here".
 *
 * And it is what makes the design's centrepiece legal. Because a cube is
 * not lethal, **both lanes may hold one at the same time** — a mirrored
@@ -75,11 +67,7 @@ standing_over_gap :: proc(player: Player, obstacle: Obstacle, world: World) -> b
 //
 // Invulnerability is decided **per type**, not once at the top, and that
 // is the whole reason this is a switch. The grace period exists to
-// forgive the flip started at the last possible instant against a hole —
-// but against a Sentinel the flip *is* the mistake, so a rule that
-// forgave the first tenth of a second of every journey would hand out a
-// free crossing to anyone who left it late, which is exactly the player
-// the Sentinel is aimed at.
+// forgive the flip started at the last possible instant against a hole.
 check_player_obstacle_collision :: proc(player: Player, obstacle: Obstacle, world: World) -> bool {
 	if !horizontally_overlapping(player, obstacle, world) {
 		return false
@@ -98,23 +86,6 @@ check_player_obstacle_collision :: proc(player: Player, obstacle: Obstacle, worl
 			return false
 		}
 		return standing_over_gap(player, obstacle, world)
-
-	case .Sentinel:
-		// The ray is a thing travelling across the corridor and it kills
-		// what it touches, so this is a plain overlap — the only one in
-		// the file, because it is the only danger that is neither an
-		// absence nor a wall.
-		//
-		// Not forgiven by the grace period. That exists to excuse the flip
-		// started at the last possible instant against a hole, where being
-		// mid-journey is the answer; here being mid-journey is the answer
-		// *and* the risk, and a tenth of a second of free passage through
-		// a moving ray would be handed to exactly the player who left it
-		// too late.
-		return rl.CheckCollisionRecs(
-			to_rect(player.position, player.size),
-			get_obstacle_rect(obstacle, world),
-		)
 
 	case .Cube:
 		return false // it costs, it does not kill — see blocks_player

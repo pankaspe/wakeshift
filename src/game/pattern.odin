@@ -9,26 +9,19 @@
 *
 * There is exactly one, and it is the whole contract:
 *
-*     At every instant at least one lane must be non-lethal. While a
-*     Sentinel is up, both must be.
+*     At every instant at least one lane must be non-lethal.
 *
 * Note the word. A cube does not kill, it blocks — so a cube on both
 * lanes at once is **legal**, and it is the design's centrepiece: no
-* escape, only a choice about which price to pay. Two things are lethal
-* and they are lethal differently: a Gap takes the lane it is on, and a
-* Sentinel takes the space between the lanes, which is why it gets the
-* second sentence rather than a lane of its own.
+* escape, only a choice about which price to pay. Only the Gap is
+* lethal, and it takes the lane it is on.
 *
 * validate_pattern_pool enforces all of it by arithmetic rather than by
 * authorial care. For every pattern, and for every ordered pair of
 * patterns across the seam between them, it works out the window of time
-* each event owns and checks three things:
+* each event owns and checks two things:
 *
 *   * a Real lethal window never overlaps a Dream one;
-*   * nothing lethal shares a Sentinel's window, on either lane — and the
-*     Sentinel's window runs a whole flip past the beam, because a player
-*     forbidden to move until it has gone still needs a journey to answer
-*     what comes after it;
 *   * two cubes facing each other across the corridor are each between
 *     MIRROR_MIN_WIDTH and MIRROR_MAX_WIDTH, which is what bounds the
 *     price of the one encounter that has no way out.
@@ -67,7 +60,7 @@ import "core:math/rand"
 // A single obstacle event within a pattern, in time relative to pattern start.
 PatternEvent :: struct {
 	time_offset:   f32, // seconds since the pattern started
-	lane:          core.Lane, // ignored by a Sentinel, which occupies both
+	lane:          core.Lane,
 	obstacle_type: ObstacleType,
 
 	// Cube only, and both have a zero value that means "the primitive":
@@ -119,8 +112,7 @@ DEMAND_LEVELS :: 4
 //
 // Deliberately small for R1. This phase is demolition: the pool that the
 // game ships with is authored in R5.2, once the Cube blocks instead of
-// killing and the Sentinel exists, because those two change what a
-// pattern can even ask.
+// killing, because that changes what a pattern can even ask.
 
 // One cube, one lane, plenty of time. The floor of the pool.
 pattern_cube_real := Pattern {
@@ -405,10 +397,19 @@ pattern_bump_and_wall := Pattern {
 // is to work through it, a flip at a time, and what it costs is the
 // width. The corridor opens for it so the two boxes read as a pair rather
 // than as a pinch.
+//
+// **Wide rather than the primitive, and that is not a strengthening.**
+// Wide is two units — 54 px, exactly what a standard cube was before the
+// unit halved — so the encounter is the same size and the same four
+// flips it has always been. What changed underneath it is that the
+// primitive is now narrower than the body, and a box that disappears
+// inside the character while it is costing them ground is the one thing
+// MIRROR_MIN_WIDTH exists to forbid. The pair is about width, so it has
+// to be authored out of a form wide enough to be seen paying for.
 pattern_mirror := Pattern {
 	events   = []PatternEvent {
-		{time_offset = 1.0, lane = .Real, obstacle_type = .Cube},
-		{time_offset = 1.0, lane = .Dream, obstacle_type = .Cube},
+		{time_offset = 1.0, lane = .Real, obstacle_type = .Cube, cube = .Wide},
+		{time_offset = 1.0, lane = .Dream, obstacle_type = .Cube, cube = .Wide},
 	},
 	track    = []core.TrackPoint {
 		{time = 0, spine = 360, span = 340},
@@ -465,77 +466,6 @@ pattern_float_pair := Pattern {
 	},
 	duration = 3.0,
 	demand   = 2,
-}
-
-// **One curtain.** An emitter on the floor firing across the corridor:
-// its own lane is lethal and the ceiling is clear, so the question is
-// where you are standing when it arrives — and it is the gentlest thing
-// this obstacle can be, which is why it is the one that teaches it.
-pattern_sentinel := Pattern {
-	events   = []PatternEvent{{time_offset = 1.2, lane = .Real, obstacle_type = .Sentinel}},
-	track    = []core.TrackPoint {
-		{time = 0, spine = 360, span = 340},
-		{time = 1.0, spine = 360, span = 300},
-		{time = 2.0, spine = 360, span = 300},
-		{time = 2.6, spine = 360, span = 340},
-	},
-	duration = 2.6,
-	demand   = 2,
-}
-
-// **The facing pair, and the reason this obstacle exists.** Two emitters
-// on opposite lanes, one after the other: be on the ceiling for the
-// first, cross in the gap between them, be on the floor for the second.
-// One flip, and it has to be made on the beat — a demand neither of the
-// other two dangers makes.
-//
-// The 0.55 s between them is not a taste. The flip itself takes 0.16 s
-// and the body needs another 45 px of travel to clear the first curtain
-// before it can start, which is 0.167 s at the opening speed and less as
-// a run speeds up — so the gap is comfortably over
-// SENTINEL_MIN_GAP_TIME and gets *easier* with speed, like everything
-// else here.
-pattern_sentinel_pair := Pattern {
-	events   = []PatternEvent {
-		{time_offset = 1.2, lane = .Real, obstacle_type = .Sentinel},
-		{time_offset = 1.75, lane = .Dream, obstacle_type = .Sentinel},
-	},
-	track    = []core.TrackPoint {
-		{time = 0, spine = 360, span = 340},
-		{time = 0.9, spine = 360, span = 320},
-		{time = 2.2, spine = 360, span = 320},
-		{time = 2.9, spine = 360, span = 340},
-	},
-	duration = 2.9,
-	demand   = 4,
-}
-
-// **The Sentinel and a cube on one lane** — the moment pillar 7 is built
-// for. The beam forbids the flip; the cube arrives near the end of it, on
-// the floor. Be on the ceiling and it is nothing at all. Be on the floor
-// and there is no escape until the beam has gone, so you stand there
-// paying ground for it, which is the whole design in one encounter.
-//
-// The cube stands just *past* the beam rather than inside it, and that is
-// not a softening — it is the only place it can be. A pin inside the beam
-// never ends (see report_conflicts), so the encounter has to be built the
-// other way round: the beam holds you on whichever lane you chose, and
-// the cube is waiting on it the moment the ban lifts. What you get is one
-// journey's worth of window: take it and you are past, hesitate and you
-// pay the block, which is the trade pillar 7 exists for.
-pattern_sentinel_cube := Pattern {
-	events   = []PatternEvent {
-		{time_offset = 1.2, lane = .Real, obstacle_type = .Sentinel},
-		{time_offset = 2.25, lane = .Real, obstacle_type = .Cube},
-	},
-	track    = []core.TrackPoint {
-		{time = 0, spine = 360, span = 340},
-		{time = 1.0, spine = 360, span = 320},
-		{time = 2.4, spine = 360, span = 320},
-		{time = 3.2, spine = 360, span = 340},
-	},
-	duration = 3.2,
-	demand   = 3,
 }
 
 all_patterns := []Pattern {
@@ -840,20 +770,6 @@ report_track_faults :: proc(pattern: Pattern, index: int) {
 	}
 }
 
-// The window a Sentinel owns, which is longer than the beam itself.
-//
-// The rule is "while a Sentinel is up, both lanes must be non-lethal",
-// and the reason it has to outlast the beam is the player's own state:
-// somebody who was forbidden to move until the beam had passed is still
-// standing on whichever lane they committed to, and needs one whole
-// journey to answer anything waiting on it. A hole placed a frame after
-// the beam ends satisfies the letter of the rule and kills.
-@(private)
-sentinel_window :: proc(event: PatternEvent) -> (start, end: f32) {
-	window_start, window_end := event_window(event)
-	return window_start, window_end + FLIP_DURATION
-}
-
 // The width bounds on a cube that faces another cube across the corridor
 // — the one encounter the player cannot dodge, only pay for.
 //
@@ -864,13 +780,33 @@ sentinel_window :: proc(event: PatternEvent) -> (start, end: f32) {
 // inside them, and an obstacle that cannot be seen while it is costing
 // you is a bug however correct the arithmetic is.
 //
-// **Never wider than the primitive**, because the price is the width:
-// mirror_flip_cost says a standard pair takes four flips, and a pair of
-// double-width cubes would take six and turn one encounter into most of
-// the runway. This is the "the total width of a mirrored pair is
-// limited" of Design Doc section 6, made into a number.
+// **Never wider than 54 px**, because the price is the width, and
+// mirror_flip_cost counts it in flips: at the opening speed one flip buys
+// 28.5 px, so 54 px costs four flips, 81 would cost five and 108 six —
+// which turns one encounter into most of the runway.
+//
+// **That is the model, and the simulation currently disagrees with it.**
+// Replayed, a mirrored pair costs one pinned step — 4.5 px — at 27, 54
+// and 108 px alike: the flip lands the character *on top of* the far
+// cube, which since 5 September is ground they may stand on, so they
+// never work through the pair a flip at a time and never pay its width.
+// The bound is kept because it is the right bound for the encounter the
+// design wants, and because it costs nothing to hold the pool inside it
+// until landing-on-top is priced (it is in CLAUDE.md's known issues). Do
+// not quote the four flips as something the game charges today.
+//
+// **Both bounds are absolute pixels, and neither is a multiple of
+// CUBE_UNIT any more.** The ceiling used to be written as the primitive's
+// own width, which read as though the rule were about the unit; it is
+// not, and the unit dropping to 27 is what proved it. The floor is the
+// *body*, and the ceiling is a *price* — 54 px is four flips whatever a
+// box happens to be built out of. Tied to the unit, halving it would have
+// made the legal band [45, 27], which is empty: every mirrored pair in
+// the game would have become illegal at once. This is the "the total
+// width of a mirrored pair is limited" of Design Doc section 6, made into
+// a number.
 MIRROR_MIN_WIDTH :: f32(PLAYER_SIZE)
-MIRROR_MAX_WIDTH :: f32(CUBE_UNIT)
+MIRROR_MAX_WIDTH :: f32(54)
 
 // Reports every way `first` and `second`, offset by `shift`, break the
 // fairness rule together. With shift = 0 and the same pattern on both
@@ -882,10 +818,6 @@ report_conflicts :: proc(first: Pattern, first_index: int, second: Pattern, seco
 
 	for a, a_index in first.events {
 		a_start, a_end := event_window(a)
-		a_banned_start, a_banned_end := a_start, a_end
-		if is_lethal_to_both_lanes(a.obstacle_type) {
-			a_banned_start, a_banned_end = sentinel_window(a)
-		}
 
 		for b, b_index in second.events {
 			// The within-pattern pass compares a pattern with itself, so
@@ -897,69 +829,16 @@ report_conflicts :: proc(first: Pattern, first_index: int, second: Pattern, seco
 			b_start, b_end := event_window(b)
 			b_start += shift
 			b_end += shift
-			b_banned_start, b_banned_end := b_start, b_end
-			if is_lethal_to_both_lanes(b.obstacle_type) {
-				b_banned_start, b_banned_end = sentinel_window(b)
-				b_banned_start += shift
-				b_banned_end += shift
-			}
 
 			if !is_lethal(a.obstacle_type) || !is_lethal(b.obstacle_type) {
-				// Nothing lethal in play. Two rules are left.
-
-				// A mirrored pair, which is legal and bounded.
+				// Nothing lethal in play. A mirrored pair, which is legal
+				// and bounded, is the only rule left.
 				if blocks_lane(a.obstacle_type) &&
 				   blocks_lane(b.obstacle_type) &&
 				   a.lane != b.lane &&
 				   overlapping(a_start, a_end, b_start, b_end) {
 					report_mirror_width(first_index, a)
 					report_mirror_width(second_index, b)
-				}
-
-				// A cube inside a Sentinel's beam is a trap rather than a
-				// price, and it is not obvious until it is replayed.
-				// A pinned character holds station *in the world* — that
-				// is what a pin is — and so does the beam, because it is
-				// authored in the same world. So a pin that starts inside
-				// the beam never ends: the beam cannot pass someone who
-				// is no longer moving relative to it, and the flip that
-				// would free them is the one thing it kills. They stand
-				// there until the Corruption arrives, which is the one
-				// death this game is not allowed to have (pillar 7).
-				//
-				// The fix is authorial and exact: the character's pinned
-				// box is [face - PLAYER_SIZE, face], so the beam has to
-				// have cleared that box before the face reaches it —
-				// which is precisely these two windows not overlapping.
-				// Note the *unpadded* beam window: a cube arriving the
-				// instant the beam lifts is not merely legal, it is the
-				// best moment the set has, because being unable to move
-				// is what put the character in front of it.
-				if (is_lethal_to_both_lanes(a.obstacle_type) && blocks_lane(b.obstacle_type)) ||
-				   (is_lethal_to_both_lanes(b.obstacle_type) && blocks_lane(a.obstacle_type)) {
-					if overlapping(a_start, a_end, b_start, b_end) {
-						fmt.printf(
-							"WARNING: pattern %d (%v at %.2fs) puts a cube inside a Sentinel's beam with pattern %d (%v at %.2fs+%.2f) — a pin there never ends\n",
-							first_index, a.obstacle_type, a.time_offset,
-							second_index, b.obstacle_type, b.time_offset, shift,
-						)
-					}
-				}
-				continue
-			}
-
-			// A Sentinel forbids the flip, so nothing lethal may share its
-			// window — on either lane, and including a second Sentinel,
-			// which would only extend the ban. Checked against the
-			// *extended* windows, so the ban outlasts the beam by a
-			// journey.
-			if is_lethal_to_both_lanes(a.obstacle_type) || is_lethal_to_both_lanes(b.obstacle_type) {
-				if overlapping(a_banned_start, a_banned_end, b_banned_start, b_banned_end) {
-					fmt.printf(
-						"WARNING: pattern %d (%v at %.2fs) and pattern %d (%v on %v at %.2fs+%.2f) leave a Sentinel sharing its window with something lethal %s\n",
-						first_index, a.obstacle_type, a.time_offset,
-						second_index, b.obstacle_type, b.lane, b.time_offset, shift, moment,
-					)
 				}
 				continue
 			}

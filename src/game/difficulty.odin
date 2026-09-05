@@ -91,7 +91,6 @@ tiers := []Tier {
 			pattern_bump_and_wall,
 			pattern_mirror,
 			pattern_float_open,
-			pattern_sentinel,
 		},
 	},
 	// The air is nearly gone and the draw is inverted: a breather is now
@@ -105,18 +104,7 @@ tiers := []Tier {
 		added_patterns = []Pattern {
 			pattern_gap_pair,
 			pattern_burst,
-
-			// The two that combine the dangers rather than presenting
-			// them: a bob you have to read, and the beam that turns a
-			// block into the better of two outcomes.
 			pattern_float_pair,
-			pattern_sentinel_cube,
-
-			// The facing pair: the one obstacle in the game that demands
-			// a press rather than allowing one, held back to the last
-			// tier because it is the only thing here that standing still
-			// does not survive.
-			pattern_sentinel_pair,
 		},
 	},
 }

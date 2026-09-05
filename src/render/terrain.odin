@@ -36,15 +36,19 @@
 * strokes. It was once a dark box sitting *on top of* the floor line,
 * which is why the design's "full vs void" pairing never landed.
 *
-* The two sides still break differently, and with no fill left the
-* difference is carried entirely by what the line does:
+* **Both sides break the same way, mirrored.** The stroke turns out of
+* the corridor at the lip — down off the floor, up off the ceiling —
+* which puts two more right angles in it: a cut, and a lethal one either
+* way up.
 *
-*   the floor  ends. The stroke turns down into the break, which puts two
-*              more right angles in it — a cut, and a lethal one.
-*   the ceiling dissolves. The stroke runs on past the lip and tapers to
-*              nothing, and the opening glows, because in the Dream world
-*              an absence is a way through rather than a fall (Design
-*              Doc, section 5).
+* It was asymmetric until 5 September: the ceiling ran on past the lip,
+* tapered to nothing and lit the opening with a halo, on the reading that
+* overhead an absence is a way through rather than a fall (Design Doc,
+* section 5). That went out when the obstacle set came down to two. With
+* only a hole and a cube left, each has to be one mark that means one
+* thing wherever it appears, and a soft lit disc in the middle of the
+* corridor was read as *something standing there* — the failure mode a
+* hole cannot afford, because a hole is the absence of anything.
 *
 * How the cutting works: the surface is a function of x, not a fixed list
 * of points, so the outline is built once across the whole screen and
@@ -93,15 +97,10 @@ TERRAIN_RIM_ALIVE :: 0.85
 // profile entry at the fastest tier, which is 74 px wide.
 TERRAIN_MARGIN :: 100
 
-// How far the broken floor turns down into the void, in pixels.
+// How far a broken lane turns out of the corridor at the lip, in pixels.
+// Down off the floor, up off the ceiling — the same mark mirrored, which
+// is what makes a hole one obstacle instead of two.
 CHASM_WALL_DEPTH :: 22
-
-// How far a dissolving ceiling edge runs on into the gap before it has
-// thinned away, how little of the stroke is left at the far end, and how
-// much light the opening throws.
-DREAM_HOLE_FADE :: 30
-DREAM_HOLE_TAPER :: 0.05
-DREAM_HOLE_GLOW :: 0.30
 
 
 // Two points closer together than this are the same point. A clipped
@@ -474,7 +473,6 @@ terrain_stroke :: proc(light: LaneLight) -> Stroke {
 // decides what happens there.
 @(private)
 draw_terrain_piece :: proc(
-	world: game.World,
 	piece: ^[dynamic]rl.Vector2,
 	light: LaneLight,
 	is_floor: bool,
@@ -484,66 +482,30 @@ draw_terrain_piece :: proc(
 		return
 	}
 
-	// The floor ends: the line turns down into the break. Two more right
-	// angles, and the mark says "cut" rather than "fade" — which is the
-	// truth, because this is the danger that kills outright.
-	if is_floor {
-		if broken_start {
-			lip := piece[0]
-			inject_at(piece, 0, rl.Vector2{lip.x, lip.y + CHASM_WALL_DEPTH})
-		}
-		if broken_end {
-			lip := piece[len(piece) - 1]
-			append(piece, rl.Vector2{lip.x, lip.y + CHASM_WALL_DEPTH})
-		}
+	// The lane ends: the line turns out of the corridor at the lip. Two
+	// more right angles, and the mark says "cut" rather than "fade" —
+	// which is the truth, because this is the danger that kills outright.
+	//
+	// **Both lanes, mirrored, and that is deliberate.** Until 5 September
+	// the ceiling did something else entirely: it ran on past the lip,
+	// tapered to nothing, and lit the opening with a halo, on the theory
+	// that overhead an absence is a way out rather than a fall. It was
+	// dropped because the game now has exactly two obstacles and they have
+	// to be legible as two: a big soft disc in the middle of the corridor
+	// reads as a *thing that is there* — it was mistaken for an emitter by
+	// the person who designed it — and the whole point of a hole is that
+	// nothing is there. One hole, one mark, whichever way up you are.
+	wall := is_floor ? f32(CHASM_WALL_DEPTH) : f32(-CHASM_WALL_DEPTH)
+	if broken_start {
+		lip := piece[0]
+		inject_at(piece, 0, rl.Vector2{lip.x, lip.y + wall})
+	}
+	if broken_end {
+		lip := piece[len(piece) - 1]
+		append(piece, rl.Vector2{lip.x, lip.y + wall})
 	}
 
 	draw_stroke(piece[:], terrain_stroke(light))
-
-	// The ceiling dissolves: the line runs on past the lip and thins to
-	// nothing instead of stopping. Drawn as its own tapered stroke rather
-	// than as part of the piece, because a stroke's taper runs end to end
-	// and a piece has two of them.
-	if !is_floor {
-		if broken_start {
-			draw_dream_tail(world, piece[0], -1, light)
-		}
-		if broken_end {
-			draw_dream_tail(world, piece[len(piece) - 1], 1, light)
-		}
-	}
-}
-
-// The last of a ceiling, running into the opening and thinning away.
-// direction is -1 to the left of the piece and +1 to its right.
-@(private)
-draw_dream_tail :: proc(world: game.World, lip: rl.Vector2, direction: f32, light: LaneLight) {
-	end_x := lip.x + direction * DREAM_HOLE_FADE
-	tail := [2]rl.Vector2{lip, rl.Vector2{end_x, terrain_surface_y(world, false, end_x)}}
-
-	stroke := terrain_stroke(light)
-	stroke.taper = DREAM_HOLE_TAPER
-	// Square at the wide end so it butts against the piece's round cap
-	// instead of adding a second one on top of it.
-	stroke.round_caps = false
-	draw_stroke(tail[:], stroke)
-}
-
-// The light behind a dissolved ceiling. It is the whole of what a Dream
-// hole *is* now that nothing is filled: an opening, lit from beyond.
-@(private)
-draw_dream_opening :: proc(world: game.World, gap: Span, light: LaneLight) {
-	width := gap.end - gap.start
-	center := rl.Vector2 {
-		(gap.start + gap.end) * 0.5,
-		terrain_surface_y(world, false, (gap.start + gap.end) * 0.5),
-	}
-	draw_glow_circle(
-		center,
-		width * 0.7 * light.gain.spread,
-		light.palette.accent,
-		DREAM_HOLE_GLOW * (0.4 + 0.6 * light.alive) * light.gain.strength,
-	)
 }
 
 @(private)
@@ -574,13 +536,6 @@ draw_terrain_side :: proc(
 
 	gaps := collect_gap_spans(world, obstacles, lane)
 
-	// The glow of an opening goes under the line, not over it.
-	if !is_floor {
-		for gap in gaps {
-			draw_dream_opening(world, gap, light)
-		}
-	}
-
 	// Where this lane's line currently ends under the pen, if it ends
 	// there at all: a hole straddling the front means there is nothing to
 	// put a nib on, because what is being drawn right now is an absence.
@@ -595,7 +550,6 @@ draw_terrain_side :: proc(
 			drawing = true
 		}
 		draw_terrain_piece(
-			world,
 			&piece,
 			light,
 			is_floor,

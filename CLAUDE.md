@@ -414,12 +414,16 @@ Three rules the implementation established, all found by replaying the simulatio
   period exists to forgive the flip started at the last possible instant against a hole — but
   against a Sentinel the flip *is* the mistake, so forgiving the first tenth of a second of
   every journey would hand a free crossing to exactly the player it is aimed at.
-- **The floor breaks, the ceiling dissolves.** Carried entirely by what the line does: the
-  floor's stroke **turns down** into the break, which puts two more right angles in it, and the
-  ceiling's **runs on past the lip and tapers to nothing** while the opening glows. Same cut,
-  opposite reading. Spikes across the break were tried on 5 September and taken out the same day:
-  the hole is the only discontinuity in the game, and filling it with a mark makes it a thing
-  rather than an absence.
+- **A hole breaks both lanes the same way, mirrored.** The stroke **turns out of the corridor**
+  at the lip — down off the floor, up off the ceiling — which puts two more right angles in it.
+  Nothing is added to the break, ever: **filling a hole with a mark makes it a thing rather than
+  an absence**, and that rule has now caught two attempts. Spikes across the break were tried on
+  5 September and taken out the same day. The ceiling's old treatment — the stroke tapering to
+  nothing past the lip and a halo lighting the opening, on the reading that overhead an absence
+  is a way through rather than a fall — lasted until the obstacle set came down to two, and went
+  out for the same reason: the halo was mistaken for an emitter standing in the corridor by the
+  person who designed it. With only two obstacles left, each has to be one mark meaning one
+  thing wherever it appears. A glow is a mark.
 - **A hole kills by being an absence, so the character has to be seen going into it.** Until 5
   September a run ended with the figure standing on nothing, which was the only moment in the
   game where the picture said something the rules did not. They now drop through and fade out —

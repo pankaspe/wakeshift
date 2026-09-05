@@ -71,14 +71,6 @@ get_track_at_anchor :: proc(world: World) -> (spine, span: f32) {
 	return core.track_sample(world.track, world.elapsed_time)
 }
 
-// The corridor at a screen x, for anything that lives between the two
-// lanes rather than on one of them. The Sentinel is the only such thing
-// today: it takes a fraction of the span centred on the spine, so it has
-// to ask about the corridor itself instead of about a surface.
-get_track_at_x :: proc(world: World, x: f32) -> (spine, span: f32) {
-	return core.track_sample(world.track, core.ground_time_at_x(get_ground(world), x))
-}
-
 // How quickly scroll_speed eases toward a new target when the tier
 // changes, in seconds — smaller is snappier, larger is smoother.
 SCROLL_SPEED_EASE_TIME :: 1.0

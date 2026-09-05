@@ -8,7 +8,7 @@
 * speed is something the *player* buys mid-run (Design Doc, sections 4
 * and 8).
 *
-* Three types, three verbs (Design Doc, section 6):
+* Two types, two verbs (Design Doc, section 6):
 *
 *   the Cube      something that is *there*. It does not kill, it
 *                 **blocks**: you are stopped against its face and you
@@ -19,12 +19,6 @@
 *                 still resting on that lane when it passes, so being
 *                 mid-flip answers it as completely as being on the other
 *                 lane does (see collision.odin).
-*   the Sentinel  an emitter on one lane firing a curtain of light across
-*                 the corridor toward the other, stopping short of it. It
-*                 asks *when*: its own lane is lethal and the far one is
-*                 clear, and it is authored in facing pairs, so what it
-*                 really wants is one flip made in the gap between two
-*                 shots.
 *
 * THE CUBE IS ONE PRIMITIVE AT SIX SIZES
 *
@@ -36,6 +30,14 @@
 * rhetoric. That is a feature: they are read at a glance as *worse* while
 * costing the same, which is how the set gets variety without getting
 * rules.
+*
+* **"The width is the price" is the design's intent and not currently the
+* game's behaviour.** Measured by replay when the unit was halved: every
+* form costs the same ground as every other, because what is actually
+* charged is the time spent pinned, and the two ways out of a pin — one
+* flip to the free lane, or a landing on top of the box — are both width-
+* independent. The forms differ today in what they *say*, not in what
+* they take. See CUBE_UNIT below for the numbers.
 *
 * Nothing here ever reads the player's position. An obstacle that adapts
 * feels stolen even when it is survivable, and it breaks pillar 3: the
@@ -58,25 +60,63 @@ import "core:math/rand"
 import rl "vendor:raylib/v55"
 
 // The side of the primitive, in pixels — every cube is some arrangement
-// of boxes this size, and the player is a little smaller than one.
-CUBE_UNIT :: 54
+// of boxes this size.
+//
+// **It is smaller than the character, and that is the point.** It used to
+// be 54, a hair over the body's 45, so one unit was already a wall and a
+// shape made of them could only ever be a bigger wall. At 27 the unit is
+// a building block rather than an obstacle: it takes two to reach the
+// body's width, so a *shape* is what threatens and a single one is a
+// bump. That is what buys the column profiles the next step is about.
+//
+// Nothing that is not literally a cube is measured in it any more. The
+// hole's widths and the mirrored pair's bounds used to be multiples of
+// this constant and were never really about it — one is about the
+// corridor, the other about the body — so they are absolute now and this
+// number can move without dragging them along.
+//
+// **Halving it did not halve what a block costs, and that was the thing
+// worth measuring.** Replayed against the real simulation at 54 and at
+// 27, a lone cube costs the same at both: 9 pinned steps and 40.5 px for
+// a player who takes 0.15 s to answer it, 2205 px for one who never
+// presses, and 4.5 px — one step's scroll — for one who answers at once.
+// The price of a block is **how long you stay**, and nothing else; width
+// only ever entered through the mirrored pair, where it no longer does
+// either (see MIRROR_MAX_WIDTH in pattern.odin).
+//
+// What it did change is how long a lane is held. A cube threatens a body
+// at the anchor for (width + PLAYER_SIZE) / speed, so the primitive fell
+// from 0.37 s to 0.27 s at the opening speed. Over 8 seeds × 120 s of the
+// real pool with no player, that moved "at least one lane is threatened"
+// from 16.5% of the time to 13.1%. The holes did not move at all —
+// "at least one lane is lethal" is 3.7% on both sides of the change,
+// which is the decoupling above doing exactly what it was for.
+CUBE_UNIT :: 27
 
 ObstacleType :: enum {
 	Cube, // either lane: sticks out into it and blocks
 	Gap, // either lane: the surface is simply not there
-	Sentinel, // both lanes at once: crossing is what it forbids
 }
 
 // The cube vocabulary (Design Doc, section 6). Standard is first so that
 // it is the zero value: a pattern event that says nothing about its cube
 // gets the primitive.
+// Sizes in brackets are what each form comes to at the current unit. Two
+// of them are worth reading twice: Standard is now well under the body's
+// 45 px, so the primitive on its own is a bump, and Wide is exactly what
+// Standard used to be — which is why the mirrored pair, whose whole
+// subject is width, was moved onto it.
+//
+// Small is the one form the halving leaves stranded: at 13 px it is no
+// longer an arrangement of unit boxes but a fragment of one, and it is
+// the obvious thing for the column profiles of the next step to absorb.
 CubeForm :: enum {
-	Standard, // one unit square — the primitive
-	Small, // half a unit: a bump rather than a wall
-	Wide, // two units of width, which is two units of price
-	Stack, // one wide, three tall: costs what it is wide, looks worse
-	Pyramid, // three wide and stepped: says in advance which side to be on
-	Float, // bobs in and out of the body's band — the one timing cube
+	Standard, // one unit square [27] — the primitive, and a bump on its own
+	Small, // half a unit [13]: stranded below the unit, see above
+	Wide, // two units of width [54], which is two units of price
+	Stack, // one wide, three tall [27x81]: costs what it is wide, looks worse
+	Pyramid, // three wide and stepped [81x81]: says in advance which side to be on
+	Float, // bobs in and out of the body's band [27] — the one timing cube
 }
 
 // How high a floating cube rises above the surface of its lane, and how
@@ -89,58 +129,6 @@ CubeForm :: enum {
 CUBE_FLOAT_LIFT :: 96
 CUBE_FLOAT_PERIOD :: 1.6
 
-// THE SENTINEL IS A CURTAIN, AND THEY COME IN PAIRS
-//
-// An emitter sits on one lane and fires a curtain of light across the
-// corridor toward the other, stopping SENTINEL_CLEARANCE short of a body
-// settled there. So a single one is simply "not this lane, not now": its
-// own lane is lethal, the far one is clear, and crossing through it is
-// death like anything else it touches.
-//
-// **The obstacle is the pair.** Two of them on opposite lanes, separated
-// in time, make one forced and timed flip: be on the far lane for the
-// first shot, cross in the gap between them, be on the other for the
-// second. That is a demand neither of the other two dangers makes — the
-// cube says *move or pay*, the hole says *not here*, and this says *now*
-// — and it is the pattern pool's job to compose it, not this file's.
-//
-// WHY IT IS NOT A SLOT YOU FLY THROUGH
-//
-// The sketch it came from had two emitters facing each other across the
-// corridor with a gap between the beams, and the character passing
-// through the gap. It cannot exist, and the arithmetic is short. A flip
-// crosses the corridor at about 2100 px/s, so a body is inside a 160 px
-// slot for 0.054 s; but a beam threatens for as long as its x overlaps
-// the body, and the body alone is 45 px wide, which at the opening speed
-// is 0.167 s. The character cannot be in the middle for as long as the
-// middle is dangerous, whatever the beam's width — including zero. The
-// same wall killed the version before it, a single ray sweeping the whole
-// corridor: two things closing head-on always meet.
-//
-// What survives from both attempts is the demand. Turning the pair from
-// *across* the corridor to *along* it keeps "pass through the middle"
-// exactly, and moves the middle somewhere the character can actually be.
-
-// The curtain's thickness in x, and how much room it leaves at the far
-// end.
-//
-// The thickness is what the collision uses and what is drawn, so the mark
-// and the hitbox are the same thing. At the opening speed a body meets it
-// for (18 + 45) / 270 = 0.23 s, and that shrinks as a run speeds up —
-// which is the promise every obstacle here makes: speed is not a
-// difficulty knob.
-//
-// The clearance is a body plus a margin, so a settled character on the
-// far lane is clear of it at every legal span.
-SENTINEL_BEAM_WIDTH :: 18
-SENTINEL_CLEARANCE :: PLAYER_SIZE + 14
-
-// What a pattern has to leave between two facing curtains, in seconds, for
-// the flip between them to be possible at all: the journey itself plus
-// the time the body takes to clear one beam. Below this the pair is
-// unanswerable; the pool leaves comfortably more (pattern.odin).
-SENTINEL_MIN_GAP_TIME :: FLIP_DURATION + 0.10
-
 // True for the type that is an *absence* rather than a thing. It is also
 // exactly the set the terrain draws rather than draw_obstacle: only the
 // code that knows where its own surface is can cut a hole in it.
@@ -148,26 +136,12 @@ is_gap :: proc(obstacle_type: ObstacleType) -> bool {
 	return obstacle_type == .Gap
 }
 
-// True for the types that end a run outright, as opposed to the ones that
-// cost ground. It is what the fairness rule is written in terms of
+// True for the type that ends a run outright, as opposed to the one that
+// costs ground. It is what the fairness rule is written in terms of
 // (pattern.odin): two *lethal* lanes at once is unanswerable, while two
 // blocked lanes is a choice about which price to pay.
 is_lethal :: proc(obstacle_type: ObstacleType) -> bool {
-	return obstacle_type == .Gap || obstacle_type == .Sentinel
-}
-
-// True for a danger that is lethal to *both* lanes at once rather than to
-// the one it stands on.
-//
-// Nothing is, any more, and that is a simplification worth having: the
-// Sentinel used to be, which is why the fairness rule needed a second
-// sentence about its window. A curtain belongs to the lane it is fired
-// from, so the ordinary rule — at every instant at least one lane must be
-// non-lethal — now covers it with no special case, and two facing
-// curtains are legal exactly when they do not overlap in time, which is
-// what makes the pair authorable at all.
-is_lethal_to_both_lanes :: proc(obstacle_type: ObstacleType) -> bool {
-	return false
+	return obstacle_type == .Gap
 }
 
 // True for the type that costs ground instead of the run.
@@ -177,7 +151,7 @@ blocks_lane :: proc(obstacle_type: ObstacleType) -> bool {
 
 Obstacle :: struct {
 	arrival_time: f32, // world.elapsed_time at which this obstacle reaches WORLD_ANCHOR_X
-	lane:         core.Lane, // meaningless for a Sentinel, which occupies both
+	lane:         core.Lane,
 	size:         rl.Vector2,
 	obstacle_type: ObstacleType,
 
@@ -193,9 +167,27 @@ Obstacle :: struct {
 // random choice left in an obstacle, so a pattern still knows exactly
 // what it is asking of the player. GAP_WIDTH_LONG is what
 // validate_pattern_pool checks against, since it is the worst case.
-GAP_WIDTH_SHORT :: CUBE_UNIT * 1.2
-GAP_WIDTH_MEDIUM :: CUBE_UNIT * 1.9
-GAP_WIDTH_LONG :: CUBE_UNIT * 2.6
+//
+// **Absolute pixels, deliberately not multiples of CUBE_UNIT.** They were
+// 1.2 / 1.9 / 2.6 units back when the unit was 54, which is where these
+// three numbers come from — but a hole is the corridor failing to be
+// there, and it has nothing to do with how big a box is. Tying the two
+// meant the unit could not move without resizing every hole in the game,
+// which is exactly what stood in the way of shrinking it.
+//
+// What a hole is actually measured against is the body and the speed: at
+// the opening 270 px/s the long one takes the floor away for 140 / 270 =
+// 0.52 s, and less as a run speeds up.
+GAP_WIDTH_SHORT :: 65
+GAP_WIDTH_MEDIUM :: 103
+GAP_WIDTH_LONG :: 140
+
+// The hole's box height. Nothing reads it: the terrain cuts a hole using
+// the rect's x and width alone, and standing_over_gap tests the body's
+// centre against the same two numbers. It exists because an Obstacle
+// carries a size and this one has to be *something* — kept off CUBE_UNIT
+// so that "how big is a box" and "how wide is a hole" stay unrelated.
+GAP_HEIGHT :: 54
 
 // The box a cube form stands in, before its lane decides which way up it
 // is. Width is the price; height is how the shape reads.
@@ -224,8 +216,6 @@ get_max_width :: proc(obstacle_type: ObstacleType, form: CubeForm) -> f32 {
 	switch obstacle_type {
 	case .Gap:
 		return GAP_WIDTH_LONG
-	case .Sentinel:
-		return SENTINEL_BEAM_WIDTH
 	case .Cube:
 		return get_cube_size(form).x
 	}
@@ -260,11 +250,7 @@ new_obstacle :: proc(
 		case:
 			width = GAP_WIDTH_LONG
 		}
-		size = rl.Vector2{width, CUBE_UNIT}
-	case .Sentinel:
-		// The curtain's height is the corridor's, so it is answered per
-		// frame by get_obstacle_size rather than stored here.
-		size = rl.Vector2{SENTINEL_BEAM_WIDTH, CUBE_UNIT}
+		size = rl.Vector2{width, GAP_HEIGHT}
 	case .Cube:
 	// the form already gave us the box
 	}
@@ -303,21 +289,8 @@ get_cube_lift :: proc(obstacle: Obstacle, world: World) -> f32 {
 }
 
 // An obstacle's size right now.
-//
-// Stored for everything except the Sentinel, whose height is the
-// corridor's whole span: it crosses from the floor to the ceiling, so it
-// opens and closes with the world instead of being a bar of its own.
-// Nothing in the simulation reads that height — the beam forbids
-// *moving*, not standing anywhere — so it is the drawing's number, kept
-// here because that is where an obstacle's geometry lives.
 get_obstacle_size :: proc(obstacle: Obstacle, world: World) -> rl.Vector2 {
-	if obstacle.obstacle_type != .Sentinel {
-		return obstacle.size
-	}
-	time_until_arrival := obstacle.arrival_time - world.elapsed_time
-	x := core.WORLD_ANCHOR_X + time_until_arrival * world.scroll_speed
-	_, span := get_track_at_x(world, x)
-	return rl.Vector2{SENTINEL_BEAM_WIDTH, max(span - SENTINEL_CLEARANCE, 0)}
+	return obstacle.size
 }
 
 // Computes the obstacle's current on-screen position, derived from how
@@ -325,19 +298,11 @@ get_obstacle_size :: proc(obstacle: Obstacle, world: World) -> rl.Vector2 {
 //
 // The world scrolls; obstacles do not move through it. y comes from the
 // track, so an obstacle sits on the surface of its own lane however the
-// corridor is bending underneath it — and a Sentinel rides the spine,
-// which is the only thing it can do and still mean "the middle".
+// corridor is bending underneath it.
 get_obstacle_position :: proc(obstacle: Obstacle, world: World) -> rl.Vector2 {
 	time_until_arrival := obstacle.arrival_time - world.elapsed_time
 	x := core.WORLD_ANCHOR_X + time_until_arrival * world.scroll_speed
 	size := get_obstacle_size(obstacle, world)
-
-	if obstacle.obstacle_type == .Sentinel {
-		// It grows out of its own lane toward the other, so on the floor
-		// the box's *bottom* is the surface and on the ceiling its top is.
-		surface := get_surface_y(world, obstacle.lane, x)
-		return rl.Vector2{x, obstacle.lane == .Real ? surface - size.y : surface}
-	}
 
 	y := get_lane_y(world, obstacle.lane, x, size)
 

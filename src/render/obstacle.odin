@@ -2,13 +2,9 @@
 * Obstacle Render
 * What is left of the obstacle set once the world became a line.
 *
-* Two things are drawn here, and they are exactly the two dangers that
-* are not part of a surface:
-*
-*   the floating cube  the one cube that is not standing on its lane, so
-*                      the terrain cannot weld it into its own line
-*   the Sentinel       a band across the middle of the corridor, which
-*                      belongs to neither lane
+* One thing is drawn here, and it is the one danger that is not part of a
+* surface: the floating cube, the one cube that is not standing on its
+* lane, so the terrain cannot weld it into its own line.
 *
 * Everything else has moved out. A cube standing on a lane is now a step
 * in that lane's stroke and is drawn by render/terrain.odin, which is the
@@ -23,17 +19,17 @@
 *
 *     the world curves, the danger corners
 *
-* Both marks here are closed strokes with right angles in them, and
-* nothing else on screen has one.
+* The mark here is a closed stroke with right angles in it, and nothing
+* else on screen has one.
 *
-* Both also **truncate themselves at both fronts** — written by the pen on
-* the right (RL.5), eaten by the Corruption on the left (RL.6). A cube
-* welded into the terrain gets that for free, because the terrain's spans
-* are cut at both; these two are drawn on their own, so each builds its
-* outline only across the stretch that currently exists and leaves the
-* loop open wherever it was cut. That is the whole reveal and the whole
-* decay: no per-obstacle animation, no state remembering how far along a
-* shape is — just a shape built between two moving edges every frame.
+* It also **truncates itself at both fronts** — written by the pen on the
+* right (RL.5), eaten by the Corruption on the left (RL.6). A cube welded
+* into the terrain gets that for free, because the terrain's spans are cut
+* at both; this one is drawn on its own, so it builds its outline only
+* across the stretch that currently exists and leaves the loop open
+* wherever it was cut. That is the whole reveal and the whole decay: no
+* per-obstacle animation, no state remembering how far along a shape is —
+* just a shape built between two moving edges every frame.
 *
 * Where the loose ends land is the part that is easy to get backwards, so
 * draw_cut_shape owns it: a shape cut on the right is open at the pen and
@@ -73,29 +69,12 @@ OBSTACLE_EDGE_ALIVE :: 0.95
 FLOAT_GLOW_STRENGTH :: 0.30
 FLOAT_GLOW_RADIUS :: 1.1
 
-// The emitter's arrow: wider than the curtain it fires, so it reads as a
-// mouth rather than as a thickening of the beam, and read from far away
-// because it is what says which lane is about to be lethal (pillar 3).
-SENTINEL_EMITTER_WIDTH :: 34
-SENTINEL_EMITTER_LENGTH :: 26
-
-// The curtain is bright but not solid: it is light, and the field behind
-// it has to stay visible through it or it reads as a wall.
-SENTINEL_BEAM_ALPHA :: 0.42
-
-SENTINEL_GLOW_STRENGTH :: 0.55
-SENTINEL_GLOW_SPREAD :: 6
-
 draw_obstacle :: proc(
 	obstacle: game.Obstacle,
 	world: game.World,
 	palettes: core.PaletteSet,
 	front_x: f32,
 ) {
-	if obstacle.obstacle_type == .Sentinel {
-		draw_sentinel(obstacle, world, palettes, front_x)
-		return
-	}
 	// The Gap is the surface failing to exist and every other cube is a
 	// step in it: both belong to whoever owns the surface.
 	if obstacle.obstacle_type != .Cube || obstacle.cube != .Float {
@@ -205,74 +184,6 @@ draw_floating_cube :: proc(
 	top := [2]rl.Vector2{{from, position.y}, {to, position.y}}
 	bottom := [2]rl.Vector2{{from, position.y + size.y}, {to, position.y + size.y}}
 	draw_cut_shape(top[:], bottom[:], eaten, written, obstacle_stroke(palette, alive, gain))
-}
-
-// --- The Sentinel ---
-//
-// An emitter on a lane and the curtain of light it fires across the
-// corridor. Two marks, both the game's own stroke: the emitter a small
-// closed arrow sitting on the line and pointing the way it shoots, the
-// curtain a stroke whose *thickness* is the width that kills, so the mark
-// and the hitbox are the same thing.
-//
-// It is drawn for as long as it exists, never only while it is doing
-// something. A danger that can kill before it is on screen is the one
-// thing pillar 3 forbids outright, and this one used to manage 0.17 s of
-// it.
-//
-// Drawn out of the neutral palette: it belongs to neither world, and the
-// one thing it must never look like is a threat to only the world it
-// happens to be nearer — even though, unlike everything else here, it
-// really does stand on a lane.
-@(private)
-draw_sentinel :: proc(
-	obstacle: game.Obstacle,
-	world: game.World,
-	palettes: core.PaletteSet,
-	front_x: f32,
-) {
-	rect := game.get_obstacle_rect(obstacle, world)
-	palette := palettes.neutral
-	gain := glow_gain(palettes.world_t)
-
-	from, to, _, _, any := drawn_extent(rect.x, rect.width, front_x)
-	if !any {
-		return
-	}
-	middle := (from + to) * 0.5
-	is_floor := obstacle.lane == core.Lane.Real
-	away: f32 = is_floor ? -1 : 1
-
-	// The curtain: one stroke from the emitter's lane to its far end,
-	// sampled along the way so it follows the surface it grows from.
-	root := terrain_surface_y(world, is_floor, middle)
-	beam := [2]rl.Vector2{{middle, root}, {middle, root + rect.height * away}}
-
-	curtain := new_stroke(core.with_alpha(palette.accent, SENTINEL_BEAM_ALPHA), rect.width)
-	curtain.glow = SENTINEL_GLOW_STRENGTH
-	curtain.spread = SENTINEL_GLOW_SPREAD
-	curtain.core_light = 0.7
-	curtain.round_caps = false
-	apply_glow_gain(&curtain, gain)
-	draw_stroke(beam[:], curtain)
-
-	// The emitter: a closed arrow on the lane, pointing where it fires.
-	// The one mark in the game that is a triangle, which is the point —
-	// it is the only obstacle that belongs to a lane *and* reaches off it.
-	half := f32(SENTINEL_EMITTER_WIDTH) * 0.5
-	nose := root + SENTINEL_EMITTER_LENGTH * away
-	arrow := [3]rl.Vector2 {
-		{middle - half, root},
-		{middle + half, root},
-		{middle, nose},
-	}
-	head := new_stroke(core.with_alpha(palette.accent, 1), TERRAIN_STROKE_THICKNESS * 1.4)
-	head.glow = SENTINEL_GLOW_STRENGTH
-	head.spread = SENTINEL_GLOW_SPREAD
-	head.core_light = 0.6
-	head.closed = true
-	apply_glow_gain(&head, gain)
-	draw_stroke(arrow[:], head)
 }
 
 // The mark an obstacle is outlined with: one neon line in the world's
