@@ -46,11 +46,29 @@ to_rect :: proc(position, size: rl.Vector2) -> rl.Rectangle {
 }
 
 // Whether the player and an obstacle are passing each other horizontally.
-// The only test a gap needs, since it occupies its whole lane vertically
-// by definition.
 horizontally_overlapping :: proc(player: Player, obstacle: Obstacle, world: World) -> bool {
 	rect := get_obstacle_rect(obstacle, world)
 	return player.position.x < rect.x + rect.width && rect.x < player.position.x + player.size.x
+}
+
+// Whether the ground has gone from under the *body*, which is not the
+// same question as whether the two boxes touch.
+//
+// A hole takes you when there is nothing under your middle, not when your
+// leading edge crosses the lip. Measured on 5 September: the box test
+// ended the run **18 px — 0.07 s — before the body's centre reached the
+// hole**, and 8 px before the drawn figure touched it at all, so the game
+// was over while the character was still plainly standing on solid
+// ground. That is the worst kind of unfair: not hard, just early.
+//
+// The centre and not the whole body, because a hole you are half over is
+// a hole you have fallen into; and the centre rather than the drawn
+// figure's own edge, because what the renderer happens to draw may never
+// decide what the simulation does.
+standing_over_gap :: proc(player: Player, obstacle: Obstacle, world: World) -> bool {
+	rect := get_obstacle_rect(obstacle, world)
+	centre := player.position.x + player.size.x * 0.5
+	return centre >= rect.x && centre <= rect.x + rect.width
 }
 
 // Checks whether an obstacle is currently killing the player.
@@ -74,8 +92,12 @@ check_player_obstacle_collision :: proc(player: Player, obstacle: Obstacle, worl
 		}
 		// The surface is missing here. Only whoever is still resting on it
 		// falls: mid-flip and on the other lane are both simply *not on
-		// this one*.
-		return player.state != .Transitioning && player.lane == obstacle.lane
+		// this one*. And they fall when the hole is under their middle,
+		// not when their leading edge reaches its lip.
+		if player.state == .Transitioning || player.lane != obstacle.lane {
+			return false
+		}
+		return standing_over_gap(player, obstacle, world)
 
 	case .Sentinel:
 		// The ray is a thing travelling across the corridor and it kills

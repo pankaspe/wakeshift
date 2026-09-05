@@ -257,13 +257,16 @@ draw_sentinel :: proc(
 	apply_glow_gain(&node, gain)
 	draw_stroke_dot(rl.Vector2{muzzle, pulsar_y}, node)
 
-	if sweep <= 0 || sweep >= 1 {
-		return // still charging, or already spent
-	}
-
-	// The ray. Its thickness *is* the height that kills, so the mark and
-	// the hitbox are the same thing — the same rule the cube's step
-	// follows (render/terrain.odin).
+	// The ray is drawn for as long as it exists, never only while it is
+	// moving. It is lethal from the instant its window touches the
+	// character, which is before the sweep starts — measured, 0.17 s of a
+	// kill nobody could see. A danger that is not drawn is the one thing
+	// pillar 3 forbids outright, so the parked ray sitting on the pulsar's
+	// lane is not a detail: it is the warning.
+	//
+	// Its thickness *is* the height that kills, so the mark and the hitbox
+	// are the same thing — the same rule the cube's step follows
+	// (render/terrain.odin).
 	beam: [SENTINEL_BEAM_SAMPLES + 1]rl.Vector2
 	for i in 0 ..= SENTINEL_BEAM_SAMPLES {
 		x := from + (to - from) * f32(i) / f32(SENTINEL_BEAM_SAMPLES)

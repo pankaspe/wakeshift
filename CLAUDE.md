@@ -392,6 +392,18 @@ Three rules the implementation established, all found by replaying the simulatio
   must never look like is a threat to only one of them. Both marks are the game's own stroke —
   the pulsar a heavy round one on the lane, the ray a stroke whose *thickness* is the height that
   kills, so the mark and the hitbox are the same thing.
+- **A hole takes you when there is nothing under your *centre*.** Not when your leading edge
+  crosses the lip: measured on 5 September, the box test ended the run 18 px — 0.07 s — before
+  the body's centre reached the hole, and 8 px before the drawn figure touched it at all, so the
+  game was over while the character was plainly still standing on solid ground. The worst kind of
+  unfair, because it is not hard, only early. The centre and not the whole body, because a hole
+  you are half over is one you have fallen into — and the centre rather than the drawn figure's
+  own edge, because what the renderer happens to draw may never decide what the simulation does.
+- **A danger that is lethal before it is drawn is the one thing pillar 3 forbids outright.** The
+  Sentinel's ray was, for 0.17 s: it was drawn only while sweeping, and it becomes lethal the
+  instant its window touches the character, which is earlier. It is now drawn for as long as it
+  exists, parked on the pulsar's lane before it fires — and that parked ray is not a detail, it
+  is the warning. Check any new obstacle for the same gap between "can kill" and "is on screen".
 - **Invulnerability is decided per type, not once at the top of the collision check.** The grace
   period exists to forgive the flip started at the last possible instant against a hole — but
   against a Sentinel the flip *is* the mistake, so forgiving the first tenth of a second of
