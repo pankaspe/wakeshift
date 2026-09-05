@@ -2,17 +2,23 @@
 
 Operational rules for developing this project.
 
-- **What and why** → `docs/design_doc.md` (**v2.1**)
+- **What and why** → `docs/archive/design_doc.md` (**v2.1**), which is the last written
+  statement of the design and is still binding on *what* to build.
 - **What it looks like** → **`docs/inspiration/La_Linea.png`**. The art direction changed
   wholesale on 4 September 2026: out goes the Ori-like silhouette-and-light of
-  `docs/sketch/sketch_3`, in comes **La Linea** — a filled background, one continuous stroke
+  `docs/archive/sketch/sketch_3`, in comes **La Linea** — a filled background, one continuous stroke
   that *is* the world, a character who rises out of that stroke and returns to it. It is
-  binding, it is summarised in `ROADMAP.md` under "La direzione artistica", and the phase that
-  puts it on screen is **RL**, which also carries the decisions taken. Section 10 of the design doc is
-  the binding statement of it. `docs/` is deliberately **not tracked by
-  git**: it is the author's working material and lives only on their disk.
-- **How, in what order, with which model** → `ROADMAP.md` (Italian; the user's working file)
+  binding. `docs/` is deliberately **not tracked by git**: it is the author's working material and
+  lives only on their disk, and everything under `docs/archive/` — the old design docs, the old
+  roadmap, the superseded sketches — is history rather than instruction. Do not read it as binding
+  and do not go there looking for the plan.
+- **What has been built, in order** → `TIMELINE.md` (Italian; the user's file). One line per
+  piece of work, and **there is no roadmap**: the user decides the next step, one at a time.
 - **How we work** → this file
+
+A comment that cites `(roadmap RX.Y)` is a historical tag, not a live reference: that file is
+`docs/archive/ROADMAP.md` now. Leave the tags where they are — they say when a decision was
+taken — and do not add new ones.
 
 ---
 
@@ -38,7 +44,7 @@ changes colour with the world, the stroke never does.
 - **All comments are English.** No exceptions, including quick inline notes.
 - **All commit messages are English.**
 - **Conversation with the user is Italian.** Explanations, proposals, questions, summaries.
-- Markdown docs follow their existing language: `ROADMAP.md` and `docs/` are Italian (the user
+- Markdown docs follow their existing language: `TIMELINE.md` and `docs/` are Italian (the user
   reads them); `CLAUDE.md` and `README.md` are English (they govern the code and face outward).
 
 ---
@@ -58,62 +64,30 @@ import raylib as `import rl "vendor:raylib/v55"` — never `v6`, the linker expe
 
 ## Picking up in a new session
 
-Development runs one roadmap phase per session, so most sessions start cold. Read in this
-order before touching anything:
+Most sessions start cold. Read, in this order:
 
-1. **`ROADMAP.md`** — the phase list says what is done (✅) and what is next. Each phase lists
-   numbered tasks with a recommended model. Respect the tagging: it is how the user budgets
-   their plan.
-2. **`docs/design_doc.md` v2.1** — binding on *what* to build, and its **section 10** is binding
-   on what it *looks* like: **La Linea** (`docs/inspiration/La_Linea.png`). The sketches under
-   `docs/sketch/` governed for one day and no longer bind anything — do not read them as
-   references. Everything is reachable with primitives plus palette plus bloom; the project has
-   no external art assets and is not getting any, and now it needs fewer.
-3. The rest of this file — architecture rules and conventions.
+1. **`TIMELINE.md`** — what exists, one line each. It is history, not a plan.
+2. **This file** — the architecture rules and the conventions, which are what actually bind.
+3. The header comment of whatever file you are about to touch. Every one states its
+   responsibility and the decisions behind it, and that is where the *why* lives.
 
-**The art direction is La Linea, and what that changes.** The simulation does not change at
-all — RL touches `render/`, `fx/` and the palette and nothing else. What changes is the
-grammar, and one rule has to be replaced before any of it is written. The old readability rule
-was *scenery is line, danger is mass*; if everything is line, it is gone. Its replacement was
-already written in `render/obstacle.odin` without anyone noticing — *a cube is the one thing in
-the world with right angles, and the scenery is all curves* — because that rule is
-**geometric, not about fill**, so it survives the change intact:
+**There is no roadmap and no phase list.** The user decides the next step and says so. If you
+finish what was asked and think something else is needed, say what and why — do not start it.
 
-> **The world curves, the danger corners.**
+**Where the project stands.** Three dangers are on screen and all three read: the cube blocks and
+can be landed on, the hole stops the line and takes you into it, the curtain pair asks for one flip
+on the beat. The world is drawn as La Linea — nothing filled but the field, obstacles welded into
+the floor's own polyline, a pen writing the world on the right and the Corruption fraying it on the
+left. The character is a hooded figure and is **provisional**: the final one is a lemur.
 
-The three dangers become three things a line can do: the cube is a step with two right angles
-*in* the surface, the gap is the line **stopping** (the only discontinuity in the game), the
-Sentinel **crosses** the corridor. The Corruption stops being a filter on the frame and becomes
-a mark — the line fraying into particles behind you — which deletes the whole "colour has two
-systems" complication below rather than working around it. Four decisions are already taken and
-bind the phase: **the background changes, never the stroke**; the blend **lags** `world_t` by
-half a second or so, because a flip is 0.16 s and three in a row would strobe; the background
-never competes with the line for attention; and the line's **glow grows toward Dream**, which is
-the second channel that says where you are going (pillar 6). All four are built, and so is the
-right-hand front: the world **draws itself on the right** as the Corruption eats it on the left.
-The draw front may never move far enough left to steal warning time (pillar 3), which is why its
-inset is a constant and costs 0.18 s.
+What is missing is the thing that turns a set of pieces into a game: **a difficulty curve built on
+those three obstacles**, which means the real pattern pool.
 
-**Where the project stands.** The design was rewritten on 4 September 2026 (v1.3 → v2.0, then
-v2.1 for the art direction), and **R1 through R4 are built and playtested**: two lanes, one
-gesture, a cube that *blocks* rather than kills in six forms, a Corruption front advancing from
-the left that eats the ground a mistake costs you, a track whose corridor undulates and pinches,
-and the Sentinel — so all three dangers and all three verbs are on screen. **Phase RL is in
-progress**: RL.1 through RL.8 are done, so **nothing on screen is filled but the background** — a
-field whose colour is the world, two unfilled strokes that are the floor and the ceiling with the
-cubes welded into them, a character made of the same mark, brighter but no heavier — one open contour, a hooded figure
-that rises out of the floor's own line — a dormant lane
-that thins and dims behind the one you are in, and two fronts that are both clips: a pen near the
-right edge writing the world, and the Corruption fraying it into dust on the left. Still missing:
-the real pattern pool (R5), fragments and the Gate (R6).
-
-Why it was rewritten, measured rather than guessed: 200 simulated runs that never touched the
-key, **161 survived the whole first tier**, median death at 35 s; **86% of the time** nothing on
-screen could kill in any position; **not once** in 24 000 seconds were both lanes threatened
-together. It was structural, not tuning — the pattern contract *guaranteed* you entered every
-pattern from the safe band, so standing still was almost always right.
-
----
+Why the design was rewritten in September 2026, measured rather than guessed: 200 simulated runs
+that never touched the key, **161 survived the whole first tier**, median death at 35 s; **86% of
+the time** nothing on screen could kill in any position. It was structural, not tuning — the old
+pattern contract *guaranteed* you entered every pattern from the safe band, so standing still was
+almost always right. Check any new rule against "does doing nothing survive this".
 
 ## How verification works here
 
@@ -171,20 +145,23 @@ compositor had maximized into the work area with the panel still on top of it.
 
 ## Workflow
 
-1. **One phase at a time.** Never start the next `ROADMAP.md` phase without the user's go-ahead.
+1. **One thing at a time, and the user picks it.** There is no plan to read ahead in.
 2. **Claude writes code and proposes ideas. The user playtests and gives feedback.**
 3. **Claude verifies only that it compiles and launches.**
 4. **Report honestly.** If a phase is partially done, say which part and why. If a test fails,
    show the output.
 5. Keep `odin check src` green at every intermediate step, especially during file moves.
-6. **Compress the phase in `ROADMAP.md` when it closes**, before moving on: a ✅ heading, a
-   paragraph on what was done, and only the decisions still binding on future work. The task
-   table goes — it existed to execute the phase, not to remember it.
+6. **Add one entry to `TIMELINE.md` when a piece of work lands**: a title and at most seventy
+   words on what changed. Nothing else goes there — no rationale, no measurements, no plans.
 
-   What was learned is not discarded, it is **moved somewhere it will be read again**: a library
-   trap into the comment of the file that hits it, an architecture rule into this file, a
-   gameplay detail into the design doc. If a note has no home elsewhere, give it one before
-   deleting it from the roadmap.
+   What was learned is **moved somewhere it will be read again**, and that is never the timeline:
+   a library trap into the comment of the file that hits it, an architecture rule into this file,
+   a measurement into the comment of the constant it justifies. The commit message carries the
+   argument; the timeline carries the fact.
+7. **Spend the user's turns, not their patience.** Batch independent edits into one call, do not
+   re-read what you already know, and do not re-run a check nothing has invalidated. When the
+   question is how something *looks*, ask the user — they play it, and a rendered readback costs
+   a round trip to answer it worse.
 
 ---
 
@@ -937,7 +914,7 @@ raise it with the user before writing code.
 
 ## Known issues carried forward
 
-Tracked here so they are not rediscovered. Each is scheduled in `ROADMAP.md`.
+Tracked here so they are not rediscovered. Nothing here is scheduled — the user decides.
 
 - **A mirrored pair costs almost nothing in runway.** Measured: three flips, 0.33 s, 4 px given
   up at the opening speed — a rhythm break rather than a price, because a mashing character is
@@ -947,7 +924,7 @@ Tracked here so they are not rediscovered. Each is scheduled in `ROADMAP.md`.
   character came down onto is ground they stand on, so flipping into an occupied lane costs
   nothing where it used to cost the cube's whole width in dragged ground. A cube still charges
   when it arrives at the character's *side*, which is the case the design was written around, but
-  a mirrored pair is much cheaper than the roadmap's measurements assumed.
+  a mirrored pair is much cheaper than the v2.0 measurements assumed.
 - **A body landing exactly as a tall cube arrives keeps up to 18 px of side contact**, 40% of its
   width. It is the documented "move first, resolve second" cap doing its job: whatever overlap
   the landing frame starts with is kept, because the pushback is limited to one step's scroll and
