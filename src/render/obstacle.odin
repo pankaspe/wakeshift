@@ -73,16 +73,15 @@ OBSTACLE_EDGE_ALIVE :: 0.95
 FLOAT_GLOW_STRENGTH :: 0.30
 FLOAT_GLOW_RADIUS :: 1.1
 
-// How many places the ray asks the corridor where it is. The lane
-// surfaces are linear between keyframes, so this only has to be fine
-// enough that a keyframe between two samples does not flatten a bend.
-SENTINEL_BEAM_SAMPLES :: 12
+// The emitter's arrow: wider than the curtain it fires, so it reads as a
+// mouth rather than as a thickening of the beam, and read from far away
+// because it is what says which lane is about to be lethal (pillar 3).
+SENTINEL_EMITTER_WIDTH :: 34
+SENTINEL_EMITTER_LENGTH :: 26
 
-// The pulsar: heavier than the world's marks, because it is the thing
-// that tells you which lane to leave and it has to be read before the ray
-// arrives (pillar 3).
-SENTINEL_PULSAR_WEIGHT :: 2.4
-SENTINEL_PULSAR_ALPHA :: 0.95
+// The curtain is bright but not solid: it is light, and the field behind
+// it has to stay visible through it or it reads as a wall.
+SENTINEL_BEAM_ALPHA :: 0.42
 
 SENTINEL_GLOW_STRENGTH :: 0.55
 SENTINEL_GLOW_SPREAD :: 6
@@ -210,18 +209,21 @@ draw_floating_cube :: proc(
 
 // --- The Sentinel ---
 //
-// A pulsar on one lane and the ray it fires across the corridor. Both are
-// the game's own stroke — the pulsar a heavy round mark sitting on the
-// line, the ray a stroke whose *thickness* is the height that kills — so
-// nothing here is a shape the rest of the picture does not already use.
+// An emitter on a lane and the curtain of light it fires across the
+// corridor. Two marks, both the game's own stroke: the emitter a small
+// closed arrow sitting on the line and pointing the way it shoots, the
+// curtain a stroke whose *thickness* is the width that kills, so the mark
+// and the hitbox are the same thing.
 //
-// It bends with the corridor. The ray is sampled along its length between
-// the two lane surfaces rather than drawn as one straight bar, so a
-// corridor that is undulating carries the ray with it instead of being
-// cut across.
+// It is drawn for as long as it exists, never only while it is doing
+// something. A danger that can kill before it is on screen is the one
+// thing pillar 3 forbids outright, and this one used to manage 0.17 s of
+// it.
 //
-// Drawn out of the neutral palette: it belongs to neither lane, and the
-// one thing it must never look like is a threat to only one of them.
+// Drawn out of the neutral palette: it belongs to neither world, and the
+// one thing it must never look like is a threat to only the world it
+// happens to be nearer — even though, unlike everything else here, it
+// really does stand on a lane.
 @(private)
 draw_sentinel :: proc(
 	obstacle: game.Obstacle,
@@ -237,48 +239,40 @@ draw_sentinel :: proc(
 	if !any {
 		return
 	}
-	sweep := game.get_sentinel_sweep(obstacle, world)
+	middle := (from + to) * 0.5
+	is_floor := obstacle.lane == core.Lane.Real
+	away: f32 = is_floor ? -1 : 1
 
-	// The pulsar, on the lane the ray leaves from, at the middle of the
-	// window — which is the x the ray is aimed through.
-	muzzle := clamp(rect.x + rect.width * 0.5, from, to)
-	pulsar_y := terrain_surface_y(world, obstacle.lane == .Real, muzzle)
+	// The curtain: one stroke from the emitter's lane to its far end,
+	// sampled along the way so it follows the surface it grows from.
+	root := terrain_surface_y(world, is_floor, middle)
+	beam := [2]rl.Vector2{{middle, root}, {middle, root + rect.height * away}}
 
-	// It charges as the window closes on the anchor and is spent once the
-	// ray has gone: brightest at the instant it fires.
-	charge := 1 - abs(sweep * 2 - 1)
-	node := new_stroke(
-		core.with_alpha(palette.accent, SENTINEL_PULSAR_ALPHA),
-		core.LIGHT_RIM_THICKNESS * SENTINEL_PULSAR_WEIGHT,
-	)
-	node.glow = SENTINEL_GLOW_STRENGTH * (0.5 + 0.5 * charge)
-	node.spread = SENTINEL_GLOW_SPREAD * (1 + charge)
-	node.core_light = 0.6
-	apply_glow_gain(&node, gain)
-	draw_stroke_dot(rl.Vector2{muzzle, pulsar_y}, node)
+	curtain := new_stroke(core.with_alpha(palette.accent, SENTINEL_BEAM_ALPHA), rect.width)
+	curtain.glow = SENTINEL_GLOW_STRENGTH
+	curtain.spread = SENTINEL_GLOW_SPREAD
+	curtain.core_light = 0.7
+	curtain.round_caps = false
+	apply_glow_gain(&curtain, gain)
+	draw_stroke(beam[:], curtain)
 
-	// The ray is drawn for as long as it exists, never only while it is
-	// moving. It is lethal from the instant its window touches the
-	// character, which is before the sweep starts — measured, 0.17 s of a
-	// kill nobody could see. A danger that is not drawn is the one thing
-	// pillar 3 forbids outright, so the parked ray sitting on the pulsar's
-	// lane is not a detail: it is the warning.
-	//
-	// Its thickness *is* the height that kills, so the mark and the hitbox
-	// are the same thing — the same rule the cube's step follows
-	// (render/terrain.odin).
-	beam: [SENTINEL_BEAM_SAMPLES + 1]rl.Vector2
-	for i in 0 ..= SENTINEL_BEAM_SAMPLES {
-		x := from + (to - from) * f32(i) / f32(SENTINEL_BEAM_SAMPLES)
-		beam[i] = rl.Vector2{x, game.get_sentinel_beam_y(obstacle, world, x)}
+	// The emitter: a closed arrow on the lane, pointing where it fires.
+	// The one mark in the game that is a triangle, which is the point —
+	// it is the only obstacle that belongs to a lane *and* reaches off it.
+	half := f32(SENTINEL_EMITTER_WIDTH) * 0.5
+	nose := root + SENTINEL_EMITTER_LENGTH * away
+	arrow := [3]rl.Vector2 {
+		{middle - half, root},
+		{middle + half, root},
+		{middle, nose},
 	}
-
-	ray := new_stroke(core.with_alpha(palette.accent, 1), game.SENTINEL_BEAM_HEIGHT)
-	ray.glow = SENTINEL_GLOW_STRENGTH
-	ray.spread = SENTINEL_GLOW_SPREAD
-	ray.core_light = 0.75
-	apply_glow_gain(&ray, gain)
-	draw_stroke(beam[:], ray)
+	head := new_stroke(core.with_alpha(palette.accent, 1), TERRAIN_STROKE_THICKNESS * 1.4)
+	head.glow = SENTINEL_GLOW_STRENGTH
+	head.spread = SENTINEL_GLOW_SPREAD
+	head.core_light = 0.6
+	head.closed = true
+	apply_glow_gain(&head, gain)
+	draw_stroke(arrow[:], head)
 }
 
 // The mark an obstacle is outlined with: one neon line in the world's

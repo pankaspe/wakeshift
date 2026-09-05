@@ -111,6 +111,12 @@ tiers := []Tier {
 			// block into the better of two outcomes.
 			pattern_float_pair,
 			pattern_sentinel_cube,
+
+			// The facing pair: the one obstacle in the game that demands
+			// a press rather than allowing one, held back to the last
+			// tier because it is the only thing here that standing still
+			// does not survive.
+			pattern_sentinel_pair,
 		},
 	},
 }

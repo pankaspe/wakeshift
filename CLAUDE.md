@@ -336,7 +336,7 @@ reproduces it.
 |---|---|---|---|
 | **Cube** | *do not be here, or you pay* | no — it **blocks** | ✅ |
 | **Gap** | *do not be here* | yes | ✅ |
-| **Sentinel** | *do not move right now* — a pulsar sweeps a ray across the space a flip would cross | yes | ✅ |
+| **Sentinel** | *not this lane, not now* — and in facing pairs, *flip, on the beat* | yes | ✅ |
 
 The cube is **one primitive at six sizes** (`CubeForm`): standard, small, wide, stack, pyramid,
 and the floating one. Mechanically only the width matters — and, on the floating one, whether
@@ -376,22 +376,30 @@ Three rules the implementation established, all found by replaying the simulatio
   and it is the first thing in the project's history that turns "where do I go" into "which
   price do I pay". The v1.x design could never do it: two lethal lanes is an unsolvable pattern.
   What a cube costs is its **width**, because width is how long you stay pinned.
-- **The Sentinel is a pulsar that sweeps a ray**, and since 5 September the ray is a real thing
-  that kills what it touches rather than a state flag. A pulsar sits on one lane and the ray
-  travels toward the other, **stopping `SENTINEL_CLEARANCE` short of a body settled there**. So
-  the far lane is always safe, the pulsar's own lane is lethal the moment it fires, and
-  everything between is swept — which is to say the ray fills exactly the space a flip would have
-  to cross. The rule is the one this obstacle always had; what the sweep buys is that the picture
-  finally shows *why*.
-- **It has to stop short, and that is arithmetic rather than taste.** Measured: a flip crosses
-  the corridor at about 2100 px/s and a ray crossing the whole of it inside its own window
-  travels at 450, head on. Two things closing from opposite ends always meet, so a ray that
-  reached the far lane while it could still touch you would have no answer at all — the harness
-  found zero surviving presses out of two hundred. Not a hard obstacle: an unsurvivable one.
-- It is drawn out of the **neutral** palette: it belongs to neither world, and the one thing it
-  must never look like is a threat to only one of them. Both marks are the game's own stroke —
-  the pulsar a heavy round one on the lane, the ray a stroke whose *thickness* is the height that
-  kills, so the mark and the hitbox are the same thing.
+- **The Sentinel is a curtain, and the obstacle is the pair.** An emitter on one lane fires a
+  curtain of light across the corridor toward the other, stopping `SENTINEL_CLEARANCE` short of a
+  body settled there. A single one is "not this lane, not now": its own lane is lethal, the far
+  one is clear. **Two of them on opposite lanes, separated in time, are one forced and timed
+  flip** — be on the far lane for the first, cross in the gap, be on the other for the second.
+  That is a demand neither of the other two dangers makes, and it is composed in the pattern pool
+  rather than built into the obstacle.
+- **It is the one thing in the game that standing still does not survive**, which is deliberate:
+  the exact failing that ended v1.x was a contract under which doing nothing was almost always
+  right. It is held to the last tier for the same reason.
+- **Two shapes were tried for it first and both are arithmetically impossible.** A ray sweeping
+  the whole corridor: a flip crosses at ~2100 px/s against a ray's ~450, head-on, and two things
+  closing from opposite ends always meet — the harness found zero surviving presses out of two
+  hundred. Then a pair facing each other *across* the corridor with a slot between them: a body
+  is inside a 160 px slot for 0.054 s, but a beam threatens for as long as its x overlaps the
+  body, and the body alone is 45 px, which is 0.167 s at the opening speed — so it is impossible
+  for a beam of any width including zero. The demand survived both; what changed is that the pair
+  runs *along* the corridor instead of across it, which puts the middle somewhere the character
+  can actually be. **Measure this class of obstacle before building it.**
+- **`is_lethal_to_both_lanes` is now false for everything**, and that is a simplification worth
+  keeping. The Sentinel used to be the exception, which is why the fairness rule needed a second
+  sentence about its window; a curtain belongs to the lane it is fired from, so the ordinary rule
+  covers it with no special case and two facing curtains are legal exactly when they do not
+  overlap in time.
 - **A hole takes you when there is nothing under your *centre*.** Not when your leading edge
   crosses the lip: measured on 5 September, the box test ended the run 18 px — 0.07 s — before
   the body's centre reached the hole, and 8 px before the drawn figure touched it at all, so the

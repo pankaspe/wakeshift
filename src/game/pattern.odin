@@ -467,17 +467,12 @@ pattern_float_pair := Pattern {
 	demand   = 2,
 }
 
-// **The Sentinel alone.** A beam across the middle of the corridor: both
-// lanes are safe and the space between them is not, so the whole question
-// is which lane you want to be standing on when it arrives — and then not
-// touching the key.
-//
-// The corridor narrows under it, which is scenery rather than difficulty:
-// the beam is a fraction of the span, so a tighter corridor makes a
-// thinner beam and the two free bands stay comfortably deeper than the
-// body.
+// **One curtain.** An emitter on the floor firing across the corridor:
+// its own lane is lethal and the ceiling is clear, so the question is
+// where you are standing when it arrives — and it is the gentlest thing
+// this obstacle can be, which is why it is the one that teaches it.
 pattern_sentinel := Pattern {
-	events   = []PatternEvent{{time_offset = 1.2, obstacle_type = .Sentinel}},
+	events   = []PatternEvent{{time_offset = 1.2, lane = .Real, obstacle_type = .Sentinel}},
 	track    = []core.TrackPoint {
 		{time = 0, spine = 360, span = 340},
 		{time = 1.0, spine = 360, span = 300},
@@ -486,6 +481,33 @@ pattern_sentinel := Pattern {
 	},
 	duration = 2.6,
 	demand   = 2,
+}
+
+// **The facing pair, and the reason this obstacle exists.** Two emitters
+// on opposite lanes, one after the other: be on the ceiling for the
+// first, cross in the gap between them, be on the floor for the second.
+// One flip, and it has to be made on the beat — a demand neither of the
+// other two dangers makes.
+//
+// The 0.55 s between them is not a taste. The flip itself takes 0.16 s
+// and the body needs another 45 px of travel to clear the first curtain
+// before it can start, which is 0.167 s at the opening speed and less as
+// a run speeds up — so the gap is comfortably over
+// SENTINEL_MIN_GAP_TIME and gets *easier* with speed, like everything
+// else here.
+pattern_sentinel_pair := Pattern {
+	events   = []PatternEvent {
+		{time_offset = 1.2, lane = .Real, obstacle_type = .Sentinel},
+		{time_offset = 1.75, lane = .Dream, obstacle_type = .Sentinel},
+	},
+	track    = []core.TrackPoint {
+		{time = 0, spine = 360, span = 340},
+		{time = 0.9, spine = 360, span = 320},
+		{time = 2.2, spine = 360, span = 320},
+		{time = 2.9, spine = 360, span = 340},
+	},
+	duration = 2.9,
+	demand   = 4,
 }
 
 // **The Sentinel and a cube on one lane** — the moment pillar 7 is built
@@ -503,7 +525,7 @@ pattern_sentinel := Pattern {
 // pay the block, which is the trade pillar 7 exists for.
 pattern_sentinel_cube := Pattern {
 	events   = []PatternEvent {
-		{time_offset = 1.2, obstacle_type = .Sentinel},
+		{time_offset = 1.2, lane = .Real, obstacle_type = .Sentinel},
 		{time_offset = 2.25, lane = .Real, obstacle_type = .Cube},
 	},
 	track    = []core.TrackPoint {
