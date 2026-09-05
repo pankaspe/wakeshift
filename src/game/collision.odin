@@ -141,7 +141,7 @@ get_blocking_face :: proc(
 	// Left to right, so the face is the first column that is in the way
 	// rather than the tallest one — the body is stopped by what it reaches
 	// first.
-	for index in 0 ..< len(get_cube_profile(obstacle)) {
+	for index in 0 ..< get_cube_columns(obstacle) {
 		column := get_cube_column(obstacle, rect, index)
 		if column.rect.height <= 0 {
 			continue

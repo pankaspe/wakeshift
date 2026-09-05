@@ -54,12 +54,13 @@ Tier :: struct {
 }
 
 tiers := []Tier {
-	// Awake opens with a full second of air between patterns.
+	// Awake opens with a lot of air between patterns, and the pool it can
+	// draw from is the one-thing-at-a-time half of the set.
 	{
 		name = "Awake",
 		start_time = 0,
 		scroll_speed = INITIAL_SCROLL_SPEED,
-		gap = 1.0,
+		gap = 0.8,
 		demand_weights = {6, 2, 1, 1},
 		added_patterns = nil,
 	},
@@ -67,28 +68,28 @@ tiers := []Tier {
 		name = "Drifting",
 		start_time = 25,
 		scroll_speed = 320,
-		gap = 0.5,
+		gap = 0.25,
 		demand_weights = {3, 4, 3, 2},
 		added_patterns = []Pattern {
+			// The shapes that say something rather than only stand there:
+			// a flat top you can be on, a middle you can be in, a hole
+			// answered on the far wall.
+			pattern_plateau_real,
+			pattern_plateau_dream,
+			pattern_canyon_real,
+			pattern_canyon_dream,
 			pattern_gap_then_cube,
 			pattern_gap_then_cube_reverse,
 			pattern_stagger,
 			pattern_stagger_reverse,
+			pattern_bump_and_ridge,
 
 			// The constriction: two facing towers, the first thing in a
-			// run that holds both lanes at once. It waits until here for
-			// the same reason the mirrored pair does — a run should learn
-			// what a cube costs before it meets two it cannot dodge.
+			// run that holds both lanes at once. It waits until here
+			// because a run should learn what a cube costs before it
+			// meets two it cannot dodge — and should have flipped a few
+			// dozen times before something floats at it.
 			pattern_narrows,
-
-			// The three new questions (roadmap R4). They are held back
-			// from the opening tier for the same reason the track is: a
-			// run should learn that a cube costs ground before it meets
-			// the pair that cannot be dodged, and should have flipped a
-			// few dozen times before something tells it not to.
-			pattern_pyramid,
-			pattern_bump_and_wall,
-			pattern_mirror,
 			pattern_float_open,
 		},
 	},
@@ -98,11 +99,15 @@ tiers := []Tier {
 		name = "Deep Dream",
 		start_time = 55,
 		scroll_speed = 370,
-		gap = 0.2,
-		demand_weights = {1, 2, 4, 5},
+		gap = 0.1,
+		demand_weights = {1, 2, 4, 7},
 		added_patterns = []Pattern {
 			pattern_gap_pair,
 			pattern_burst,
+			pattern_ridge_run,
+			pattern_ravine_real,
+			pattern_ravine_dream,
+			pattern_gauntlet,
 			pattern_float_pair,
 		},
 	},

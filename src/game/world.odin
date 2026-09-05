@@ -138,7 +138,7 @@ get_support_y :: proc(
 		// is worth knowing before authoring a staircase: landing on one
 		// puts the character on the *upper* of the two steps they cover,
 		// not the one their leading edge touched. Verified by replay.
-		for index in 0 ..< len(get_cube_profile(obstacle)) {
+		for index in 0 ..< get_cube_columns(obstacle) {
 			column := get_cube_column(obstacle, rect, index)
 			if column.rect.height <= 0 {
 				continue

@@ -23,10 +23,11 @@
 * THE CUBE IS A SKYLINE, AND THE SKYLINE IS DATA
 *
 * Everything the design asks of the obstacle set is a run of columns on a
-* lane, and the pattern authors the numbers: CubeProfile is the whole
-* vocabulary and this file knows the name of no shape at all. What a
-* column does — stop the body, hold it up, or be drawn — is answered in
-* one place, get_cube_column, so the three readers cannot disagree.
+* lane. The pattern declares a form and its bounds, the generator draws
+* the numbers (skyline.odin), and this file knows the name of no shape at
+* all. What a column does — stop the body, hold it up, or be drawn — is
+* answered in one place, get_cube_column, so the three readers cannot
+* disagree.
 *
 * **"The width is the price" is the design's intent and not currently the
 * game's behaviour.** Measured by replay when the unit was halved: every
@@ -103,47 +104,32 @@ ObstacleType :: enum {
 // A CUBE IS A SKYLINE, AND THE SKYLINE IS DATA
 //
 // A cube is a run of columns, each CUBE_UNIT wide, each a whole number of
-// units tall. The pattern authors the numbers; nothing here knows the
-// name of a shape. `{1, 2, 3}` is a staircase, `{3, 0, 3}` is two towers
-// with a canyon between them, `{1}` is the primitive.
+// units tall. `{1, 2, 3}` is a staircase, `{3, 0, 0, 3}` two towers with
+// a canyon between them, `{1}` the primitive — and nothing in this file
+// knows the name of any of those. It reads digits.
 //
-// It replaced a six-entry enum whose shapes were welded into three
-// different files — the box in get_cube_size, the staircase in
-// render/terrain.odin, and nothing at all in the collision, which is the
-// part that mattered: the pyramid was *drawn* as steps and *collided* as
-// its bounding box, so the low step it showed you could not be stood on.
-// One profile read by all three is what makes the mark and the hitbox the
-// same thing, which is the rule the rest of the renderer already keeps.
+// The digits used to be authored in the pattern. Since C2 the pattern
+// declares a **form and its bounds** and the run's own generator draws
+// them (skyline.odin), so one authored moment is a different ridge on
+// every seed. Where they come from is the only thing that changed: an
+// obstacle still holds columns, and the mark, the hitbox and the support
+// still read the same ones through get_cube_column.
+//
+// That is what keeps the form enum in skyline.odin from being the CubeForm
+// T3 deleted. The old one survived generation and was re-interpreted by
+// three files — the box in get_cube_size, the staircase in the renderer,
+// nothing at all in the collision — so a pyramid was drawn as steps and
+// collided as a filled box. This one is resolved once and is gone.
 //
 // **A zero is a column that is not there**, and it is a legal thing to
-// author: the skyline drops to the lane's own surface and comes back. It
-// is not the same as a hole — the ground is still there to stand on.
+// draw: the skyline drops to the lane's own surface and comes back. It is
+// not the same as a hole — the ground is still there to stand on.
 //
-// The old vocabulary is now four literals and one deletion. Standard is
-// {1}, Wide {1,1}, Stack {3}, Pyramid {1,2,3}; Float stopped being a
-// shape at all and became `floating`, which is orthogonal and always
-// should have been. Small is gone: it was half a unit, and the halving in
-// T2 left it a fragment of a column rather than an arrangement of them —
-// at the current unit a single column *is* the bump it was there to be.
-CubeProfile :: []u8
+// The columns live inline rather than behind a slice. An Obstacle is
+// copied by value all over the game, and a slice into a copy points at a
+// body that has already gone.
 
-// What an event gets when it says nothing about its cube.
-PROFILE_PRIMITIVE := CubeProfile{1}
-
-// The shapes that earned a name, so a pattern reads as prose where it
-// wants to and as numbers where it has something particular to say.
-PROFILE_WIDE := CubeProfile{1, 1}
-PROFILE_STACK := CubeProfile{3}
-PROFILE_PYRAMID := CubeProfile{1, 2, 3}
-
-// One half of a constriction: a squat tower two columns wide, meant to
-// stand opposite another one (pattern_narrows). Two columns rather than
-// one because a cube facing another across the corridor must be at least
-// as wide as the body (MIRROR_MIN_WIDTH), and two units tall so that the
-// pair reads as unequal rather than as one box cut in half.
-PROFILE_TOWER := CubeProfile{2, 2}
-
-// The bounds validate_pattern_pool holds an authored profile inside.
+// The bounds validate_pattern_pool holds a declared skyline inside.
 //
 // **Height is the one with teeth.** An obstacle belongs to a lane, and
 // blocks_player only ever tests the lane it stands on — so a floor cube
@@ -252,24 +238,27 @@ Obstacle :: struct {
 	size:         rl.Vector2,
 	obstacle_type: ObstacleType,
 
-	// Cube only. The profile is the shape; floating says whether it rests
-	// on its lane or bobs off it, and the phase decides where in that bob
-	// it is at the moment it reaches the anchor — so a pattern can author
-	// "this one blocks" and "this one you go under" out of the same
-	// obstacle.
+	// Cube only. The columns are the shape, drawn once from the pattern's
+	// declaration when this obstacle was created (skyline.odin) and never
+	// touched again; floating says whether it rests on its lane or bobs
+	// off it, and the phase decides where in that bob it is at the moment
+	// it reaches the anchor — so a pattern can author "this one blocks"
+	// and "this one you go under" out of the same obstacle.
 	//
-	// The profile is a slice of the pattern's own static data, never
-	// allocated and never owned, so an Obstacle stays a plain value that
-	// can be copied and compacted like any other.
-	profile:      CubeProfile,
+	// Inline storage, not a slice. An Obstacle is copied by value into
+	// the renderer's steps and into the interpolated world, and a slice
+	// into one of those copies would outlive what it points at.
+	profile:      [CUBE_MAX_COLUMNS]u8,
+	column_count: int,
 	floating:     bool,
 	float_phase:  f32,
 }
 
-// A cube's profile, with the empty one resolved to the primitive. Every
-// reader goes through this, so "says nothing" means one thing everywhere.
-get_cube_profile :: proc(obstacle: Obstacle) -> CubeProfile {
-	return len(obstacle.profile) > 0 ? obstacle.profile : PROFILE_PRIMITIVE
+// How many columns a cube has, with the unset one resolved to the
+// primitive. Every reader goes through this, so "says nothing" means one
+// thing everywhere.
+get_cube_columns :: proc(obstacle: Obstacle) -> int {
+	return obstacle.column_count > 0 ? obstacle.column_count : 1
 }
 
 // One column of a skyline, in screen coordinates.
@@ -288,8 +277,8 @@ CubeColumn :: struct {
 // here — its single column is the box itself, and a body can land on top
 // of it exactly as it can on ground.
 get_cube_column :: proc(obstacle: Obstacle, rect: rl.Rectangle, index: int) -> CubeColumn {
-	profile := get_cube_profile(obstacle)
-	height := f32(profile[index]) * CUBE_UNIT
+	units := obstacle.column_count > 0 ? obstacle.profile[index] : 1
+	height := f32(units) * CUBE_UNIT
 	if obstacle.floating {
 		height = rect.height
 	}
@@ -344,25 +333,40 @@ GAP_HEIGHT :: 54
 // the culling and the fairness windows all reason about where a whole
 // obstacle is, and because get_cube_column measures the columns from its
 // far edge.
-get_cube_size :: proc(profile: CubeProfile) -> rl.Vector2 {
-	columns := len(profile) > 0 ? profile : PROFILE_PRIMITIVE
+get_cube_size :: proc(profile: [CUBE_MAX_COLUMNS]u8, count: int) -> rl.Vector2 {
+	columns := max(count, 1)
 
-	tallest: u8 = 0
-	for height in columns {
-		tallest = max(tallest, height)
+	tallest: u8 = count > 0 ? 0 : 1
+	for i in 0 ..< count {
+		tallest = max(tallest, profile[i])
 	}
-	return rl.Vector2{f32(len(columns)) * CUBE_UNIT, f32(tallest) * CUBE_UNIT}
+	return rl.Vector2{f32(columns) * CUBE_UNIT, f32(tallest) * CUBE_UNIT}
 }
 
-// The widest this event can ever turn out to be. Used by the fairness
-// check, which has to reason about a pattern before its random choices
-// have been made.
-get_max_width :: proc(obstacle_type: ObstacleType, profile: CubeProfile) -> f32 {
+// The widest and the narrowest this event can ever turn out to be. Both
+// are used by the fairness check, which has to reason about a pattern
+// before its random choices have been made — the hole has rolled its own
+// width since long before the skyline did, and this is the same idea
+// answered for both types.
+//
+// The narrowest matters only for a facing pair, which has to be at least
+// as wide as the body on **every** seed and not merely on some of them.
+get_max_width :: proc(obstacle_type: ObstacleType, shape: Skyline) -> f32 {
 	switch obstacle_type {
 	case .Gap:
 		return GAP_WIDTH_LONG
 	case .Cube:
-		return get_cube_size(profile).x
+		return f32(skyline_max_columns(shape)) * CUBE_UNIT
+	}
+	return CUBE_UNIT
+}
+
+get_min_width :: proc(obstacle_type: ObstacleType, shape: Skyline) -> f32 {
+	switch obstacle_type {
+	case .Gap:
+		return GAP_WIDTH_SHORT
+	case .Cube:
+		return f32(skyline_min_columns(shape)) * CUBE_UNIT
 	}
 	return CUBE_UNIT
 }
@@ -377,12 +381,14 @@ new_obstacle :: proc(
 	arrival_time: f32,
 	lane: core.Lane,
 	obstacle_type: ObstacleType,
-	profile: CubeProfile,
+	shape: Skyline,
 	floating: bool,
 	float_phase: f32,
 	rng: rand.Generator,
 ) -> Obstacle {
-	size := get_cube_size(profile)
+	profile: [CUBE_MAX_COLUMNS]u8
+	count := 0
+	size: rl.Vector2
 
 	switch obstacle_type {
 	case .Gap:
@@ -397,8 +403,12 @@ new_obstacle :: proc(
 			width = GAP_WIDTH_LONG
 		}
 		size = rl.Vector2{width, GAP_HEIGHT}
+
 	case .Cube:
-	// the profile already gave us the box
+		// The one place a form becomes columns. After this line nothing
+		// in the game knows the shape had a name.
+		profile, count = draw_skyline(shape, rng)
+		size = get_cube_size(profile, count)
 	}
 
 	return Obstacle {
@@ -407,6 +417,7 @@ new_obstacle :: proc(
 		size = size,
 		obstacle_type = obstacle_type,
 		profile = profile,
+		column_count = count,
 		floating = floating,
 		float_phase = float_phase,
 	}

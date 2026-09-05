@@ -19,12 +19,36 @@
 * validate_pattern_pool enforces all of it by arithmetic rather than by
 * authorial care. For every pattern, and for every ordered pair of
 * patterns across the seam between them, it works out the window of time
-* each event owns and checks two things:
+* each event owns and checks three things:
 *
 *   * a Real lethal window never overlaps a Dream one;
 *   * two cubes facing each other across the corridor are each between
 *     MIRROR_MIN_WIDTH and MIRROR_MAX_WIDTH, which is what bounds the
-*     price of the one encounter that has no way out.
+*     price of the one encounter that has no way out;
+*   * two cubes on the *same* lane never overlap in x, because the
+*     renderer welds them into one polyline and drops the second one
+*     rather than tearing the line — a mark and a hitbox that disagree.
+*
+* A PATTERN CONTAINS ITS OWN WINDOWS
+*
+* The composability rule, and since C2 it is the only one there is. Every
+* event's window — the stretch of time it can touch a body at the anchor —
+* lies inside [0, duration]. Two consequences fall out of it:
+*
+*   * **the seam cannot produce a conflict at any gap.** If both patterns
+*     hold their windows, then whatever order the generator strings them
+*     in and however small the air between them, no window of one can
+*     reach a window of the other. The seam check still runs, because a
+*     rule worth having is worth verifying rather than believing.
+*   * **a pattern's own boundaries are not its warning.** The warning is
+*     the screen: an obstacle is visible from x = 1280 and arrives at
+*     x = 360, which is 2.5 to 3.4 seconds of looking at it whatever
+*     pattern it belongs to, and the pattern before it is still on screen
+*     while it comes. So a lead-in inside a pattern buys nothing and is
+*     simply dead air — which is what C2 found the old pool was mostly
+*     made of, and what it cut to reach the density the design asks for.
+*     The air between patterns is the tier's gap and nothing else, which
+*     leaves density with exactly one knob.
 *
 * WHY PATTERNS NO LONGER CHAIN
 *
@@ -63,16 +87,22 @@ PatternEvent :: struct {
 	lane:          core.Lane,
 	obstacle_type: ObstacleType,
 
-	// Cube only, and every one has a zero value that means "the
-	// primitive": an event that says nothing about its cube gets one
-	// column one unit tall, resting on its lane.
+	// Cube only, and the zero value means "the primitive": an event that
+	// says nothing about its cube gets one column one unit tall, resting
+	// on its lane.
 	//
-	// The profile is the skyline in units — {1,2,3} is a staircase,
-	// {3,0,3} two towers with a canyon between them (obstacle.odin).
-	// Floating is orthogonal to it rather than one of its shapes, which
-	// is what lets a pattern lift any cube it likes and is why the phase
+	// It is a **declaration, not a shape** (skyline.odin). The pattern
+	// says what form the thing is and how big it is allowed to be; the
+	// run's own generator draws the columns inside those bounds, so an
+	// authored moment is a different ridge on every seed and the pattern
+	// still knows exactly what it is asking. Everything the fairness
+	// check needs from it is a bound rather than an outcome, which is how
+	// a pool can be validated before any seed exists.
+	//
+	// Floating is orthogonal to it rather than one of its forms, which is
+	// what lets a pattern lift any cube it likes and is why the phase
 	// only means anything alongside it.
-	profile:       CubeProfile,
+	shape:         Skyline,
 	floating:      bool,
 	cube_phase:    f32, // floating only: 0 is down and blocking, 0.5 is up and open
 }
@@ -100,74 +130,190 @@ DEMAND_LEVELS :: 4
 
 // --- The pool ---
 //
-// Deliberately small for R1. This phase is demolition: the pool that the
-// game ships with is authored in R5.2, once the Cube blocks instead of
-// killing, because that changes what a pattern can even ask.
+// The world of the sketch, built out of the bricks: bumps, towers,
+// plateaus, staircases, canyons, ridges, facing constrictions, and the
+// one block that floats. Every cube here is a *declaration* — a form and
+// the bounds around it — and the columns are drawn per obstacle, so no
+// two runs meet the same ridge twice (skyline.odin).
+//
+// TWO THINGS THAT SHAPED EVERY PATTERN BELOW
+//
+// **A wide cube on one lane forbids a cube on the other for most of a
+// second.** Two facing cubes have to be between MIRROR_MIN_WIDTH and
+// MIRROR_MAX_WIDTH, which is exactly two columns, so anything wider than
+// that has to be clear in time of everything on the far lane. A ridge's
+// window runs from 0.17 s before its arrival to 0.6 s after it, and that
+// spacing is why the busy patterns run along one lane rather than across
+// the corridor.
+//
+// **A hole must stay away from a pattern's ends.** The seam check runs
+// every ordered pair of patterns at the smallest gap any tier uses, and a
+// long hole owns 0.69 s of its lane. A lethal event inside about half a
+// second of either end is how two patterns that are fair apart become
+// unanswerable together, so none of them are.
 
-// One cube, one lane, plenty of time. The floor of the pool.
-pattern_cube_real := Pattern {
-	events   = []PatternEvent{{time_offset = 0.9, lane = .Real, obstacle_type = .Cube}},
-	duration = 1.9,
+// --- Awake: one thing at a time ---
+
+// The floor of the pool: a single brick. It is narrower than the body, so
+// it reads as a bump rather than as a wall, and the answer is one flip.
+pattern_bump_real := Pattern {
+	events   = []PatternEvent {
+		{time_offset = 0.2, lane = .Real, obstacle_type = .Cube, shape = SHAPE_BUMP},
+	},
+	duration = 0.3,
 	demand   = 0,
 }
 
-pattern_cube_dream := Pattern {
-	events   = []PatternEvent{{time_offset = 0.9, lane = .Dream, obstacle_type = .Cube}},
-	duration = 1.9,
+pattern_bump_dream := Pattern {
+	events   = []PatternEvent {
+		{time_offset = 0.2, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_BUMP},
+	},
+	duration = 0.3,
 	demand   = 0,
 }
 
-// A hole is wider than a cube and asks a different question — not "move
-// now" but "do not be down here for this stretch".
+// A hole asks a different question from a cube — not "move now" but "do
+// not be down here for this stretch" — and it is the only thing in the
+// game that ends the run.
+// **Demand 1 rather than 0, and that is about the draw and not about the
+// hole.** It asks no more of the hand than a bump does. But it is the only
+// lethal thing in the game, and the opening tier weights demand 0 six to
+// one — measured with the hole at demand 0, more than a quarter of every
+// pattern a new run met was a hole, and the first tier came out deadlier
+// than the last. A demand level is what a tier draws on, so it is also
+// where "how often" is said.
 pattern_gap_real := Pattern {
-	events   = []PatternEvent{{time_offset = 0.9, lane = .Real, obstacle_type = .Gap}},
-	duration = 1.9,
-	demand   = 0,
+	events   = []PatternEvent{{time_offset = 0.2, lane = .Real, obstacle_type = .Gap}},
+	duration = 0.72,
+	demand   = 1,
 }
 
 pattern_gap_dream := Pattern {
-	events   = []PatternEvent{{time_offset = 0.9, lane = .Dream, obstacle_type = .Gap}},
-	duration = 1.9,
+	events   = []PatternEvent{{time_offset = 0.2, lane = .Dream, obstacle_type = .Gap}},
+	duration = 0.72,
+	demand   = 1,
+}
+
+// An isolated tower: tall enough to read from across the screen, narrow
+// enough that the answer is still one flip. The height is what the eye
+// gets and the width is what the hand gets, and they are deliberately
+// different sizes.
+pattern_tower_real := Pattern {
+	events   = []PatternEvent {
+		{time_offset = 0.2, lane = .Real, obstacle_type = .Cube, shape = SHAPE_TOWER},
+	},
+	duration = 0.5,
 	demand   = 0,
 }
 
-// Two threats on opposite lanes: whichever lane you start on, you move
-// at least once, and if you start on the wrong one you move twice.
+pattern_tower_dream := Pattern {
+	events   = []PatternEvent {
+		{time_offset = 0.2, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_TOWER},
+	},
+	duration = 0.5,
+	demand   = 0,
+}
+
+// A staircase presenting its low step first — the one form that can be
+// entered rather than only dodged. Land on the low step and the wall
+// becomes the next column along; a body is 45 px and a column is 27, so
+// it always straddles two and rests on the higher.
+pattern_stairs_real := Pattern {
+	events   = []PatternEvent {
+		{time_offset = 0.2, lane = .Real, obstacle_type = .Cube, shape = SHAPE_STAIRS_UP},
+	},
+	duration = 0.7,
+	demand   = 1,
+}
+
+pattern_stairs_dream := Pattern {
+	events   = []PatternEvent {
+		{time_offset = 0.2, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_STAIRS_UP},
+	},
+	duration = 0.7,
+	demand   = 1,
+}
+
+// Two threats on opposite lanes: whichever lane you start on you move at
+// least once, and if you start on the wrong one you move twice.
 pattern_alternate := Pattern {
 	events   = []PatternEvent {
-		{time_offset = 0.8, lane = .Real, obstacle_type = .Cube},
-		{time_offset = 1.7, lane = .Dream, obstacle_type = .Cube},
+		{time_offset = 0.2, lane = .Real, obstacle_type = .Cube, shape = SHAPE_TOWER},
+		{time_offset = 1, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_TOWER},
 	},
-	duration = 2.6,
+	duration = 1.3,
 	demand   = 1,
 }
 
 pattern_alternate_reverse := Pattern {
 	events   = []PatternEvent {
-		{time_offset = 0.8, lane = .Dream, obstacle_type = .Cube},
-		{time_offset = 1.7, lane = .Real, obstacle_type = .Cube},
+		{time_offset = 0.2, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_TOWER},
+		{time_offset = 1, lane = .Real, obstacle_type = .Cube, shape = SHAPE_TOWER},
 	},
-	duration = 2.6,
+	duration = 1.3,
 	demand   = 1,
 }
 
-// A hole then a cube on the other side: the answer to the first is the
+// --- Drifting: the shapes start meaning things ---
+
+// A plateau: flat on top and wide enough that flipping onto it is a real
+// answer rather than an accident. The bump after it is on the same lane,
+// so the pattern is read along one wall instead of across the corridor.
+pattern_plateau_real := Pattern {
+	events   = []PatternEvent {
+		{time_offset = 0.2, lane = .Real, obstacle_type = .Cube, shape = SHAPE_PLATEAU},
+		{time_offset = 1.1, lane = .Real, obstacle_type = .Cube, shape = SHAPE_BUMP},
+	},
+	duration = 1.2,
+	demand   = 1,
+}
+
+pattern_plateau_dream := Pattern {
+	events   = []PatternEvent {
+		{time_offset = 0.2, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_PLATEAU},
+		{time_offset = 1.1, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_BUMP},
+	},
+	duration = 1.2,
+	demand   = 1,
+}
+
+// A canyon: two towers with the lane's own surface between them. The
+// middle is a place to *stand*, which is what makes it not a hole, and
+// the whole shape is wide enough that the answer is "be somewhere for a
+// while" rather than "move once".
+pattern_canyon_real := Pattern {
+	events   = []PatternEvent {
+		{time_offset = 0.2, lane = .Real, obstacle_type = .Cube, shape = SHAPE_CANYON},
+	},
+	duration = 0.9,
+	demand   = 1,
+}
+
+pattern_canyon_dream := Pattern {
+	events   = []PatternEvent {
+		{time_offset = 0.2, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_CANYON},
+	},
+	duration = 0.9,
+	demand   = 1,
+}
+
+// A hole then a shape on the other side: the answer to the first is the
 // place the second is waiting.
 pattern_gap_then_cube := Pattern {
 	events   = []PatternEvent {
-		{time_offset = 0.9, lane = .Real, obstacle_type = .Gap},
-		{time_offset = 2.0, lane = .Dream, obstacle_type = .Cube},
+		{time_offset = 0.2, lane = .Real, obstacle_type = .Gap},
+		{time_offset = 1.1, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_TOWER},
 	},
-	duration = 2.9,
+	duration = 1.4,
 	demand   = 1,
 }
 
 pattern_gap_then_cube_reverse := Pattern {
 	events   = []PatternEvent {
-		{time_offset = 0.9, lane = .Dream, obstacle_type = .Gap},
-		{time_offset = 2.0, lane = .Real, obstacle_type = .Cube},
+		{time_offset = 0.2, lane = .Dream, obstacle_type = .Gap},
+		{time_offset = 1.1, lane = .Real, obstacle_type = .Cube, shape = SHAPE_TOWER},
 	},
-	duration = 2.9,
+	duration = 1.4,
 	demand   = 1,
 }
 
@@ -175,143 +321,56 @@ pattern_gap_then_cube_reverse := Pattern {
 // second, because there is no room to settle in between.
 pattern_stagger := Pattern {
 	events   = []PatternEvent {
-		{time_offset = 0.8, lane = .Real, obstacle_type = .Cube},
-		{time_offset = 1.5, lane = .Dream, obstacle_type = .Cube},
-		{time_offset = 2.2, lane = .Real, obstacle_type = .Cube},
+		{time_offset = 0.2, lane = .Real, obstacle_type = .Cube, shape = SHAPE_BUMP},
+		{time_offset = 0.9, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_TOWER},
+		{time_offset = 1.6, lane = .Real, obstacle_type = .Cube, shape = SHAPE_TOWER},
 	},
-	duration = 3.0,
+	duration = 1.9,
 	demand   = 2,
 }
 
 pattern_stagger_reverse := Pattern {
 	events   = []PatternEvent {
-		{time_offset = 0.8, lane = .Dream, obstacle_type = .Cube},
-		{time_offset = 1.5, lane = .Real, obstacle_type = .Cube},
-		{time_offset = 2.2, lane = .Dream, obstacle_type = .Cube},
+		{time_offset = 0.2, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_BUMP},
+		{time_offset = 0.9, lane = .Real, obstacle_type = .Cube, shape = SHAPE_TOWER},
+		{time_offset = 1.6, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_TOWER},
 	},
-	duration = 3.0,
+	duration = 1.9,
 	demand   = 2,
 }
 
-// Two holes on alternating lanes: long stretches rather than instants,
-// so the answer is to be somewhere for a while rather than to move once.
-pattern_gap_pair := Pattern {
+// A bump, then a ridge on the other lane. The two ends of what a cube can
+// be, and the pattern that says what width actually buys: **nothing, on
+// its own**. A lone cube of any width costs one flip, because the other
+// lane is open and one flip is one flip. Width becomes a price only where
+// there is no free lane, which is the facing pair and nowhere else — so
+// these two are here for the eye, not the hand, and that is a legitimate
+// job. They are how the set stops looking like one object repeated.
+pattern_bump_and_ridge := Pattern {
 	events   = []PatternEvent {
-		{time_offset = 0.9, lane = .Real, obstacle_type = .Gap},
-		{time_offset = 2.2, lane = .Dream, obstacle_type = .Gap},
+		{time_offset = 0.2, lane = .Real, obstacle_type = .Cube, shape = SHAPE_BUMP},
+		{time_offset = 1, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_RIDGE},
 	},
-	duration = 3.1,
-	demand   = 2,
+	duration = 1.8,
+	demand   = 1,
 }
 
-// The burst: four answers, no room at all.
-pattern_burst := Pattern {
-	events   = []PatternEvent {
-		{time_offset = 0.8, lane = .Real, obstacle_type = .Cube},
-		{time_offset = 1.4, lane = .Dream, obstacle_type = .Cube},
-		{time_offset = 2.0, lane = .Real, obstacle_type = .Cube},
-		{time_offset = 2.6, lane = .Dream, obstacle_type = .Cube},
-	},
-	duration = 3.4,
-	demand   = 3,
-}
-
-// **The constriction**, and it is the pattern C1 was really about. The
-// corridor used to pinch: the span closed to 304 px and one ordinary cube
-// stood inside the narrowing. That was a second vocabulary for relief,
-// and the world only has one now — bricks — so a pinch is what it is in
-// the sketch, **two facing towers**.
+// **The constriction.** Two facing towers of unequal height, which is
+// what a pinch is now that the corridor no longer pinches: the same
+// bricks as everything else, on both lanes at once.
 //
-// Mechanically that makes it a mirrored pair: both lanes are held, there
-// is no dodge, and what is bought is a price rather than an escape. So it
-// obeys MIRROR_MIN_WIDTH / MIRROR_MAX_WIDTH exactly like the pair below,
-// and it costs a demand level over the pinch it replaces, which is
-// honest — the old one asked for one flip and this one asks which side to
-// pay on.
-//
-// The two towers are deliberately unequal. Facing columns of the same
-// height read as one object cut in half; unequal ones read as a place
-// where the world closes in.
+// Mechanically it is a mirrored pair — both lanes held, no dodge, only a
+// price — so both halves are SHAPE_FACING, whose two columns are the only
+// width MIRROR_MIN_WIDTH and MIRROR_MAX_WIDTH leave legal. The heights
+// are drawn independently, so it comes out lopsided far more often than
+// not, and a lopsided pair reads as a place where the world closes in
+// rather than as one object cut in half.
 pattern_narrows := Pattern {
 	events   = []PatternEvent {
-		{
-			time_offset = 1.4,
-			lane = .Real,
-			obstacle_type = .Cube,
-			profile = PROFILE_TOWER,
-		},
-		{time_offset = 1.4, lane = .Dream, obstacle_type = .Cube, profile = PROFILE_WIDE},
+		{time_offset = 0.3, lane = .Real, obstacle_type = .Cube, shape = SHAPE_FACING},
+		{time_offset = 0.3, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_FACING},
 	},
-	duration = 2.6,
-	demand   = 2,
-}
-
-// --- The three dangers, and what they say together (roadmap R4) ---
-
-// A tower on the floor. Mechanically it is the primitive: three cubes
-// stacked cost exactly what one costs, because the price is the width and
-// the height is rhetoric. It earns its place by being read as *worse* at
-// a glance, which is the cheapest variety in the whole set.
-pattern_stack := Pattern {
-	events   = []PatternEvent{{time_offset = 0.9, lane = .Real, obstacle_type = .Cube, profile = PROFILE_STACK}},
-	duration = 2.0,
-	demand   = 0,
-}
-
-// Cubes in a staircase, hanging from the ceiling. Wide — three units, so
-// it holds a lane for most of a second — and it announces its own shape
-// early, which is the point of it: the silhouette says which side of the
-// corridor is going to be worth being on before the mass arrives.
-pattern_pyramid := Pattern {
-	events   = []PatternEvent{{time_offset = 1.2, lane = .Dream, obstacle_type = .Cube, profile = PROFILE_PYRAMID}},
-	duration = 2.6,
-	demand   = 1,
-}
-
-// A bump, then a wall. The two ends of the single cube's range on
-// opposite lanes, and the pattern that says what width actually buys:
-// **nothing, on its own**. A lone cube of any width costs exactly one
-// flip, because the other lane is open and one flip is one flip. Width
-// only becomes a price where there is no free lane to flip to — which is
-// the mirrored pair below, and nowhere else.
-//
-// So a one-column cube and a two-column one are here for the eye, not
-// the hand, and that is a legitimate job: they are how the set stops
-// looking like one object repeated.
-pattern_bump_and_wall := Pattern {
-	events   = []PatternEvent {
-		{time_offset = 0.9, lane = .Real, obstacle_type = .Cube, profile = PROFILE_PRIMITIVE},
-		{time_offset = 1.9, lane = .Dream, obstacle_type = .Cube, profile = PROFILE_WIDE},
-	},
-	duration = 2.8,
-	demand   = 1,
-}
-
-// **The mirrored pair.** The same cube on both lanes at the same instant,
-// and the first thing in the project's history that threatens both
-// answers at once without being unfair — legal precisely because a cube
-// does not kill.
-//
-// There is no way out and there is no way round: pinned, the character
-// holds station in the world, and only a flip buys ground. So the answer
-// is to work through it, a flip at a time, and what it costs is the
-// width. The corridor opens for it so the two boxes read as a pair rather
-// than as a pinch.
-//
-// **Two columns rather than one, and that is not a strengthening.**
-// PROFILE_WIDE is 54 px, exactly what a standard cube was before the
-// unit halved — so the encounter is the same size and the same four
-// flips it has always been. What changed underneath it is that the
-// primitive is now narrower than the body, and a box that disappears
-// inside the character while it is costing them ground is the one thing
-// MIRROR_MIN_WIDTH exists to forbid. The pair is about width, so it has
-// to be authored wide enough to be seen paying for.
-pattern_mirror := Pattern {
-	events   = []PatternEvent {
-		{time_offset = 1.0, lane = .Real, obstacle_type = .Cube, profile = PROFILE_WIDE},
-		{time_offset = 1.0, lane = .Dream, obstacle_type = .Cube, profile = PROFILE_WIDE},
-	},
-	duration = 2.3,
+	duration = 0.5,
 	demand   = 2,
 }
 
@@ -322,15 +381,92 @@ pattern_mirror := Pattern {
 pattern_float_open := Pattern {
 	events   = []PatternEvent {
 		{
-			time_offset = 1.3,
+			time_offset = 0.35,
 			lane = .Dream,
 			obstacle_type = .Cube,
 			floating = true,
 			cube_phase = 0.5,
 		},
+		{time_offset = 1.3, lane = .Real, obstacle_type = .Cube, shape = SHAPE_TOWER},
+	},
+	duration = 1.6,
+	demand   = 1,
+}
+
+// --- Deep Dream: no room to settle ---
+
+// Two holes on alternating lanes: long stretches rather than instants, so
+// the answer is to be somewhere for a while rather than to move once.
+pattern_gap_pair := Pattern {
+	events   = []PatternEvent {
+		{time_offset = 0.2, lane = .Real, obstacle_type = .Gap},
+		{time_offset = 1.1, lane = .Dream, obstacle_type = .Gap},
+	},
+	duration = 1.62,
+	demand   = 2,
+}
+
+// The burst: four answers, no room at all.
+pattern_burst := Pattern {
+	events   = []PatternEvent {
+		{time_offset = 0.2, lane = .Real, obstacle_type = .Cube, shape = SHAPE_BUMP},
+		{time_offset = 0.75, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_BUMP},
+		{time_offset = 1.3, lane = .Real, obstacle_type = .Cube, shape = SHAPE_TOWER},
+		{time_offset = 1.85, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_TOWER},
+	},
+	duration = 2.15,
+	demand   = 3,
+}
+
+// A ridge on one lane and a ridge on the other, far enough apart in time
+// to be legal and close enough to be one thought. It is the longest
+// stretch in the game where a lane is simply gone, and the pattern that
+// most looks like the sketch: a skyline you read rather than a thing you
+// dodge.
+pattern_ridge_run := Pattern {
+	events   = []PatternEvent {
+		{time_offset = 0.2, lane = .Real, obstacle_type = .Cube, shape = SHAPE_RIDGE},
+		{time_offset = 1.25, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_RIDGE},
+	},
+	duration = 2.05,
+	demand   = 3,
+}
+
+// A staircase down into a canyon and back up, all on one wall. Three
+// shapes back to back with nothing on the far lane, so the whole pattern
+// is read along one side of the corridor — the answer is to leave, and
+// the question is when.
+pattern_ravine_real := Pattern {
+	events   = []PatternEvent {
+		{time_offset = 0.2, lane = .Real, obstacle_type = .Cube, shape = SHAPE_STAIRS_DOWN},
+		{time_offset = 1, lane = .Real, obstacle_type = .Cube, shape = SHAPE_CANYON},
+		{time_offset = 1.9, lane = .Real, obstacle_type = .Cube, shape = SHAPE_STAIRS_UP},
 	},
 	duration = 2.4,
-	demand   = 1,
+	demand   = 3,
+}
+
+pattern_ravine_dream := Pattern {
+	events   = []PatternEvent {
+		{time_offset = 0.2, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_STAIRS_DOWN},
+		{time_offset = 1, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_CANYON},
+		{time_offset = 1.9, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_STAIRS_UP},
+	},
+	duration = 2.4,
+	demand   = 3,
+}
+
+// The constriction, then a hole, then somewhere to land. The hardest
+// thing the pool says: pay, move, and be right about which side.
+pattern_gauntlet := Pattern {
+	events   = []PatternEvent {
+		{time_offset = 0.3, lane = .Real, obstacle_type = .Cube, shape = SHAPE_FACING},
+		{time_offset = 0.3, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_FACING},
+		{time_offset = 1.2, lane = .Real, obstacle_type = .Gap},
+		{time_offset = 2.1, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_PLATEAU},
+	},
+	duration = 2.7,
+	demand   = 3,
 }
 
 // Two of them, out of phase: the first is up as it passes and the second
@@ -339,29 +475,30 @@ pattern_float_open := Pattern {
 pattern_float_pair := Pattern {
 	events   = []PatternEvent {
 		{
-			time_offset = 1.0,
+			time_offset = 0.35,
 			lane = .Dream,
 			obstacle_type = .Cube,
 			floating = true,
 			cube_phase = 0.5,
 		},
-		{time_offset = 2.1, lane = .Dream, obstacle_type = .Cube, floating = true},
+		{time_offset = 1.2, lane = .Dream, obstacle_type = .Cube, floating = true},
+		{time_offset = 2.1, lane = .Real, obstacle_type = .Cube, shape = SHAPE_PLATEAU},
 	},
-	duration = 3.0,
+	duration = 2.7,
 	demand   = 2,
 }
 
 all_patterns := []Pattern {
-	pattern_cube_real,
-	pattern_cube_dream,
+	pattern_bump_real,
+	pattern_bump_dream,
 	pattern_gap_real,
 	pattern_gap_dream,
+	pattern_tower_real,
+	pattern_tower_dream,
+	pattern_stairs_real,
+	pattern_stairs_dream,
 	pattern_alternate,
 	pattern_alternate_reverse,
-
-	// A stack asks nothing a single cube does not, so it belongs in the
-	// opening tier: it is the same question wearing a bigger silhouette.
-	pattern_stack,
 }
 
 // --- Generation ---
@@ -470,8 +607,8 @@ generate_ahead :: proc(
 					generator.generated_until + event.time_offset,
 					event.lane,
 					event.obstacle_type,
-					event.profile,
-				event.floating,
+					event.shape,
+					event.floating,
 					event.cube_phase,
 					rng,
 				),
@@ -522,7 +659,7 @@ generate_ahead :: proc(
 @(private)
 event_window :: proc(event: PatternEvent) -> (start, end: f32) {
 	v := f32(INITIAL_SCROLL_SPEED)
-	w := get_max_width(event.obstacle_type, event.profile)
+	w := get_max_width(event.obstacle_type, event.shape)
 	swing: f32 = event.floating ? CUBE_FLOAT_DRIFT : 0
 	return event.time_offset - (f32(PLAYER_SIZE) + swing) / v,
 		event.time_offset + (w + swing) / v
@@ -538,12 +675,11 @@ overlapping :: proc(a_start, a_end, b_start, b_end: f32) -> bool {
 // mistake that produces no error and no crash: a moment where both lanes
 // are lethal, which is a pattern the player cannot answer at all.
 //
-// It checks the seam as well as the pattern. A wide hole at the end of
-// one pattern and a cube at the start of the next are authored in
-// different files' worth of thinking and meet only at runtime, which is
-// exactly the kind of overlap nobody spots by reading. The seam is
-// checked at the *smallest* gap any tier uses, since a smaller gap can
-// only bring the two closer together.
+// It checks the seam as well as the pattern. The containment rule in the
+// file header means a seam *cannot* conflict, but that is a property of
+// what is authored rather than of the type, so it is verified rather than
+// assumed. The seam is checked at the *smallest* gap any tier uses, since
+// a smaller gap can only bring the two closer together.
 validate_pattern_pool :: proc(pool: []Pattern) {
 	smallest_gap := tiers[0].gap
 	for tier in tiers {
@@ -555,15 +691,8 @@ validate_pattern_pool :: proc(pool: []Pattern) {
 			fmt.printf("WARNING: pattern %d has no events\n", index)
 		}
 		for event in pattern.events {
-			if event.time_offset < 0 || event.time_offset > pattern.duration {
-				fmt.printf(
-					"WARNING: pattern %d has an event at %.2fs, outside its own %.2fs duration\n",
-					index,
-					event.time_offset,
-					pattern.duration,
-				)
-			}
-			report_profile_faults(event, index)
+			report_containment_faults(pattern, index, event)
+			report_skyline_faults(event, index)
 		}
 		report_conflicts(pattern, index, pattern, index, 0)
 	}
@@ -581,14 +710,56 @@ validate_pattern_pool :: proc(pool: []Pattern) {
 	}
 }
 
-// Checks an authored skyline.
+// Checks that an event's window lies inside its own pattern.
 //
-// This is the other half of "the shape is data". A profile is free — a
-// pattern may write any run of columns it likes — so the thing that keeps
-// a free profile safe is arithmetic here rather than a closed set of
-// shapes somewhere else. Since C1 it is the *only* half: the corridor is
-// a constant and the columns are all the relief there is, so this check
-// is where every piece of the world's shape is held to its limits.
+// This is what makes the seam safe at every gap, and it is the rule that
+// replaced the old one — every pattern opening and closing at the neutral
+// corridor — when C1 took the corridor away. It is stricter than "the
+// event happens during the pattern": the *window* is what has to fit,
+// which means a pattern owes its first event the time a body takes to
+// reach it and its last one the time the widest draw takes to pass.
+//
+// Measured at the slowest speed a run ever uses, because that is where a
+// window is longest. A pool that fits here fits everywhere.
+//
+// The tolerance is for f32 and nothing else. A pattern authored exactly
+// on the bound — last event plus the widest draw it can make — is the
+// intended case rather than a mistake, and in single precision that sum
+// lands a few ten-millionths over. A millisecond is 0.3 px at the opening
+// speed, which is far below anything the game can express.
+CONTAINMENT_TOLERANCE :: f32(0.001)
+
+@(private)
+report_containment_faults :: proc(pattern: Pattern, index: int, event: PatternEvent) {
+	start, end := event_window(event)
+	if start < -CONTAINMENT_TOLERANCE {
+		fmt.printf(
+			"WARNING: pattern %d has an event at %.2fs whose window starts at %.2fs, before the pattern does — it would reach back into whatever came before\n",
+			index, event.time_offset, start,
+		)
+	}
+	if end > pattern.duration + CONTAINMENT_TOLERANCE {
+		fmt.printf(
+			"WARNING: pattern %d has an event at %.2fs whose window ends at %.2fs, past its own %.2fs — it would reach into whatever comes next\n",
+			index, event.time_offset, end, pattern.duration,
+		)
+	}
+}
+
+// Checks a declared skyline.
+//
+// This is the other half of "the shape is data". A declaration is free —
+// a pattern may ask for any form at any size it likes — so the thing that
+// keeps it safe is arithmetic here rather than a closed set of shapes
+// somewhere else. Since C1 it is the *only* half: the corridor is a
+// constant and the columns are all the relief there is, so this check is
+// where every piece of the world's shape is held to its limits.
+//
+// It checks the **bounds and never an outcome**, which is what lets it
+// run once, at startup, against a pool no seed has touched. A declaration
+// whose widest draw is legal is legal on every seed, and the same is true
+// of its tallest. That is the property C2 was built to keep, and it is
+// the same one the hole's width has always had.
 //
 // The height bound is the one with a failure behind it rather than a
 // taste. An obstacle belongs to a lane and blocks only bodies on that
@@ -599,59 +770,67 @@ validate_pattern_pool :: proc(pool: []Pattern) {
 // CUBE_MAX_HEIGHT reaches the other lane — always, rather than at some
 // legal span.
 @(private)
-report_profile_faults :: proc(event: PatternEvent, index: int) {
+report_skyline_faults :: proc(event: PatternEvent, index: int) {
+	shape := event.shape
+
 	if event.obstacle_type != .Cube {
-		// A hole has no shape to author, so a profile on one is a line
+		// A hole has no shape to declare, so a skyline on one is a line
 		// that silently does nothing — the kind of authoring mistake that
 		// survives review precisely because it has no effect.
-		if len(event.profile) > 0 || event.floating {
+		if shape != (Skyline{}) || event.floating {
 			fmt.printf(
-				"WARNING: pattern %d gives a %v at %.2fs a cube's shape — profiles and floating belong to cubes\n",
+				"WARNING: pattern %d gives a %v at %.2fs a cube's shape — skylines and floating belong to cubes\n",
 				index, event.obstacle_type, event.time_offset,
 			)
 		}
 		return
 	}
 
-	profile := event.profile
-	if len(profile) == 0 {
+	if shape == (Skyline{}) {
 		return // the primitive, which is always legal
 	}
 
-	if len(profile) > CUBE_MAX_COLUMNS {
+	if shape.columns.high < shape.columns.low || shape.height.high < shape.height.low {
 		fmt.printf(
-			"WARNING: pattern %d authors a %d-column cube at %.2fs, over the %v-column limit\n",
-			index, len(profile), event.time_offset, CUBE_MAX_COLUMNS,
+			"WARNING: pattern %d declares an empty range at %.2fs (columns %v..%v, height %v..%v) — the generator would have nothing to draw from\n",
+			index, event.time_offset,
+			shape.columns.low, shape.columns.high, shape.height.low, shape.height.high,
 		)
 	}
 
-	tallest: u8 = 0
-	for height in profile {
-		tallest = max(tallest, height)
-		if int(height) > CUBE_MAX_HEIGHT {
-			fmt.printf(
-				"WARNING: pattern %d authors a column %v units tall at %.2fs, over the %v-unit limit — it would reach a body on the other lane without blocking it\n",
-				index, height, event.time_offset, CUBE_MAX_HEIGHT,
-			)
-		}
+	if skyline_max_columns(shape) > CUBE_MAX_COLUMNS {
+		fmt.printf(
+			"WARNING: pattern %d may draw a %d-column cube at %.2fs, over the %v-column limit\n",
+			index, skyline_max_columns(shape), event.time_offset, CUBE_MAX_COLUMNS,
+		)
 	}
 
-	// All zeros is a cube that is not there: it takes up width in every
-	// window the validator computes and blocks nothing.
-	if tallest == 0 {
+	if skyline_max_height(shape) > CUBE_MAX_HEIGHT {
 		fmt.printf(
-			"WARNING: pattern %d authors a cube at %.2fs whose columns are all zero — it is a shape with nothing in it\n",
-			index, event.time_offset,
+			"WARNING: pattern %d may draw a column %v units tall at %.2fs, over the %v-unit limit — it would reach a body on the other lane without blocking it\n",
+			index, skyline_max_height(shape), event.time_offset, CUBE_MAX_HEIGHT,
+		)
+	}
+
+	// A canyon is two towers with something between them. Two columns
+	// would be a pair of walls touching, which is a plateau with a lie in
+	// its name; draw_skyline floors it at three, and a declaration that
+	// needs flooring is a declaration that says the wrong thing.
+	if shape.form == .Canyon && skyline_min_columns(shape) < 3 {
+		fmt.printf(
+			"WARNING: pattern %d declares a canyon as narrow as %d columns at %.2fs — a canyon needs three to have a middle\n",
+			index, skyline_min_columns(shape), event.time_offset,
 		)
 	}
 
 	// A floating cube is drawn as its bounding box (render/obstacle.odin),
 	// so a skyline lifted off its lane would be a box that does not match
-	// the columns the collision uses. One column keeps the two the same.
-	if event.floating && len(profile) > 1 {
+	// the columns the collision uses. One column keeps the two the same,
+	// on every draw and not merely on the lucky ones.
+	if event.floating && skyline_max_columns(shape) > 1 {
 		fmt.printf(
-			"WARNING: pattern %d floats a %d-column cube at %.2fs — a lifted cube is drawn as one box, so it must be one column\n",
-			index, len(profile), event.time_offset,
+			"WARNING: pattern %d floats a cube that may reach %d columns at %.2fs — a lifted cube is drawn as one box, so it must be one column\n",
+			index, skyline_max_columns(shape), event.time_offset,
 		)
 	}
 }
@@ -716,6 +895,8 @@ report_conflicts :: proc(first: Pattern, first_index: int, second: Pattern, seco
 			b_start += shift
 			b_end += shift
 
+			report_same_lane_overlap(first_index, a, second_index, b, shift)
+
 			if !is_lethal(a.obstacle_type) || !is_lethal(b.obstacle_type) {
 				// Nothing lethal in play. A mirrored pair, which is legal
 				// and bounded, is the only rule left.
@@ -741,13 +922,64 @@ report_conflicts :: proc(first: Pattern, first_index: int, second: Pattern, seco
 	}
 }
 
+// Two cubes on one lane that overlap in x.
+//
+// A new failure mode as of C2, because the shapes got wide: the terrain
+// welds every cube into the lane's own polyline, and an overlapping one is
+// **dropped** rather than merged, since the outline walks x forward and
+// cannot go back (render/terrain.odin). The collision would still see it.
+// A danger that is not drawn is the one thing pillar 3 forbids outright,
+// and this is the quiet way to author one.
+//
+// Measured at the slowest speed, where two events of a given spacing sit
+// closest together in x — the separation is (t2 - t1) * speed and the
+// widths are fixed, so every faster tier only pulls them further apart.
+//
+// A floating cube is exempt at both ends: it is the one cube the terrain
+// does not weld in, so it is drawn whatever it overlaps.
+@(private)
+report_same_lane_overlap :: proc(
+	first_index: int,
+	a: PatternEvent,
+	second_index: int,
+	b: PatternEvent,
+	shift: f32,
+) {
+	if a.lane != b.lane || !blocks_lane(a.obstacle_type) || !blocks_lane(b.obstacle_type) {
+		return
+	}
+	if a.floating || b.floating {
+		return
+	}
+
+	a_time := a.time_offset
+	b_time := b.time_offset + shift
+	if b_time < a_time {
+		return // the ordered pass reaches this pair the other way round
+	}
+
+	separation := (b_time - a_time) * f32(INITIAL_SCROLL_SPEED)
+	width := get_max_width(a.obstacle_type, a.shape)
+	if separation < width {
+		fmt.printf(
+			"WARNING: pattern %d at %.2fs and pattern %d at %.2fs put two cubes %.0f px apart on the same lane, closer than the first can be wide (%.0f px) — the second would be dropped from the line and drawn nowhere\n",
+			first_index, a_time, second_index, b.time_offset, separation, width,
+		)
+	}
+}
+
+// **Both ends of the declaration, not one.** A skyline is drawn per
+// obstacle, so a pattern whose facing cube is legal at its widest and
+// illegal at its narrowest would be fair on some seeds and not on others
+// — the exact failure mode a static check exists to make impossible.
 @(private)
 report_mirror_width :: proc(index: int, event: PatternEvent) {
-	width := get_max_width(event.obstacle_type, event.profile)
-	if width < MIRROR_MIN_WIDTH || width > MIRROR_MAX_WIDTH {
+	narrow := get_min_width(event.obstacle_type, event.shape)
+	wide := get_max_width(event.obstacle_type, event.shape)
+	if narrow < MIRROR_MIN_WIDTH || wide > MIRROR_MAX_WIDTH {
 		fmt.printf(
-			"WARNING: pattern %d faces a %v cube (%.0f px) across the corridor at %.2fs — a mirrored pair must be between %.0f and %.0f px wide\n",
-			index, event.profile, width, event.time_offset, MIRROR_MIN_WIDTH, MIRROR_MAX_WIDTH,
+			"WARNING: pattern %d faces a cube of %.0f..%.0f px across the corridor at %.2fs — a mirrored pair must be between %.0f and %.0f px wide on every draw\n",
+			index, narrow, wide, event.time_offset, MIRROR_MIN_WIDTH, MIRROR_MAX_WIDTH,
 		)
 	}
 }

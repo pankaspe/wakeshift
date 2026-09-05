@@ -159,7 +159,7 @@ strozzatura riguarda quanto spazio resta al corpo, e il corpo è 45 px assoluti.
 
 ---
 
-## 6 settembre 2026 — il pavimento diventa dritto
+## 6 settembre 2026 — il mondo di mattoncini
 
 **C1 — Via il keyframing** → Spina e apertura sono costanti: pavimento a 555, soffitto a 165.
 Cancellati `Pattern.track` e i 76 keyframe autorati, `report_track_faults`, il campionatore e la
@@ -167,37 +167,41 @@ sua storia. Resta la mappa fra scroll e tempo, che ora usano anche gli ostacoli.
 sono due torri affacciate; `pattern_swell` sparisce con l'ondulazione e `CUBE_MAX_HEIGHT` sale da
 7 a 12, perché il corridoio non si stringe più.
 
+**C2 — Il pool costruito a mattoncini** → Il pattern non scrive più le colonne: dichiara una
+**forma e i suoi limiti** (muro, salita, discesa, canyon) e il generatore pesca la skyline dal seed
+della run. Il pool diventa il vocabolario dello sketch. Via l'aria morta dentro i pattern: il
+preavviso è lo schermo, non i loro bordi, e la densità resta con una manopola sola.
+
+**Due regole nuove, entrambe misurate** → Ogni pattern **contiene le proprie finestre**, e questo
+rende la giunzione sicura a qualunque gap: sostituisce la vecchia regola del corridoio neutro che
+C1 aveva cancellato. E due cubi sulla stessa corsia non possono sovrapporsi in x, perché il
+terreno ne scarta uno e la collisione lo terrebbe — un pericolo che non si vede.
+
 ---
 
 ## Dove sta il gioco adesso
 
 A schermo non c'è niente di pieno tranne il fondo. Ci sono i **due ostacoli** (quadrato e buco), un
-pavimento e un soffitto dritti su cui tutto il rilievo lo fanno le colonne, la Corruzione che
-avanza da sinistra, il pennino che scrive il mondo a destra, e la parallasse.
+pavimento e un soffitto dritti su cui tutto il rilievo lo fanno le colonne — torri, altopiani,
+scale, canyon, creste, strozzature affacciate — la Corruzione che avanza da sinistra, il pennino
+che scrive il mondo a destra, e la parallasse.
 
-Manca il gioco. Le venti pattern sono tutte scritte per il vecchio enum: **nessuna usa il
-vocabolario che T3 ha costruito** — niente skyline oltre le tre colonne, nessuna colonna a zero. E
-si vede nella misura: una corsia è minacciata il **13,1%** del tempo, letale il 3,7%, contro un
-obiettivo di oltre il 40%. Il mondo è per lo più aria.
+Il mondo non è più aria. Misurato su 8 semi x 120 s senza giocatore: una corsia è minacciata il
+**40,9%** del tempo contro il 13,1% di prima, e su 200 run che non toccano mai il tasto la morte
+mediana è a **3,4 s**, nessuna supera il primo tier — contro 35 s e 161 su 200 della v1.3. Un bot
+avido che guarda una mossa avanti tiene 49,5 s di mediana e muore sempre per Corruzione, mai in un
+buco.
+
+Manca la **curva**: i tre tier sono ancora tre scalini su un orologio.
 
 ---
 
-## In corso — il mondo di mattoncini e la curva di difficoltà
+## In corso — la curva di difficoltà
 
-**Riferimento visivo: `sketch.jpeg` in root.** Il mondo si costruisce con i quadrati, che sono i
-mattoncini di gioco: **pavimento e soffitto diventano dritti** e tutto il rilievo lo fanno le
-colonne — scale, torri isolate, altopiani, canyon, strozzature affacciate. Il blocco staccato che
-si muove è il fluttuante, che c'è già.
-
-La forma dei pattern resta autorata, la forma dei blocchi no: il pattern autora il **ritmo**
-(quando, quale corsia, cosa chiede) e il generatore pesca la **skyline** dentro limiti che il
-pattern dichiara. È nella grana del progetto — `get_max_width` esiste già apposta per far ragionare
-il validatore su un evento prima che le sue scelte casuali siano fatte, ed è così che il buco tira
-a sorte la propria larghezza.
+Il mondo di mattoncini è costruito (C1 e C2). Quello che resta è come cresce, e come si entra.
 
 | | Task | Modello |
 |---|---|---|
-| **C2** | **Il pool vero, costruito a mattoncini** → Il contenuto: le skyline dello sketch, profili pescati dentro limiti dichiarati dall'evento e verificati staticamente come già si fa per la larghezza del buco. Densità molto su. Obiettivo misurato: **oltre il 40%** di tempo con almeno una corsia minacciata, contro il 13,1% di oggi. Ogni regola nuova va controllata contro "stare fermi sopravvive a questo?", che è la misura che ha chiuso la v1.3. | Opus |
 | **C3** | **La curva continua, in distanza** → Via i tre tier discreti, dentro una funzione continua. **La variabile è la distanza, non il tempo**: così comprare velocità compra punteggio e difficoltà insieme, e rallentare non è una strategia. Cresce la densità (l'aria fra i pattern) e cresce la parzialità del sorteggio verso i pattern che chiedono di più. La velocità smette di essere una manopola del tier. | Opus |
 | **C4** | **Il feedback dello scalino** → Ogni tot distanza un burst particellare dice "sei salito di un gradino", senza scriverlo. Da far percepire, non da spiegare. `fx/particles.odin` c'è già: il pool è fisso, ha un generatore di casualità proprio che **non è quello della run** — e non deve diventarlo, o due replay della stessa run divergerebbero. Emesso dal clock del frame, mai dentro uno step. | Sonnet |
 | **C5** | **L'intro e il tutorial** → I primi secondi: un testo in fadeIn insegna `SPACE`, poi il gioco entra. **Rischio noto**: l'aria morta è esattamente ciò che ha chiuso la v1.3, e dieci secondi in cui non succede niente sono lunghissimi alla seconda run. Tenere l'intro corta e far arrivare il primo ostacolo presto. | Sonnet |

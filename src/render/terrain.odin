@@ -294,7 +294,7 @@ push_point :: proc(points: ^[dynamic]rl.Vector2, point: rl.Vector2) {
 // column of height zero puts that x back on the lane's own surface.
 @(private)
 append_step :: proc(points: ^[dynamic]rl.Vector2, step: Step, is_floor: bool) {
-	for index in 0 ..< len(game.get_cube_profile(step.obstacle)) {
+	for index in 0 ..< game.get_cube_columns(step.obstacle) {
 		column := game.get_cube_column(step.obstacle, step.rect, index)
 		push_point(points, rl.Vector2{column.rect.x, column.contact})
 		push_point(points, rl.Vector2{column.rect.x + column.rect.width, column.contact})

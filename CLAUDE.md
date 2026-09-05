@@ -11,7 +11,7 @@ Operational rules for developing this project.
 - **How the world is built** → **`docs/inspiration/sketch.jpeg`**, the author's own, and binding
   the same way. Flat floor and flat ceiling with all the relief made of **bricks**: staircases,
   isolated towers, plateaus, canyons, facing constrictions, and one detached block that moves.
-  C1 built the flat lanes on 6 September; C2 builds the relief (`TIMELINE.md`).
+  C1 built the flat lanes and C2 the relief, both on 6 September (`TIMELINE.md`).
 - `docs/` is deliberately **not tracked by git**: it is the author's working material and lives
   only on their disk, and everything under `docs/archive/` — the old design docs, the old roadmap,
   the superseded sketches — is history rather than instruction. Do not read it as binding and do
@@ -86,22 +86,28 @@ is **provisional**: the final one is a lemur.
 
 What the obstacle set became in September 2026, in code terms rather than as history — the
 timeline has the story. `CUBE_UNIT` is **27**, deliberately narrower than the 45 px body, so a
-single brick is a bump and a *shape* is what threatens. A cube's shape is a **`CubeProfile`**, a
-run of column heights authored in the pattern, and one function (`get_cube_column`) is what the
-block, the support and the drawing all read. `floating` is a flag rather than a shape, and a
-floating cube **orbits** — bob and drift on one clock, a quarter turn apart. The hole's widths and
-the mirrored pair's bounds are absolute pixels and deliberately not multiples of the unit.
+single brick is a bump and a *shape* is what threatens. A cube's shape is a run of column heights,
+and one function (`get_cube_column`) is what the block, the support and the drawing all read.
+Since C2 the pattern does not write those heights: it declares a **`Skyline`** — a form and the
+bounds around it — and the run's generator draws the columns (`game/skyline.odin`). `floating` is
+a flag rather than a form, and a floating cube **orbits** — bob and drift on one clock, a quarter
+turn apart. The hole's widths and the mirrored pair's bounds are absolute pixels and deliberately
+not multiples of the unit.
 
-**The next piece is decided and written down**, and it is the whole of what is left before the
-game can be judged: `TIMELINE.md` ends with the remaining tasks (C2..C5) and the model each is
-tagged for. Read them there rather than re-deriving them. In one sentence: **the world gets built
-out of the bricks** — `docs/inspiration/sketch.jpeg` is the reference and it is binding.
+**The next piece is decided and written down**: `TIMELINE.md` ends with the remaining tasks
+(C3..C5) and the model each is tagged for. Read them there rather than re-deriving them.
 
-**C1 landed on 6 September**, and it is the half of that sentence about the *floor*: the corridor
-stopped undulating, spine and span became constants, and every piece of relief is now a column.
-What is left is the half about the *content*, and a cold session should know one thing before
-starting it: **the pool is the content and it is nearly empty.** Not a mechanism problem — the
-generator works, it has nothing good to generate. See the known issue below for the numbers.
+**C1 and C2 both landed on 6 September**, and between them they are the world of
+`docs/inspiration/sketch.jpeg`. C1 made the floor and the ceiling straight and moved every piece
+of relief into the columns. C2 filled it: a pattern now declares a *form and its bounds* and the
+generator draws the skyline, the pool is the sketch's vocabulary — bumps, towers, plateaus,
+staircases, canyons, ridges, facing constrictions — and the dead air inside patterns is gone.
+Measured over 8 seeds x 120 s with no player, at least one lane is threatened **40.9%** of the
+time against 13.1% before, and 200 runs that never touch the key have a median death at **3.4 s**
+with none surviving the first tier, against 35 s and 161 of 200 in v1.x.
+
+What is left is the *curve*, which is C3: the tiers are still three discrete steps on a clock,
+and they should be one continuous function of distance.
 
 Why the design was rewritten in September 2026, measured rather than guessed: 200 simulated runs
 that never touched the key, **161 survived the whole first tier**, median death at 35 s; **86% of
@@ -271,9 +277,10 @@ Two things C1 changed that a later phase will meet:
   Measured over 120 s of the current pool, the worst lane polyline is **16** points against
   `STROKE_MAX_POINTS` of 256.
 
-**The profile validator is now the only place the world's shape is held to its limits**
-(`report_profile_faults`). It was one of two, the other being the track's rate limits and its
-endpoint rule; those are gone along with the thing they constrained.
+**The skyline validator is now the only place the world's shape is held to its limits**
+(`report_skyline_faults`). It was one of two, the other being the track's rate limits and its
+endpoint rule; those are gone along with the thing they constrained, and C2 replaced the endpoint
+rule's job with the containment rule below.
 
 ### The player's screen x is game state
 
@@ -321,7 +328,7 @@ reproduces it.
   ground is not eased, because a floor coming up under you has already arrived, and a journey is
   never eased because it owns its own path. Without it, riding a cube off its leading edge is a
   whole column's height of teleport in one frame — the game has no gravity to spread it over.
-- **Since the profile it is answered per column**, not per obstacle, so a body straddling a
+- **It is answered per column**, not per obstacle, so a body straddling a
   staircase rests on the highest step under its width exactly as it rests on the highest ground.
   A column of height zero offers nothing and the track underneath is the answer there.
 - What it replaced: a flip onto an occupied lane used to leave the character standing **inside**
@@ -346,12 +353,29 @@ class before building it.** Two shapes for it were arithmetically impossible and
 found that out, because a flip crosses the corridor at ~2100 px/s and a 45 px body still takes
 0.167 s to clear any given x.
 
-**The cube's shape is data** (`CubeProfile`): a run of columns, each `CUBE_UNIT` wide, each a
-whole number of units tall, authored in the pattern. `{1,2,3}` is a staircase, `{3,0,3}` two
-towers with a canyon between them, `{1}` the primitive. One function — `get_cube_column` — is
-what the block, the support and the drawing all read, which is what keeps the mark and the hitbox
-the same thing. Before it, the pyramid was drawn as steps and collided as its bounding box: it
-showed a low step it would not let you use.
+**The cube's shape is data**: a run of columns, each `CUBE_UNIT` wide, each a whole number of
+units tall. `{1,2,3}` is a staircase, `{3,0,0,3}` two towers with a canyon between them, `{1}` the
+primitive. One function — `get_cube_column` — is what the block, the support and the drawing all
+read, which is what keeps the mark and the hitbox the same thing. Before it, the pyramid was drawn
+as steps and collided as its bounding box: it showed a low step it would not let you use.
+
+**Since C2 the pattern declares the shape rather than writing it** (`game/skyline.odin`). A
+`Skyline` is a form — `Wall`, `Rise`, `Fall`, `Canyon` — plus an inclusive range for the column
+count and one for the height, and `draw_skyline` resolves it into columns from the run's own
+generator at the moment the obstacle is created. Three things make that safe, and all three are
+load-bearing:
+
+- **The form never survives generation.** That is the whole difference between this enum and the
+  `CubeForm` T3 deleted: the old one was re-read by three files that disagreed, this one is gone
+  by the time anything can read it, and an obstacle still holds nothing but digits.
+- **Everything a validator needs is a bound, never an outcome**, which is what lets the pool be
+  checked once at startup against a seed that does not exist yet. `get_max_width` had always done
+  this for the hole's rolled width; C2 gave the cube the same property and added `get_min_width`,
+  because a facing pair has to be legal on *every* draw and not on the lucky ones.
+- **The columns live inline in the `Obstacle`**, a fixed `[CUBE_MAX_COLUMNS]u8` and a count, not a
+  slice. An authored profile could be a slice into static pattern data; a drawn one cannot, and an
+  `Obstacle` is copied by value into the renderer's steps and into the interpolated world.
+  Verified: two runs of one seed produce byte-identical obstacles.
 
 Rules the implementation established, all found by replaying the simulation:
 
@@ -443,12 +467,31 @@ obstacle was deleted; only the hole is lethal now, so one sentence covers it. Ev
 mirrored cubes, staircases, a skyline in the awkward place — is legal by construction, because
 none of it kills.
 
-The **profile** is the other half of the contract, and it is validated the same way rather than
-by a closed set of shapes: `report_profile_faults` rejects a skyline with too many columns, one
-taller than `CUBE_MAX_HEIGHT`, one with nothing in it, and a lifted cube with more than one
-column. The height bound is the one with a failure behind it — a floor cube tall enough to reach
-a body on the ceiling would slide through it without blocking it, since an obstacle only ever
-tests its own lane.
+The **skyline** is the other half of the contract, and it is validated the same way rather than by
+a closed set of shapes: `report_skyline_faults` rejects a declaration that may draw too many
+columns, one taller than `CUBE_MAX_HEIGHT`, an empty range, a canyon too narrow to have a middle,
+and a lifted cube that may reach more than one column. The height bound is the one with a failure
+behind it — a floor cube tall enough to reach a body on the ceiling would slide through it without
+blocking it, since an obstacle only ever tests its own lane.
+
+**A pattern contains its own windows**, and that is the composability rule C2 added
+(`report_containment_faults`). Every event's window — the time it can touch a body at the anchor —
+lies inside `[0, duration]`, measured at the slowest speed a run uses. Two things follow:
+
+- **the seam cannot conflict at any gap**, whatever order the generator strings patterns in. It is
+  the replacement for "every pattern opens and closes at the neutral corridor", which C1 deleted
+  along with the corridor. The seam check still runs: a rule worth having is worth verifying.
+- **a pattern's own boundaries are not its warning.** The warning is the *screen* — 920 px, 2.5 to
+  3.4 seconds of looking at a thing, and the previous pattern is still on screen while the next
+  one's obstacles arrive. So a lead-in inside a pattern buys nothing, and measuring that is what
+  found the old pool's density problem: it was mostly lead-in and tail. Air between patterns is
+  the tier's gap and nothing else, which leaves density with exactly one knob.
+
+**Two cubes on one lane may not overlap in x** (`report_same_lane_overlap`), and this became a
+real risk only when C2 made the shapes wide. `render/terrain.odin` welds every cube into the
+lane's polyline and **drops** an overlapping one rather than tearing the line — so the collision
+would keep a danger the picture does not show, which is the one thing pillar 3 forbids outright.
+Checked at the slowest speed, where two events of a given spacing sit closest together in x.
 
 Two things the old contract taught that are still worth knowing:
 
@@ -486,9 +529,11 @@ all established by reading pixels back:
   256. C1 made the lane much cheaper — a flat stretch costs nothing, and everything a lane spends
   goes on the columns standing on it, two vertices each plus two per cube — so the worst lane over
   120 s of the current pool is **16** points and a screen tiled with the widest legal cubes is
-  about 128. C2 is about to fill the screen with skylines: **re-measure it there.** The same class
-  of silent failure as the winding above: check a new kind of stroke by reading the pixels back,
-  not by looking at it.
+  about 128. **Re-measured after C2 filled the screen with skylines: 76 points** over 8 seeds x
+  120 s of the real pool, with eight-column cubes appearing. Comfortable, and the reason it stayed
+  comfortable is C1 — a flat lane spends nothing on itself. Re-measure again if the widest shape
+  or the density moves. The same class of silent failure as the winding above: check a new kind of
+  stroke by reading the pixels back, not by looking at it.
 
 Since RL.3 it draws the character too, and one shape was worth building properly: the bulb is the
 outline of the **union** of two overlapping circles, not two circle outlines on top of each
@@ -970,14 +1015,17 @@ Tracked here so they are not rediscovered. Nothing here is scheduled — the use
   that. It was invisible while a cube was a filled mass. Closing it
   needs the pushback to exceed the world's speed while penetrating, which would also make
   `velocity_x` drop below `-scroll_speed` and force `score.odin` to clamp.
-- **The pool is still a placeholder**, nineteen patterns over two obstacle types, and it is the
-  next piece of work (C2). Measured after T3, over 8 seeds x 120 s with no player: at least one
-  lane is *threatened* 13.1% of the time, both at once 0.5%, at least one *lethal* 3.7% — against
-  a Definition of Done that asks for over 40%. No pattern uses a skyline of more than three
-  columns or a column of height zero, because they were all written when the shape was an enum:
-  the profile is available and unused. C1 removed `pattern_swell`, whose whole content was the
-  ground moving, and turned `pattern_narrows` from a pinched corridor into two facing towers —
-  the measurement above predates both and is due a re-run as part of C2.
+- **The pool reached its density target and has not been played.** 28 patterns, measured over 8
+  seeds x 120 s with no player: at least one lane threatened **40.9%** (the Definition of Done
+  asks for over 40), both at once 1.2%, at least one lethal 4.3%. Per tier, 28.7 / 40.7 / 45.6%.
+  A greedy one-move-lookahead bot has a median run of **49.5 s** and never reaches 120 s, dying
+  60 times out of 60 to the Corruption and never to a hole — which is pillar 7 working as
+  written, but it is a floor measured by a machine and the feel is the user's call.
+- **The runway is 360 px and a pin spends it at full scroll speed.** Not new and not C2's doing,
+  but C2 made it matter: at 40% density a player who does not answer is pushed off the left edge
+  in about 1.3 seconds of continuous pinning, which is why 177 of 200 idle runs end at the
+  Corruption rather than in a hole. `PLAYER_RECOVERY_RATIO` and `CORRUPTION_MIN_RUNWAY` are the
+  knobs if a playtest says the bleed is too fast.
 - Menus, HUD and the options screen take their colours from the palette but still use raylib's
   default bitmap font. Everything drawn from primitives is crisp at native resolution and only
   the text is not (phase R7).
