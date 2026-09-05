@@ -1098,6 +1098,28 @@ il personaggio non è più il tratto più spesso ma il più bianco.
 
 ---
 
+#### Appunto: il personaggio sarà un lemure
+
+Preso il 5 settembre, dal tuo schizzo. Il mago resta **provvisorio** — è quello che permette di
+andare avanti — ma la figura definitiva è un **lemure**: coda lunga a strisce, muso tondo con gli
+occhi grandi, che corre. È una sagoma molto più difficile di una veste, perché la coda esce dal
+contorno e le proporzioni non sono una campana.
+
+Due cose da ricordare quando si arriva a farlo:
+
+- **La coda è un secondo segno, non parte del contorno.** Il corpo può restare un contorno solo
+  aperto ai piedi come adesso; la coda è un tratto a parte che parte dalla groppa e ricade, ed è
+  il posto giusto per la macchina dell'inerzia che oggi muove il cappuccio (ritardo, scia sulla
+  rotazione e sulla salita). La coda di un lemure che corre è esattamente "movimento gratis".
+- **Il profilo conviene autorarlo fuori.** Hai offerto di disegnarlo tu: la cosa che serve è un
+  **path solo, normalizzato in una scatola unitaria, con i piedi sul bordo inferiore** — SVG o
+  anche solo una lista di punti. Non diventerebbe un asset caricato a runtime (il progetto non ne
+  ha e non ne avrà): si converte una volta sola in una lista di ancore costanti dentro
+  `render/player.odin`, esattamente come sono adesso il cappuccio e la veste. Servirebbe anche
+  sapere **quali ancore devono animarsi** (l'orlo, la coda, la testa).
+
+---
+
 #### I rischi che segnalo adesso
 
 - **Il personaggio a 45 px fatto di tratto sottile.** Si è avverato, ed è stato risolto: la
