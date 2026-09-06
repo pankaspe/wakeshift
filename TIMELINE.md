@@ -308,6 +308,36 @@ mediana del bot crolla da 16 100 px a 9 900 — è una scelta di difficoltà, no
 e la lascio a te. Le costanti della Corruzione non si sono mosse: la pressione media sul bot è
 84 px dove F2 ne misurava 84.
 
+**F4 — Onirico = veloce** → Sul soffitto il mondo corre a **1,35**: 364 px/s contro 270, e il
+preavviso scende da 3,41 a 2,52 secondi. Il pavimento resta il tempo che il gioco ha sempre avuto,
+perché "più veloce" dev'essere una cosa che il giocatore *fa*, non una linea di base da notare.
+
+**È un orologio, non una velocità, ed è tutta l'implementazione** → La strada ovvia — alzare
+`scroll_speed` sull'Onirico — è sbagliata: la x di un ostacolo è `ancora + (arrivo - adesso) *
+velocità`, quindi alzarla moltiplica la *distanza* da tutto ciò che non è ancora arrivato. Il
+mondo scivolerebbe a destra a ogni flip, e non sarebbe nemmeno più veloce nel senso che serve: gli
+orari d'arrivo non si muovono, cresce solo la spaziatura. Quindi `scroll_speed` resta ferma e
+**`elapsed_time` avanza di `pace` secondi per secondo reale**.
+
+**Misurato** → Seguendo un ostacolo attraverso un flip, il movimento più grande in uno step è
+**6,08 px** — esattamente uno step al ritmo del soffitto — e su uno step in cui il ritmo cambia
+davvero, 6,07. Alzando `scroll_speed` lo stesso ostacolo sarebbe scivolato di **247 px** e il bordo
+destro dello schermo di **322**. Il pool **non ha avuto bisogno di rivalidazione**: ogni finestra
+è `(corpo + larghezza) / scroll_speed` secondi di *mondo*, e `scroll_speed` non si muove più.
+
+**Il ritmo è un costo, non un acquisto** → La run finisce quando il fronte ti raggiunge, il fronte
+guadagna per pixel, e il punteggio *è* distanza: si muore alla stessa distanza e si segna lo stesso
+numero a qualunque ritmo. Andare veloce non fa guadagnare di più, fa guadagnare lo stesso **prima**.
+Quello che rende il soffitto sensato sono i frammenti di F3, e il ritmo è il loro prezzo. Su 60 run
+il bot passa da 16 150 px in 60 s a 15 180 px in **47,6 s**, a 319 px/s medi con il 47% degli step
+in alto; e ne raccoglie 10,6 invece di 12,8, perché la finestra di raccolta è 0,2 s di mondo, cioè
+0,148 reali lassù.
+
+**Quello che il flip non fa** → Resta 0,160 s di tempo **reale**: "il gesto non cambia mai col
+mondo" è più vecchio di questa fase. Quindi al soffitto costa 0,216 secondi di mondo invece di
+0,160, ed è lì che va a finire tutta la difficoltà. Il bot sottostima il costo — reagisce in uno
+step e non guarda avanti — quindi il preavviso perso vale quasi niente per lui e molto per te.
+
 ---
 
 ## In corso — la fase F
@@ -320,7 +350,6 @@ che è F6 in miniatura.
 
 | | Task | Modello |
 |---|---|---|
-| **F4** | **Onirico = veloce** → Il mondo accelera quando sei sul soffitto: il giocatore fa il tempo del gioco con un tasto. Richiede di ridefinire la banda di velocità e **rivalidare il pool**, che è controllato alla velocità più lenta di una run. | Opus |
 | **F5** | **Le due lane** → Reale pulito e ad alto contrasto, Onirico ricco e più difficile da leggere, così la differenza visiva *è* la differenza di difficoltà. Modifica la regola "il campo cambia colore col mondo, il tratto mai". | Sonnet |
 | **F6** | **Far fallire il bot avido** → Pattern dove la mossa localmente giusta frega due secondi dopo. Bersaglio misurabile col bot che esiste già. | Sonnet |
 | **C4** | **Il feedback dello scalino** → **Accantonato dall'autore il 6 settembre**, da rivalutare. Il burst particellare che serviva è nato comunque, come feedback della presa di un frammento. | Sonnet |

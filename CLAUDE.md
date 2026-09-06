@@ -269,7 +269,9 @@ What survived, and why each one had to:
   point: anything the presentation copies forward wants to be a value.
 - **The gesture never changes with the world.** The flip was a constant 0.167 s across every span
   the corridor could reach; with the span fixed it is now also a constant 390 px. The rule that
-  produced the measurement outlives the measurement.
+  produced the measurement outlives the measurement — and F4 leant its whole weight on it, because
+  a flip staying constant in *real* time while the world's clock speeds up is the only thing the
+  pace actually costs the player.
 - **A *world* element nailed to the screen reads as two pictures.** That is why the old sky rode
   the spine, and it will come up again for anything the world contains. The vignette that
   replaced the sky is not a world element but a property of the lens, so it stays screen-fixed on
@@ -583,10 +585,11 @@ Two things the old contract taught that are still worth knowing:
 - **Difficulty is not speed**, and since C3 the code says so. Obstacles are events in time, so
   reaction time *inside* a pattern does not move with scroll speed at all — replaying every
   pattern at 270, 330 and 400 px/s gave the same set of surviving answers. Speed changes how long
-  you get to *look*, and pulling the other way, how briefly a wide obstacle blocks a lane. A run
-  now scrolls at `INITIAL_SCROLL_SPEED` from the first metre to the last and only the player
-  moves it (roadmap R6.3); the curve is measured in **distance**, so buying speed will buy score
-  and difficulty together for free.
+  you get to *look*, and pulling the other way, how briefly a wide obstacle blocks a lane.
+  `INITIAL_SCROLL_SPEED` is still a constant from the first metre to the last, and Slancio
+  (roadmap R6.3) is still the only thing that will ever move it; the curve is measured in
+  **distance**, so buying speed will buy score and difficulty together for free. What F4 added is
+  not a second speed but a **clock** — see below.
 
 ### The curve is one function of distance
 
@@ -915,6 +918,41 @@ Four things the implementation established, all found by measuring before writin
   differently: brighter drives the halo toward white and saturates, wider keeps it soft and
   covers more air. The Dream is the soft one, so most of the growth is in the reach.
 
+### The player sets the world's clock
+
+F4, `game/world.odin`. The world runs at `WORLD_PACE_DREAM` seconds per real second while the
+character is on the ceiling and `WORLD_PACE_REAL` on the floor — 1.35 against 1.0, which is 364
+px/s of screen against 270 and 2.52 seconds of look-ahead against 3.41.
+
+- **It is a clock, not a speed, and that is the whole implementation.** Raising `scroll_speed` is
+  the obvious build and it is wrong: an obstacle's x is `anchor + (arrival - now) * speed`, so a
+  higher speed multiplies the distance to everything not yet arrived. Measured, the naive version
+  slides one obstacle 247 px across a single flip and the right edge of the screen 322 px — and it
+  is not even faster in the sense that matters, because arrival *times* do not move, so only the
+  spacing grows. Leaving `scroll_speed` alone and advancing `elapsed_time` by `pace` instead makes
+  the largest single-step move of any obstacle 6.08 px, which is exactly one step at the ceiling's
+  rate.
+- **`scroll_speed` is now the base rate, not the rate anything moves at.** Everything that means
+  "how much world went by this step" goes through `game.get_scroll_rate`. Code written before F4
+  read `scroll_speed` for both, so check any use of it that predates this.
+- **The pool needed no revalidation**, which is not what F4 was expected to need. Every window the
+  fairness check computes is `(body + width) / scroll_speed` *world* seconds and `scroll_speed`
+  does not move, so the geometry is pace-invariant by construction. That property is the reason to
+  build it this way, not a lucky consequence of it.
+- **The pace is a cost, not a purchase.** A run ends when the front reaches the character, the
+  front gains per pixel, and depth *is* distance — so a run dies at the same distance and scores
+  the same number at any pace. Going fast earns the same sooner, never more. What makes the ceiling
+  worth visiting is the fragments F3 put there, and the pace is their price.
+- **The difficulty lands entirely on the one clock that does not dilate**: the flip is
+  `FLIP_DURATION` of *real* time, because "the gesture never changes with the world" is older than
+  this phase, so at pace 1.35 it costs 0.216 world seconds instead of 0.160. Anything else added
+  on the player's side has to decide which clock it is on, and the default is real.
+- **The pace rides the journey's clock, never the drawn body's height.** `get_player_pace_t` is in
+  `game/player.odin` for that reason: `render/palette.odin`'s `world_t` is derived from
+  `position.y`, and a body standing on a twelve-unit tower is 324 px up a 390 px corridor while
+  still plainly on the floor. Reading that would accelerate the world because the character climbed
+  a staircase.
+
 ### Colour has two systems, and they must not collide
 
 Two things change the colour of everything, and they are kept apart by being different *kinds*
@@ -1184,10 +1222,13 @@ Tracked here so they are not rediscovered. Nothing here is scheduled — the use
   one, so a very deep run is busier and slightly less deadly than its own middle. Raising
   `pattern_gap_pair` to demand 3 nearly halved the dip; closing it properly means authoring more
   late patterns that carry a hole.
-  A greedy one-move-lookahead bot that collects has a median run of **16150 px**, dying 57 times
-  out of 60 to the Corruption and 3 times in a hole — the fragments pulling a locally right answer
-  into a wrong one, which is F6 arriving early. The same bot with fragments out of its valuation
-  dies at 8440 px. At the top of the curve, pinned there with the Corruption switched off, 40 of 40
+  A greedy one-move-lookahead bot that collects has a median run of **15180 px in 47.6 seconds**
+  since F4 put a clock in the player's hand, dying 58 times out of 60 to the Corruption and 2 times
+  in a hole — the fragments pulling a locally right answer into a wrong one, which is F6 arriving
+  early. The same bot with fragments out of its valuation dies at 8440 px. **The bot understates
+  what the pace costs** and any conclusion from it should say so: it reacts in one step and never
+  looks ahead, so the 0.9 seconds of warning the ceiling takes away is worth almost nothing to it
+  and a great deal to a person. At the top of the curve, pinned there with the Corruption switched off, 40 of 40
   bots survive a full minute: the endgame kills by ground loss, not by being unanswerable.
 - **The runway is 360 px and a pin spends it at full scroll speed.** Not new and not C2's doing,
   but C2 made it matter: at 40% density a player who does not answer is pushed off the left edge

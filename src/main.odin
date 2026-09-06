@@ -103,9 +103,11 @@ draw_gameplay :: proc(
 // when the cube became an outline with the character standing in it.
 //
 // Exact rather than a guess in the one case that matters. A pinned
-// character's velocity_x is exactly -scroll_speed, which is exactly what
-// the face they are pinned against is doing, so the two move together and
-// the contact is drawn where the simulation put it: touching.
+// character's velocity_x is exactly minus the world's own rate, which is
+// exactly what the face they are pinned against is doing, so the two move
+// together and the contact is drawn where the simulation put it:
+// touching. That stays true at any pace, because both sides of it are the
+// same number (game/world.odin, get_scroll_rate).
 interpolated_player :: proc(player: game.Player, accumulator: f32) -> game.Player {
 	ahead := player
 	ahead.position.x += player.velocity_x * accumulator
@@ -122,8 +124,13 @@ interpolated_player :: proc(player: game.Player, accumulator: f32) -> game.Playe
 // extrapolation, and the real world state is the one that was stepped.
 interpolated_world :: proc(world: game.World, accumulator: f32) -> game.World {
 	ahead := world
-	ahead.elapsed_time += accumulator
-	ahead.scroll_offset += ahead.scroll_speed * accumulator
+	// On the world's own clock, exactly as update_world advances it: the
+	// accumulator is real time, and since F4 a real second is `pace`
+	// world seconds (game/world.odin). Nudging the two by different
+	// factors would make the drawn frame disagree with the step it is
+	// interpolating from.
+	ahead.elapsed_time += accumulator * ahead.pace
+	ahead.scroll_offset += game.get_scroll_rate(ahead) * accumulator
 	return ahead
 }
 
@@ -480,10 +487,22 @@ main :: proc() {
 
 				// update the world — must run before update_player, since
 				// update_player reads world.elapsed_time (section 17).
-				// Speed is no longer a difficulty knob: a run scrolls at
-				// the opening speed until the player buys more (roadmap
-				// R6.3), which is why this is a constant here.
-				game.update_world(&world, core.FIXED_TIMESTEP, game.INITIAL_SCROLL_SPEED)
+				// The base speed is still a constant: it stopped being a
+				// difficulty knob in C3 and stays one until the player
+				// buys more of it (roadmap R6.3).
+				//
+				// What is not constant since F4 is the **pace** — the
+				// character's height in the corridor decides how fast the
+				// world's clock runs (game/world.odin). Read here, before
+				// update_player, so it is where they were at the top of
+				// this step: one step of lag, exactly as the difficulty
+				// curve above.
+				game.update_world(
+					&world,
+					core.FIXED_TIMESTEP,
+					game.INITIAL_SCROLL_SPEED,
+					game.get_world_pace(game.get_player_pace_t(player)),
+				)
 
 				// update the player: the press, the journey it starts, and
 				// the ground held or lost against the cubes already on

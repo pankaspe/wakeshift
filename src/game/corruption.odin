@@ -212,7 +212,10 @@ update_corruption :: proc(
 	difficulty: Difficulty,
 	delta_time: f32,
 ) {
-	corruption.front_x += get_corruption_gain(difficulty) * world.scroll_speed * delta_time
+	// The distance the world actually covered this step, so the front's
+	// appetite follows the pace the player is setting (world.odin) with
+	// nothing here having to know that it does.
+	corruption.front_x += get_corruption_gain(difficulty) * get_scroll_rate(world) * delta_time
 
 	if corruption.owed > 0 {
 		paid := min(corruption.owed, f32(CORRUPTION_REFUND_SPEED) * delta_time)

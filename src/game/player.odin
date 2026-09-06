@@ -365,9 +365,11 @@ update_player :: proc(
 // faster than the world moves. Two consequences fall out of it, and both
 // are load-bearing —
 //
-//   * velocity_x can never be below -scroll_speed, so the depth
-//     arithmetic in score.odin (which adds the two) can never go
-//     negative and never has to clamp.
+//   * velocity_x can never be below minus the world's own rate, so the
+//     depth arithmetic in score.odin (which adds the two) can never go
+//     negative and never has to clamp. Since F4 that rate is
+//     get_scroll_rate rather than scroll_speed, and score.odin adds the
+//     same one.
 //   * a pair of cubes facing each other across the corridor terminates.
 //     Pinned, the character holds station in the world; flipping is the
 //     only thing that buys ground, so each flip advances them by
@@ -382,7 +384,12 @@ advance_ground :: proc(
 ) {
 	entry_x := player.position.x
 
-	recovery := world.scroll_speed * PLAYER_RECOVERY_RATIO * delta_time
+	// Against the rate the world actually moves at, never the base speed:
+	// the ratio is what makes a pin cost the same ground at any pace
+	// (world.odin), which is what keeps the economy pace-invariant.
+	rate := get_scroll_rate(world)
+
+	recovery := rate * PLAYER_RECOVERY_RATIO * delta_time
 	player.position.x = min(player.position.x + recovery, core.PLAYER_HOME_X)
 
 	player.is_blocked = false
@@ -399,7 +406,7 @@ advance_ground :: proc(
 		player.position.x = min(player.position.x, face - player.size.x)
 	}
 
-	player.position.x = max(player.position.x, entry_x - world.scroll_speed * delta_time)
+	player.position.x = max(player.position.x, entry_x - rate * delta_time)
 }
 
 // How much ground one flip buys against something standing still in the
@@ -409,16 +416,20 @@ advance_ground :: proc(
 // world: the recovery is cancelled by the pin. Mid-flip nothing on a lane
 // can reach them, so the recovery runs unopposed, and this is all of it.
 // It is the unit the price of a mirrored pair is counted in.
-flip_clearance :: proc(scroll_speed: f32) -> f32 {
-	return scroll_speed * PLAYER_RECOVERY_RATIO * FLIP_DURATION
+//
+// Takes the world's *rate* rather than its base speed since F4, because
+// the recovery does: a flip buys more pixels at the ceiling's pace, and
+// the same fraction of the box either way.
+flip_clearance :: proc(scroll_rate: f32) -> f32 {
+	return scroll_rate * PLAYER_RECOVERY_RATIO * FLIP_DURATION
 }
 
 // How many flips it takes to work past a cube of the given width when the
 // opposite lane offers no way out. The body has to clear its own length
 // as well as the box, which is why a mirrored pair is never free even of
 // a cube with no width at all.
-mirror_flip_cost :: proc(width: f32, scroll_speed: f32) -> int {
-	clearance := flip_clearance(scroll_speed)
+mirror_flip_cost :: proc(width: f32, scroll_rate: f32) -> int {
+	clearance := flip_clearance(scroll_rate)
 	if clearance <= 0 {
 		return 0
 	}
@@ -430,6 +441,33 @@ mirror_flip_cost :: proc(width: f32, scroll_speed: f32) -> int {
 // and there is no other.
 get_player_runway :: proc(player: Player, front_x: f32) -> f32 {
 	return player.position.x - front_x
+}
+
+// Where the character is between the two lanes, 0 on the floor and 1 at
+// the ceiling — the number the world's clock runs on (F4, world.odin).
+//
+// **On the journey's own clock, not on the drawn body's height.** There
+// is already a value shaped like this in render/palette.odin, and it is
+// the wrong one twice over: `render` is downstream of `game` and could
+// not be read from here anyway, and it is derived from position.y, which
+// a body standing on a twelve-unit tower carries 324 px up a 390 px
+// corridor while still plainly running along the floor. The world would
+// accelerate because the character climbed a staircase.
+//
+// The journey's clock has neither problem, and it is the same clock the
+// block's colour has travelled on since it became a block: a flip is one
+// gesture with one clock, so anything that crosses with it uses that one.
+get_player_pace_t :: proc(player: Player) -> f32 {
+	switch player.state {
+	case .Real:
+		return 0
+	case .Dream:
+		return 1
+	case .Transitioning:
+		t := clamp(player.transition_timer / FLIP_DURATION, 0, 1)
+		return player.target_lane == .Dream ? t : 1 - t
+	}
+	return 0
 }
 
 @(private)
