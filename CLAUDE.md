@@ -98,8 +98,8 @@ a flag rather than a form, and a floating cube **orbits** — bob and drift on o
 turn apart. The hole's widths and the mirrored pair's bounds are absolute pixels and deliberately
 not multiples of the unit.
 
-**The next piece is decided and written down**: `TIMELINE.md` ends with the remaining tasks
-(C4, C5) and the model each is tagged for. Read them there rather than re-deriving them.
+**The next piece is decided and written down**: `TIMELINE.md` ends with the remaining tasks and
+the model each is tagged for. Read them there rather than re-deriving them.
 
 **C1, C2 and C3 all landed on 6 September**, and between them they are the world of
 `docs/inspiration/sketch.jpeg` and the shape of a run through it.
@@ -467,6 +467,77 @@ Rules the implementation established, all found by replaying the simulation:
   Drawing a gap as an object is what made it read as a box standing on the floor for the whole of
   the prototype, and drawing a cube as an object is what made it read as something *put there*
   rather than as something the world did.
+
+### The economy: the front is state, and fragments are what is spent on it
+
+Since F2 (`game/corruption.odin`) the Corruption **always gains** — `CORRUPTION_GAIN` pixels of
+front per pixel of world scrolled, on `difficulty.t` — and a fragment buys `CORRUPTION_REFUND`
+of it back. Three things about it are load-bearing:
+
+- **`front_x` is no longer a pure function of distance**, and that was given up knowingly: a
+  refund cannot be written as one. It is still fully deterministic, so a recorded run validates;
+  what is gone is the ability to *ask* where the front is at a given depth without replaying to
+  it, and nothing ever asked. The same trade will come up for anything else the player is allowed
+  to spend against.
+- **The front no longer stops short of the character.** "A player making no mistakes is never in
+  danger from the Corruption" was true, was the reason the front was decoration for anyone
+  competent, and is now false on purpose.
+- **The bank is the screen.** `front_x` clamps at the left edge and any refund still owed there is
+  discarded, so a player who out-collects the front is simply safe rather than storing room. A
+  hidden surplus behind the left edge would be a meter nobody can see, which is the one thing the
+  score and the HUD both refuse. Verified: ten fragments on a full runway leave the front at 8 px
+  and nothing owed.
+- **The gain is a straight line while the other two knobs are curves**, and that is deliberate:
+  the air between patterns is spent early and the draw's lean bites late (`game/difficulty.odin`),
+  so a third knob at a constant rate means one of the three is always moving under the player.
+  C3's lesson was that one curve saturates; three that saturate together are the same mistake.
+- **A refund is a retreat, not a jump.** 60 px in one frame reads as a glitch; 0.23 s of motion
+  reads as an event, and a *line* of fragments becomes one continuous slide, which is what the
+  run-of-five pattern exists for.
+
+Tuned by replaying 60 runs with a one-move-lookahead bot: fragments unpaid it dies at 8440 px,
+paid at 12370, so the economy is worth **+46% of a run**. The front's *average* pressure lands
+within 3 px of where the old fixed slide held it (80 against 83) and the **peak** is what moved,
+176 to 251 — F2 changes what the front is without quietly changing how hard the game is.
+
+**The gain survived F3 replacing the entire supply it was tuned against**, and that is worth
+knowing before touching it: the anchor to re-check is the collecting bot's *mean front* (84 px,
+against 83 for the pre-F2 fixed slide), not the run length, which moved from 12370 px to 16150
+once the pool started paying properly. Re-measure whenever the supply moves, and re-measure that
+number.
+
+### Where a fragment goes, and the one check that keeps it honest
+
+The authoring rule is one sentence, and it lives in `game/pattern.odin` above the pool:
+
+> **A fragment sits on the Dream lane, half a body off the ceiling, just after the pattern's last
+> Dream closure — and only in a pattern whose last closure is on the Dream lane.**
+
+It exists because of a measurement, not a taste. A reward on the road the player was taking anyway
+is free: before F3 a bot that did not want fragments still collected 16.6 a run, because the
+prototype patterns put a cube opposite every diamond. Just after the Dream lane reopens is the one
+instant in a pattern where the player is *provably* on the floor, so the trip up is a round trip
+nothing else asked for. Measured after: 0.7 a run for that bot, against 12.8 for one that wants
+them.
+
+- **A fragment can never cost danger**, only position and tempo — its lane has to be open for the
+  diamond to be reachable at all. What is charged is a flip and arriving at the next pattern from
+  the ceiling, and the curve raises that price on its own as it closes the air between patterns.
+- **The tails those placements need are not the dead air C2 deleted.** C2 cut lead-in and tail that
+  contained nothing. These hold the reward — but they do cost density: 4 to 10 points of
+  "threatened" per band, peak 71.1% down to 61.0%.
+- **`report_fragment_burial` is the check F1 could not write.** A diamond inside a cube or over a
+  hole, against the skyline's **declared bounds** and never its drawn columns — widest draw,
+  tallest draw, and for a floating cube the reach of its whole orbit. It checks the far lane too,
+  because `CUBE_MAX_HEIGHT` crosses 324 px of a 390 px corridor. It runs on the seam as well as
+  within a pattern, because a fragment has no containment rule of its own and the thing most
+  likely to bury one is the *next* pattern's first cube.
+- **It is written on the assumption that a diamond is taken by a body standing on its lane**, which
+  is what `FRAGMENT_ON_LANE` being the only authored offset means. A placement further into the
+  corridor needs that check revisited, not merely re-run.
+- **No diamond sits on top of a floating platform**, and that was measured rather than decided: the
+  lift is `LIFT/2 * (1 - cos)`, so the top of the box is at any authored height for one instant and
+  nowhere near it across the 200 ms collection window.
 
 ### The fairness rule — the only one there is
 
@@ -1100,26 +1171,30 @@ Tracked here so they are not rediscovered. Nothing here is scheduled — the use
   that. It was invisible while a cube was a filled mass. Closing it
   needs the pushback to exceed the world's speed while penetrating, which would also make
   `velocity_x` drop below `-scroll_speed` and force `score.odin` to clamp.
-- **The pool reached its density target and has not been played.** 28 patterns, measured over 8
-  seeds x 120 s with no player: at least one lane threatened **40.9%** (the Definition of Done
-  asks for over 40), both at once 1.2%, at least one lethal 4.3%. C3 then spread that along a
-  curve: measured in 5000 px bands with no player, threatened runs 24.7 / 36.2 / 42.5 / 45.0 /
-  48.5 / 53.9 / 56.0 / 62.1 / 66.7 / 71.1 / 67.4 / 68.7%, and lethal 6.0 / 4.2 / 8.0 / 7.6 /
-  10.1 / 14.9 / 11.5 / 12.3 / 10.8 / 8.8 / 8.3 / 7.3%. **The lethal share is the one that is not
-  monotone**, and it is a consequence of the lean rather than an oversight: the deep pool holds
-  more high-demand patterns without a hole in them than with one, so a very deep run is busier
-  and slightly less deadly than its own middle. Raising `pattern_gap_pair` to demand 3 nearly
-  halved the dip; closing it properly means authoring more late patterns that carry a hole.
-  A greedy one-move-lookahead bot has a median run of **23700 px (depth 2375)**, dying 60 times
-  out of 60 to the Corruption and never to a hole — which is pillar 7 working as written, but it
-  is a floor measured by a machine and the feel is the user's call. At the top of the curve,
-  pinned there with the Corruption switched off, 40 of 40 bots survive a full minute: the endgame
-  kills by ground loss, not by being unanswerable.
+- **The pool has not been played since F3, and F3 moved its density.** 31 patterns. Measured in
+  5000 px bands with no player, at least one lane threatened runs 20.9 / 30.4 / 37.1 / 39.1 /
+  41.7 / 44.7 / 47.7 / 52.7 / 59.7 / 55.9 / 56.8 / 61.0%, and lethal 5.4 / 3.9 / 6.0 / 5.8 / 9.4 /
+  9.0 / 10.5 / 7.4 / 6.5 / 8.8 / 6.5 / 9.4%. Both are **4 to 10 points below the pre-F3 numbers**,
+  which ran 24.7 … 71.1%: the tails that hold the fragments are time when nothing threatens.
+  Taking `DIFFICULTY_GAP_OPEN` from 0.90 to 0.70 puts the opening band back at 24.2% but drops the
+  collecting bot's median run from 16150 px to 9930 — a difficulty decision rather than a
+  compensation, so it is the user's to make at a playtest.
+  **The lethal share is the one that is not monotone**, and it is a consequence of the lean rather
+  than an oversight: the deep pool holds more high-demand patterns without a hole in them than with
+  one, so a very deep run is busier and slightly less deadly than its own middle. Raising
+  `pattern_gap_pair` to demand 3 nearly halved the dip; closing it properly means authoring more
+  late patterns that carry a hole.
+  A greedy one-move-lookahead bot that collects has a median run of **16150 px**, dying 57 times
+  out of 60 to the Corruption and 3 times in a hole — the fragments pulling a locally right answer
+  into a wrong one, which is F6 arriving early. The same bot with fragments out of its valuation
+  dies at 8440 px. At the top of the curve, pinned there with the Corruption switched off, 40 of 40
+  bots survive a full minute: the endgame kills by ground loss, not by being unanswerable.
 - **The runway is 360 px and a pin spends it at full scroll speed.** Not new and not C2's doing,
   but C2 made it matter: at 40% density a player who does not answer is pushed off the left edge
   in about 1.3 seconds of continuous pinning, which is why 177 of 200 idle runs end at the
-  Corruption rather than in a hole. `PLAYER_RECOVERY_RATIO` and `CORRUPTION_MIN_RUNWAY` are the
-  knobs if a playtest says the bleed is too fast.
+  Corruption rather than in a hole. `PLAYER_RECOVERY_RATIO` is the knob if a playtest says the
+  bleed is too fast; `CORRUPTION_MIN_RUNWAY` was the other one and F2 deleted it, because the
+  front does not stop short of the player any more.
 - Menus, HUD and the options screen take their colours from the palette but still use raylib's
   default bitmap font. Everything drawn from primitives is crisp at native resolution and only
   the text is not (phase R7).

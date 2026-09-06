@@ -50,23 +50,15 @@ draw_main_menu :: proc(menu: Menu, high_score: f32, palettes: core.PaletteSet) {
 // health bar, and how deep you are is the one number a player has any
 // attention left to read. A tier name told them something they could
 // already feel.
-// The fragment count is here **only for F1**, and it is the readout of a
-// prototype rather than a HUD element the design asked for. What a
-// fragment is worth is meant to be said by the Corruption's front moving
-// backwards, which is a thing the player is already looking at; a number
-// in a corner is the stand-in until F2 makes that true. Delete it then.
-draw_hud :: proc(score: game.Score, fragments: game.Fragments, palettes: core.PaletteSet) {
+// F1 put a fragment counter under it and F2 took it out again, on F1's
+// own instruction: what a fragment is worth is said by the Corruption's
+// front sliding backwards, which is a thing the player is already
+// looking at, and a number in a corner was the stand-in until that was
+// true. The run's total is on the Dream Report instead, where a tally
+// belongs.
+draw_hud :: proc(score: game.Score, palettes: core.PaletteSet) {
 	score_text := fmt.ctprintf("Depth: %.0f", score.value)
 	rl.DrawText(score_text, 20, 20, 24, core.with_alpha(palettes.current.light, TEXT_PRIMARY))
-
-	fragment_text := fmt.ctprintf("Fragments: %d", fragments.collected)
-	rl.DrawText(
-		fragment_text,
-		20,
-		50,
-		20,
-		core.with_alpha(palettes.current.accent, TEXT_SECONDARY),
-	)
 }
 
 // C5 — the one instruction the game ever gives: how to change lane.
@@ -131,28 +123,45 @@ draw_pause_overlay :: proc(menu: Menu, palettes: core.PaletteSet) {
 // Drawn on top of the frozen gameplay frame on game over — a small
 // Dream Report (Design Doc, section 8-9): final depth, and whether it's
 // a new personal best. The full report is roadmap T13.2.
-draw_game_over :: proc(score: game.Score, high_score: f32, palettes: core.PaletteSet) {
+draw_game_over :: proc(
+	score: game.Score,
+	fragments: game.Fragments,
+	high_score: f32,
+	palettes: core.PaletteSet,
+) {
 	draw_overlay_scrim(palettes)
 
 	// Waking up is a return to the Real world, so the screen that says so
 	// is lit by it, whichever world the run ended in.
-	draw_centered_text("AWAKENED", 260, 40, palettes.real.accent)
+	draw_centered_text("AWAKENED", 250, 40, palettes.real.accent)
 
 	final_score_text := fmt.ctprintf("Depth reached: %.0f", score.value)
 	draw_centered_text(
 		final_score_text,
-		320,
+		312,
 		20,
 		core.with_alpha(palettes.current.light, TEXT_PRIMARY),
 	)
 
+	// The run's fragments, in the accent they were drawn in. It is a
+	// tally and not a currency — every one of them was spent against the
+	// front the moment it was taken (game/corruption.odin) — so it is
+	// reported once, here, and never during the run.
+	fragment_text := fmt.ctprintf("Fragments: %d", fragments.collected)
+	draw_centered_text(
+		fragment_text,
+		342,
+		18,
+		core.with_alpha(palettes.current.accent, TEXT_SECONDARY),
+	)
+
 	if score.value >= high_score {
-		draw_centered_text("NEW BEST!", 350, 22, palettes.dream.accent)
+		draw_centered_text("NEW BEST!", 374, 22, palettes.dream.accent)
 	} else {
 		best_text := fmt.ctprintf("Best Depth: %.0f", high_score)
 		draw_centered_text(
 			best_text,
-			350,
+			374,
 			20,
 			core.with_alpha(palettes.current.light, TEXT_SECONDARY),
 		)
@@ -160,7 +169,7 @@ draw_game_over :: proc(score: game.Score, high_score: f32, palettes: core.Palett
 
 	draw_centered_text(
 		"Press ENTER to try again",
-		390,
+		416,
 		20,
 		core.with_alpha(palettes.current.light, TEXT_MUTED),
 	)

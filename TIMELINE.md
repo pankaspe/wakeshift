@@ -260,20 +260,66 @@ più forte. Moltiplica la scala esistente, non la sostituisce.
 il pieno è ciò che dice "questo sei tu". Il discriminante si sposta da *pieno* a **quadrato
 pieno**: il rombo è ruotato, è meno di metà del corpo, ed è l'unico che usa il colore `accent`.
 
+**F2 — L'economia** → Il fronte **accumula** invece di essere una funzione della distanza:
+guadagna 0,030 px per ogni px di mondo all'apertura, sale con la curva, e non si ferma più a
+150 px dal personaggio. Ogni frammento ne ricompra 60, restituiti come arretramento e non come
+salto. Il surplus non si banca: la stanza è quella che si vede, e dieci frammenti su un corridoio
+pieno lasciano il fronte a 8 px con niente in sospeso.
+
+**Misurato in replay, 60 run** → Con un bot che schiva una mossa avanti: se i frammenti non pagano
+muore a 8440 px (31 s), se pagano a 12 370 (46 s). L'economia vale il **+46% di run**. La pressione
+media sul giocatore resta dov'era col vecchio fronte fisso — 80 px contro 83 — ed è il **picco** a
+muoversi, da 176 a 251. Muoiono tutti di Corruzione, nessuno in un buco.
+
+**Due cose che F3 deve sistemare** → La pendenza del sorteggio decide anche l'offerta del premio:
+i due prototipi hanno demand bassa, quindi i frammenti crollano da 1,40 per 1000 px a zero oltre i
+45 000. E il bot ne raccoglie 16,6 a run **anche quando non li vuole**, run identiche allo step,
+perché il cubo sta sulla corsia opposta ai rombi: il premio è sulla strada che stava già facendo.
+
+**Via il contatore dall'HUD** → Lo chiedeva già F1: quanto vale un frammento lo dice il fronte che
+arretra, non un numero in un angolo. Il totale della run finisce nel Dream Report.
+
+**F3 — Il pool si riempie** → Una regola sola: il rombo sta sulla corsia **Onirica**, subito dopo
+l'ultima chiusura onirica del pattern, e solo nei pattern che chiudono l'Onirico per ultimi. È
+l'unico istante in cui il giocatore è dimostrabilmente sul pavimento, quindi salire è un viaggio
+di andata e ritorno che nessun altro motivo giustifica. Sedici pattern su trentuno lo portano; i
+due prototipi di F1 sono spariti.
+
+**Il premio smette di essere gratis** → Misurato con lo stesso bot di F2: uno che schiva e basta
+ne raccoglieva **16,6 a run**, adesso **0,7**, contro 12,8 di uno che li vuole. E l'offerta non
+crolla più con la profondità — da 0,95→0,00 per 1000 px a **1,15–1,60 piatta su dodici bande** —
+perché non dipende più da due pattern a domanda bassa che la pendenza del sorteggio spegneva.
+
+**Il controllo che mancava** → `report_fragment_burial`: un rombo dentro un cubo o sopra un buco,
+scritto contro i **limiti dichiarati** della skyline e non contro l'esito — larghezza massima,
+altezza massima, e per un cubo fluttuante tutta l'orbita. Controlla anche la corsia opposta,
+perché una torre da 12 unità attraversa 324 px di corridoio su 390. Gira sul pattern e sulla
+giunzione, perché un frammento non ha una regola di contenimento sua.
+
+**Piattaforme fluttuanti** → Due pattern nuovi: il blocco sospeso arriva anche sul pavimento, e
+una coppia sfasata sulle due pareti fa da cancello. **Niente rombo sopra una piattaforma**, e non
+per scelta: il sollevamento è `LIFT/2 * (1 - cos)`, quindi la cima della scatola sta all'altezza
+autorata per un istante e non per i 200 ms della finestra di raccolta.
+
+**Cosa è cambiato senza che lo chiedessi** → La densità scende di 4–10 punti per banda (picco dal
+71,1% al 61,0%): le code che reggono i premi sono tempo in cui nessuna corsia è minacciata.
+Riportando `DIFFICULTY_GAP_OPEN` da 0,90 a 0,70 la banda d'apertura torna a 24,2% ma la run
+mediana del bot crolla da 16 100 px a 9 900 — è una scelta di difficoltà, non una compensazione,
+e la lascio a te. Le costanti della Corruzione non si sono mosse: la pressione media sul bot è
+84 px dove F2 ne misurava 84.
+
 ---
 
 ## In corso — la fase F
 
-Due pattern (`pattern_fragment_pair`, `_run`) esistono **per essere buttati**: F3 sparge i
-frammenti sul pool vero. Misurato: sulla corsia la finestra di raccolta è **200 ms** esatti,
-`(16+38)/270`, ed è l'unica manopola che ha. E un rombo messo dove il giocatore già si trova è
-**gratis** — una run che non tocca mai il tasto lo raccoglie — quindi collocarli è tutto il lavoro
-che resta da fare per dargli un senso.
+Il pool ha **trentuno** pattern e sedici portano un frammento. La finestra di raccolta sulla
+corsia è **200 ms** esatti, `(16+38)/270`, ed è l'unica manopola che il rombo ha; il resto lo
+decide dove sta. Un bot avido che raccoglie arriva a 16 100 px (60 s) e muore tre volte su
+sessanta in un buco — il premio che tira una risposta localmente giusta dentro una sbagliata,
+che è F6 in miniatura.
 
 | | Task | Modello |
 |---|---|---|
-| **F2** | **L'economia** → La Corruzione guadagna sempre, con un ritmo che cresce con la curva; i frammenti la ricacciano indietro. Qui il gioco cambia natura. Va **dopo** F1 e non prima: un fronte che avanza senza niente da spendergli contro è un conto alla rovescia, che è l'obiezione che `corruption.odin` fa già agli inseguitori. Si accetta consapevolmente che `front_x` smetta di essere una funzione pura della distanza e che "chi non sbaglia non è mai in pericolo" decada. | Opus |
-| **F3** | **Il pool si riempie** → I frammenti nella collocazione vincente su tutto il pool, i tre prototipi via, più piattaforme fluttuanti. Qui serve anche il controllo che oggi manca: un rombo dentro un cubo, da scrivere contro i **limiti** dichiarati della skyline e non contro l'esito, come fa già `get_max_width`. | Sonnet |
 | **F4** | **Onirico = veloce** → Il mondo accelera quando sei sul soffitto: il giocatore fa il tempo del gioco con un tasto. Richiede di ridefinire la banda di velocità e **rivalidare il pool**, che è controllato alla velocità più lenta di una run. | Opus |
 | **F5** | **Le due lane** → Reale pulito e ad alto contrasto, Onirico ricco e più difficile da leggere, così la differenza visiva *è* la differenza di difficoltà. Modifica la regola "il campo cambia colore col mondo, il tratto mai". | Sonnet |
 | **F6** | **Far fallire il bot avido** → Pattern dove la mossa localmente giusta frega due secondi dopo. Bersaglio misurabile col bot che esiste già. | Sonnet |

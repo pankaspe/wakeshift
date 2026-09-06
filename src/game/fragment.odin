@@ -24,7 +24,7 @@
 * ONE REPRESENTATION, THREE PLACEMENTS
 *
 * A fragment is a lane and an offset *into the corridor*, and that is all
-* three of the placements F1 exists to choose between:
+* three of the placements F1 existed to choose between:
 *
 *   on the lane      offset of half a body: the diamond sits in the path
 *                    of a character running along that lane, and is
@@ -49,21 +49,43 @@
 * inside the flip should start from the numbers rather than re-derive
 * them.
 *
-* What survives is a diamond on the **Dream lane**, which is the shape F2
-* needs anyway: the reward is in the world that is worth going to. The
-* trail is not a second placement, it is several of the first.
+* What survives is a diamond on the **Dream lane**: the reward is in the
+* world that is worth going to. The trail is not a second placement, it is
+* several of the first.
 *
-* A fragment sitting where the player already is costs nothing — replayed
-* with a run that never touches the key, it is collected anyway — so
-* placing them is the whole of making them mean something. That is F3.
+* WHERE THEY SIT, AND WHY IT IS THE WHOLE OF THE DESIGN
 *
-* WHAT F1 DELIBERATELY DOES NOT DO
+* **A fragment sitting where the player already is costs nothing.** F1
+* wrote that down and F2 measured it: a bot that did not want fragments
+* at all still collected 16.6 a run, because the two prototype patterns
+* put a cube on the lane opposite every diamond and the dodge already
+* went where the reward was.
 *
-* Collecting one changes nothing yet except a counter. The economy — the
-* Corruption gaining ground on its own and fragments buying it back — is
-* F2, and it is second on purpose: an always-gaining front with nothing
-* to spend against it is a countdown, not a mechanic, which is precisely
-* the objection corruption.odin already raises against chasers.
+* F3 answered it with one authoring rule — the diamond goes just after
+* the pattern's last **Dream** closure, so the one instant the player is
+* provably on the floor is the instant the reward is on the ceiling. The
+* rule and its arithmetic live in pattern.odin, next to the pool it
+* governs. Measured after: the same bot collects **0.7** a run, against
+* 12.8 for one that wants them.
+*
+* The offset is still FRAGMENT_ON_LANE everywhere, and
+* report_fragment_burial is written on the assumption that it stays that
+* way — a diamond is reached by a body *standing on its lane*, so the
+* lane has to be there and be clear of columns. A placement further into
+* the corridor would need that check revisited, not merely re-run.
+*
+* WHAT IT IS WORTH, SINCE F2
+*
+* Ground off the Corruption, immediately: CORRUPTION_REFUND pixels of
+* front, handed back as a retreat. The price and the arithmetic both
+* live in corruption.odin, with the front they are spent against, and
+* the only thing this file contributes to the economy is an honest count
+* of what the body touched.
+*
+* That ordering was deliberate. An always-gaining front with nothing to
+* spend against it is a countdown rather than a mechanic — the objection
+* corruption.odin already raises against chasers — so the reward had to
+* exist before the pressure did.
 */
 package game
 
@@ -139,8 +161,10 @@ FragmentPickup :: struct {
 // Everything a run's fragments are.
 //
 // The count lives here rather than in Score because Score is the distance
-// travelled and nothing else, deliberately (score.odin) — and because
-// what a fragment will eventually buy is **room**, not points (F2).
+// travelled and nothing else, deliberately (score.odin). What a fragment
+// buys is **room** and it buys it the instant it is taken (F2,
+// corruption.odin), so this is a tally of the run rather than a balance:
+// it is spent nowhere, and it is read once, on the Dream Report.
 Fragments :: struct {
 	live:      [dynamic]Fragment,
 	collected: int,
@@ -183,17 +207,27 @@ get_fragment_rect :: proc(fragment: Fragment, world: World) -> rl.Rectangle {
 // opposite bias is the one that matters, which is why a hole is tested
 // against the body's *centre* instead (collision.odin).
 //
-// Returns how many pickups were written into `picked`. The caller turns
-// those into a burst; the simulation itself has no opinion about
-// particles.
+// Returns two counts that are *usually* the same and must not be
+// confused: how many pickups were written into `picked`, which is capped
+// by the slice the caller handed in, and how many fragments were
+// actually taken, which is not.
+//
+// The first buys a burst of particles and the second buys ground off the
+// Corruption (corruption.odin). Paying the economy out of the reported
+// count would mean an overflowing step silently lost the player room —
+// FRAGMENT_MAX_PER_STEP is far above what a 38 px body can physically
+// touch, so it would never happen and would be impossible to find if it
+// did. Losing a burst is a frame; losing a refund is a run.
 collect_fragments :: proc(
 	fragments: ^Fragments,
 	player: Player,
 	world: World,
 	picked: []FragmentPickup,
-) -> int {
+) -> (
+	reported: int,
+	taken: int,
+) {
 	body := to_rect(player.position, player.size)
-	reported := 0
 	kept := 0
 
 	for index in 0 ..< len(fragments.live) {
@@ -201,6 +235,7 @@ collect_fragments :: proc(
 
 		if rl.CheckCollisionRecs(body, get_fragment_rect(fragment, world)) {
 			fragments.collected += 1
+			taken += 1
 			if reported < len(picked) {
 				picked[reported] = FragmentPickup {
 					at   = get_fragment_center(fragment, world),
@@ -216,7 +251,7 @@ collect_fragments :: proc(
 	}
 
 	resize(&fragments.live, kept)
-	return reported
+	return reported, taken
 }
 
 // True once a fragment is off the left edge and can no longer be taken.

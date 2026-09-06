@@ -45,8 +45,10 @@ reset_run :: proc(
 	delete(obstacles^)
 	obstacles^ = nil
 
-	// Both the list and the count, because the count is the run's and not
-	// the player's: it is what F2 will spend against the Corruption.
+	// Both the list and the count. The count is the run's and not the
+	// player's — what a fragment bought was spent against the Corruption
+	// the instant it was taken (corruption.odin), and what is left here
+	// is the tally the Dream Report reads.
 	delete(fragments.live)
 	fragments^ = Fragments{}
 

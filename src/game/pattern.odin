@@ -174,6 +174,51 @@ DEMAND_LEVELS :: 4
 // long hole owns 0.69 s of its lane. A lethal event inside about half a
 // second of either end is how two patterns that are fair apart become
 // unanswerable together, so none of them are.
+//
+// WHERE THE FRAGMENTS GO (F3)
+//
+// One rule, and it is the whole of the authoring:
+//
+//     A fragment sits on the **Dream** lane, one body-half off the
+//     ceiling, just after the pattern's last Dream closure — and only in
+//     a pattern whose last closure is on the Dream lane at all.
+//
+// Each half of that sentence answers something measured.
+//
+// **The Dream lane, because that is what the phase is for.** F1's
+// playtest picked the on-lane placement on the ceiling and threw out the
+// mid-corridor one; the reward belongs in the world the player has to
+// choose to be in, and the Real lane is where a run starts and where it
+// stays if nothing moves it.
+//
+// **Just after the closure, because that is the only moment the player is
+// provably somewhere else.** F2 measured the prototypes and found the bot
+// collecting 16.6 fragments a run *whether or not it wanted them* — the
+// prototypes put a cube on the lane opposite the diamonds, so the dodge
+// already went where the reward was. A reward on the road you were taking
+// anyway is free. Immediately after the Dream lane reopens is the one
+// instant in a pattern where the player is known to be on the floor, so
+// going up for the diamond is a round trip nothing else asked for.
+//
+// **And only where the last closure is on Dream**, because otherwise the
+// pattern's own tail sends the player to the ceiling and the round trip
+// evaporates. That is why pattern_stagger carries nothing and
+// pattern_stagger_reverse carries one: the mirror is not decoration here,
+// it decides whether the reward has a price.
+//
+// What it costs, and it is deliberately not danger: **one flip you had no
+// other reason to make, and arriving at the next pattern from the
+// ceiling.** A fragment can never cost danger — the lane it is on has to
+// be open for the diamond to be reachable at all — so what is charged is
+// position and tempo. The price rises on its own as the curve closes the
+// air between patterns (difficulty.odin): at the top of it the next
+// pattern starts the instant this one ends, and where you are standing
+// when it does is the whole of the cost.
+//
+// The tail those placements need is **not the dead air C2 deleted**. C2
+// cut lead-in and tail that contained nothing; these hold the reward, and
+// they are the only part of a pattern the player has a reason to enter
+// rather than to answer.
 
 // --- From the first metre: one thing at a time ---
 
@@ -191,7 +236,8 @@ pattern_bump_dream := Pattern {
 	events    = []PatternEvent {
 		{time_offset = 0.2, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_BUMP},
 	},
-	duration  = 0.3,
+	fragments = []FragmentEvent{{time_offset = 0.34, lane = .Dream, offset = FRAGMENT_ON_LANE}},
+	duration  = 0.46,
 	demand    = 0,
 }
 
@@ -213,7 +259,8 @@ pattern_gap_real := Pattern {
 
 pattern_gap_dream := Pattern {
 	events    = []PatternEvent{{time_offset = 0.2, lane = .Dream, obstacle_type = .Gap}},
-	duration  = 0.72,
+	fragments = []FragmentEvent{{time_offset = 0.78, lane = .Dream, offset = FRAGMENT_ON_LANE}},
+	duration  = 0.90,
 	demand    = 1,
 }
 
@@ -233,7 +280,8 @@ pattern_tower_dream := Pattern {
 	events    = []PatternEvent {
 		{time_offset = 0.2, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_TOWER},
 	},
-	duration  = 0.5,
+	fragments = []FragmentEvent{{time_offset = 0.62, lane = .Dream, offset = FRAGMENT_ON_LANE}},
+	duration  = 0.74,
 	demand    = 0,
 }
 
@@ -254,7 +302,8 @@ pattern_stairs_dream := Pattern {
 	events    = []PatternEvent {
 		{time_offset = 0.2, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_STAIRS_UP},
 	},
-	duration  = 0.7,
+	fragments = []FragmentEvent{{time_offset = 0.82, lane = .Dream, offset = FRAGMENT_ON_LANE}},
+	duration  = 0.94,
 	demand    = 1,
 	min_depth = 1500,
 }
@@ -266,7 +315,8 @@ pattern_alternate := Pattern {
 		{time_offset = 0.2, lane = .Real, obstacle_type = .Cube, shape = SHAPE_TOWER},
 		{time_offset = 1, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_TOWER},
 	},
-	duration  = 1.3,
+	fragments = []FragmentEvent{{time_offset = 1.42, lane = .Dream, offset = FRAGMENT_ON_LANE}},
+	duration  = 1.54,
 	demand    = 1,
 	min_depth = 3000,
 }
@@ -301,7 +351,8 @@ pattern_plateau_dream := Pattern {
 		{time_offset = 0.2, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_PLATEAU},
 		{time_offset = 1.1, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_BUMP},
 	},
-	duration  = 1.2,
+	fragments = []FragmentEvent{{time_offset = 1.32, lane = .Dream, offset = FRAGMENT_ON_LANE}},
+	duration  = 1.44,
 	demand    = 1,
 	min_depth = 5000,
 }
@@ -323,7 +374,8 @@ pattern_canyon_dream := Pattern {
 	events    = []PatternEvent {
 		{time_offset = 0.2, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_CANYON},
 	},
-	duration  = 0.9,
+	fragments = []FragmentEvent{{time_offset = 1.02, lane = .Dream, offset = FRAGMENT_ON_LANE}},
+	duration  = 1.14,
 	demand    = 1,
 	min_depth = 7000,
 }
@@ -335,7 +387,8 @@ pattern_gap_then_cube := Pattern {
 		{time_offset = 0.2, lane = .Real, obstacle_type = .Gap},
 		{time_offset = 1.1, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_TOWER},
 	},
-	duration  = 1.4,
+	fragments = []FragmentEvent{{time_offset = 1.52, lane = .Dream, offset = FRAGMENT_ON_LANE}},
+	duration  = 1.64,
 	demand    = 1,
 	min_depth = 9000,
 }
@@ -369,7 +422,8 @@ pattern_stagger_reverse := Pattern {
 		{time_offset = 0.9, lane = .Real, obstacle_type = .Cube, shape = SHAPE_TOWER},
 		{time_offset = 1.6, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_TOWER},
 	},
-	duration  = 1.9,
+	fragments = []FragmentEvent{{time_offset = 2.02, lane = .Dream, offset = FRAGMENT_ON_LANE}},
+	duration  = 2.14,
 	demand    = 2,
 	min_depth = 11000,
 }
@@ -386,7 +440,8 @@ pattern_bump_and_ridge := Pattern {
 		{time_offset = 0.2, lane = .Real, obstacle_type = .Cube, shape = SHAPE_BUMP},
 		{time_offset = 1, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_RIDGE},
 	},
-	duration  = 1.8,
+	fragments = []FragmentEvent{{time_offset = 1.92, lane = .Dream, offset = FRAGMENT_ON_LANE}},
+	duration  = 2.04,
 	demand    = 1,
 	min_depth = 13000,
 }
@@ -406,7 +461,8 @@ pattern_narrows := Pattern {
 		{time_offset = 0.3, lane = .Real, obstacle_type = .Cube, shape = SHAPE_FACING},
 		{time_offset = 0.3, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_FACING},
 	},
-	duration  = 0.5,
+	fragments = []FragmentEvent{{time_offset = 0.62, lane = .Dream, offset = FRAGMENT_ON_LANE}},
+	duration  = 0.74,
 	demand    = 2,
 	min_depth = 15000,
 }
@@ -448,7 +504,8 @@ pattern_gap_pair := Pattern {
 		{time_offset = 0.2, lane = .Real, obstacle_type = .Gap},
 		{time_offset = 1.1, lane = .Dream, obstacle_type = .Gap},
 	},
-	duration  = 1.62,
+	fragments = []FragmentEvent{{time_offset = 1.74, lane = .Dream, offset = FRAGMENT_ON_LANE}},
+	duration  = 1.86,
 	demand    = 3,
 	min_depth = 21000,
 }
@@ -461,7 +518,8 @@ pattern_burst := Pattern {
 		{time_offset = 1.3, lane = .Real, obstacle_type = .Cube, shape = SHAPE_TOWER},
 		{time_offset = 1.85, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_TOWER},
 	},
-	duration  = 2.15,
+	fragments = []FragmentEvent{{time_offset = 2.27, lane = .Dream, offset = FRAGMENT_ON_LANE}},
+	duration  = 2.39,
 	demand    = 3,
 	min_depth = 24000,
 }
@@ -476,7 +534,8 @@ pattern_ridge_run := Pattern {
 		{time_offset = 0.2, lane = .Real, obstacle_type = .Cube, shape = SHAPE_RIDGE},
 		{time_offset = 1.25, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_RIDGE},
 	},
-	duration  = 2.05,
+	fragments = []FragmentEvent{{time_offset = 2.17, lane = .Dream, offset = FRAGMENT_ON_LANE}},
+	duration  = 2.29,
 	demand    = 3,
 	min_depth = 31000,
 }
@@ -502,7 +561,8 @@ pattern_ravine_dream := Pattern {
 		{time_offset = 1, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_CANYON},
 		{time_offset = 1.9, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_STAIRS_UP},
 	},
-	duration  = 2.4,
+	fragments = []FragmentEvent{{time_offset = 2.52, lane = .Dream, offset = FRAGMENT_ON_LANE}},
+	duration  = 2.64,
 	demand    = 3,
 	min_depth = 35000,
 }
@@ -516,7 +576,8 @@ pattern_gauntlet := Pattern {
 		{time_offset = 1.2, lane = .Real, obstacle_type = .Gap},
 		{time_offset = 2.1, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_PLATEAU},
 	},
-	duration  = 2.7,
+	fragments = []FragmentEvent{{time_offset = 2.82, lane = .Dream, offset = FRAGMENT_ON_LANE}},
+	duration  = 2.94,
 	demand    = 3,
 	min_depth = 40000,
 }
@@ -541,51 +602,62 @@ pattern_float_pair := Pattern {
 	min_depth = 27000,
 }
 
-// --- F1: the fragments, on the ceiling ---
+// --- The floating platforms ---
 //
-// The playtest picked the on-lane placement on the **Dream** side and
-// threw out the corridor one (fragment.odin has the argument). These two
-// are what is left of the three prototypes, and they are still temporary:
-// F3 spreads fragments across the real pool and deletes them.
+// A floating cube is the only place in the game that is neither wall nor
+// lane: it is somewhere to *be* that the world did not put on either
+// surface. The pool had two of them and both were on the ceiling, so
+// these two give the floor one and put a pair across the corridor.
 //
-// Their cubes stand on the floor, opposite the diamonds, so nothing here
-// can be a fragment buried inside a skyline — the one fault
-// report_fragment_faults cannot see yet.
+// **A diamond does not sit on top of one, and that was measured rather
+// than decided.** It is the obvious idea — a reward you can only take by
+// standing on the platform — and it does not survive the orbit: the lift
+// is CUBE_FLOAT_LIFT/2 * (1 - cos), so the top of the box is at the
+// authored height for one instant and nowhere near it 200 ms later,
+// which is exactly how long the collection window is. A statically
+// authored offset would line up with the platform on one frame of that
+// window and be air on the rest of it. The reach of the whole orbit is
+// what report_fragment_burial checks against, for the same reason.
 
-// The primitive: two diamonds on the ceiling, and a bump on the floor to
-// make going up worth something.
-pattern_fragment_pair := Pattern {
+// The floor's floating block, and the mirror of pattern_float_open. It is
+// up as it reaches the anchor, so a character who still has their ground
+// meets nothing and one who has lost some meets it coming down.
+pattern_float_real := Pattern {
 	events    = []PatternEvent {
-		{time_offset = 0.2, lane = .Real, obstacle_type = .Cube, shape = SHAPE_BUMP},
+		{
+			time_offset = 0.35,
+			lane = .Real,
+			obstacle_type = .Cube,
+			floating = true,
+			cube_phase = 0.5,
+		},
+		{time_offset = 1.3, lane = .Dream, obstacle_type = .Cube, shape = SHAPE_TOWER},
 	},
-	fragments = []FragmentEvent {
-		{time_offset = 0.25, lane = .Dream, offset = FRAGMENT_ON_LANE},
-		{time_offset = 0.50, lane = .Dream, offset = FRAGMENT_ON_LANE},
-	},
-	duration  = 0.9,
-	demand    = 0,
+	fragments = []FragmentEvent{{time_offset = 1.72, lane = .Dream, offset = FRAGMENT_ON_LANE}},
+	duration  = 1.94,
+	demand    = 1,
+	min_depth = 20000,
 }
 
-// A run of five along the ceiling. Not a second placement — several of
-// the first — and the reason to have it is that a line of them is a
-// **route** rather than a pickup: it says stay up here for a while, and
-// staying is the thing that will cost something once F2 exists.
-//
-// The staircase on the floor is what makes the stretch worth committing
-// to rather than dipping in and out of.
-pattern_fragment_run := Pattern {
+// One on each wall, out of phase and far enough apart in time that their
+// windows never touch — which they must not, because a floating cube is
+// one column and a mirrored pair has to be at least as wide as the body
+// (MIRROR_MIN_WIDTH). The ceiling closes first and the floor opens after
+// it, so the pattern reads as a gate rather than as a pinch.
+pattern_float_gate := Pattern {
 	events    = []PatternEvent {
-		{time_offset = 0.3, lane = .Real, obstacle_type = .Cube, shape = SHAPE_STAIRS_UP},
+		{time_offset = 0.4, lane = .Dream, obstacle_type = .Cube, floating = true},
+		{
+			time_offset = 1.15,
+			lane = .Real,
+			obstacle_type = .Cube,
+			floating = true,
+			cube_phase = 0.5,
+		},
 	},
-	fragments = []FragmentEvent {
-		{time_offset = 0.45, lane = .Dream, offset = FRAGMENT_ON_LANE},
-		{time_offset = 0.65, lane = .Dream, offset = FRAGMENT_ON_LANE},
-		{time_offset = 0.85, lane = .Dream, offset = FRAGMENT_ON_LANE},
-		{time_offset = 1.05, lane = .Dream, offset = FRAGMENT_ON_LANE},
-		{time_offset = 1.25, lane = .Dream, offset = FRAGMENT_ON_LANE},
-	},
-	duration  = 1.5,
-	demand    = 1,
+	duration  = 1.45,
+	demand    = 2,
+	min_depth = 33000,
 }
 
 // The whole pool, in the order it unlocks. There is one list since C3:
@@ -620,10 +692,8 @@ all_patterns := []Pattern {
 	pattern_ravine_real,
 	pattern_ravine_dream,
 	pattern_gauntlet,
-
-	// F1. Temporary — see the block above the two of them.
-	pattern_fragment_pair,
-	pattern_fragment_run,
+	pattern_float_real,
+	pattern_float_gate,
 }
 
 
@@ -859,19 +929,28 @@ validate_pattern_pool :: proc(pool: []Pattern) {
 		}
 		for fragment in pattern.fragments {
 			report_fragment_faults(fragment, index)
+			for event in pattern.events {
+				report_fragment_burial(index, fragment, index, event, 0)
+			}
 		}
 		report_conflicts(pattern, index, pattern, index, 0)
 	}
 
 	for first, first_index in pool {
 		for second, second_index in pool {
-			report_conflicts(
-				first,
-				first_index,
-				second,
-				second_index,
-				first.duration + smallest_gap,
-			)
+			shift := first.duration + smallest_gap
+			report_conflicts(first, first_index, second, second_index, shift)
+
+			// The fragments of the first against the cubes of the second,
+			// which is the direction that matters: a fragment sits near
+			// the end of its pattern and the next one's first cube arrives
+			// straight after it. The other direction is covered because
+			// this runs over every ordered pair.
+			for fragment in first.fragments {
+				for event in second.events {
+					report_fragment_burial(first_index, fragment, second_index, event, shift)
+				}
+			}
 		}
 	}
 }
@@ -943,15 +1022,6 @@ report_containment_faults :: proc(pattern: Pattern, index: int, event: PatternEv
 // beyond the far wall, and both are a mark the player cannot act on —
 // which is the one failure this project keeps paying for in other forms
 // (a hitbox that does not match what is drawn).
-//
-// **It cannot yet check the one fault that matters most**: a fragment
-// sitting inside a cube. A skyline is drawn from the run's seed at the
-// moment the obstacle is created, so what a column occupies is not known
-// until then, and a static check would have to be written against the
-// declared *bounds* rather than the outcome — the same discipline
-// get_max_width already follows. Worth doing when the placements settle
-// (F3); for now the prototype patterns keep their fragments clear of
-// their own cubes by hand.
 @(private)
 report_fragment_faults :: proc(fragment: FragmentEvent, index: int) {
 	if fragment.offset < 0 || fragment.offset > core.TRACK_SPAN {
@@ -960,6 +1030,108 @@ report_fragment_faults :: proc(fragment: FragmentEvent, index: int) {
 			index,
 			fragment.offset,
 			int(core.TRACK_SPAN),
+		)
+	}
+}
+
+// How far into the corridor a cube event can reach, from the surface of
+// its own lane, on its worst draw.
+//
+// A **bound and never an outcome**, which is the whole discipline that
+// lets a pool be checked at startup against a seed that does not exist
+// yet (skyline.odin). A floating cube's reach is its whole orbit rather
+// than where it happens to be: it is CUBE_FLOAT_LIFT up at the top and
+// resting on the lane at the bottom, so everything from the surface to
+// the lift plus its own height is somewhere it passes through.
+@(private)
+cube_reach :: proc(event: PatternEvent) -> f32 {
+	if event.floating {
+		return f32(CUBE_FLOAT_LIFT + CUBE_UNIT)
+	}
+	return f32(skyline_max_height(event.shape)) * CUBE_UNIT
+}
+
+// The check F1 could not write and F3 owes it: a fragment the player
+// cannot reach because something else is standing where it is.
+//
+// **The rule it enforces is that a fragment is standable-at.** The one
+// authored placement is FRAGMENT_ON_LANE — the playtest threw the
+// mid-corridor one out (fragment.odin) — so a diamond is taken by a body
+// *running along its lane*, and that lane has to exist there and be
+// clear of columns. Two faults follow from the one rule:
+//
+//   over a hole    the surface is simply not there, so nobody is ever
+//                  standing at that x to take it.
+//   inside a cube  the diamond is behind the mark, and a reward that
+//                  cannot be seen is worse than no reward — it is the
+//                  same "the picture and the rules disagree" this
+//                  project has paid for twice already.
+//
+// It reads the cube's **declared bounds** rather than its drawn columns:
+// the widest it may be, the tallest it may reach, and for a floating one
+// the whole orbit it may be anywhere in. So a placement that passes is
+// legal on every seed, which is exactly the property get_max_width has
+// always had and the reason a static check is possible at all.
+//
+// The far lane is checked too, and it is not paranoia: CUBE_MAX_HEIGHT
+// is 12 units, which is 324 px of a 390 px corridor, so a tower on one
+// wall can reach most of the way to the other one. Today's placements
+// clear it by 39 px; a placement further into the corridor would not.
+//
+// Both passes call it — within a pattern and across the seam — because a
+// fragment carries no containment rule of its own. Its window is 200 ms
+// wide and a pattern's last fragment sits near its end, so the thing
+// most likely to bury one is the *next* pattern's first cube.
+@(private)
+report_fragment_burial :: proc(
+	fragment_index: int,
+	fragment: FragmentEvent,
+	cube_index: int,
+	event: PatternEvent,
+	shift: f32,
+) {
+	half := f32(FRAGMENT_SIZE) * 0.5
+
+	// Where the diamond's centre sits relative to the obstacle's left
+	// edge. Both scroll at the same speed, so this separation is the same
+	// at every instant and at every scroll speed — which is why it can be
+	// asked once, statically. The half body is the same shift
+	// get_fragment_center applies: arrival_time means "it is on you".
+	relative :=
+		(fragment.time_offset - (event.time_offset + shift)) * f32(INITIAL_SCROLL_SPEED) +
+		f32(PLAYER_SIZE) * 0.5
+
+	// A floating cube is somewhere in a ±CUBE_FLOAT_DRIFT swing about the
+	// x its pattern authored, so its span is that much wider at both ends.
+	drift: f32 = event.floating ? CUBE_FLOAT_DRIFT : 0
+	span_start := -drift
+	span_end := get_max_width(event.obstacle_type, event.shape) + drift
+
+	if relative + half <= span_start || relative - half >= span_end {
+		return
+	}
+
+	if is_gap(event.obstacle_type) {
+		if event.lane == fragment.lane {
+			fmt.printf(
+				"WARNING: pattern %d puts a fragment at %.2fs over the hole pattern %d opens at %.2fs+%.2f — there is no lane there to take it from\n",
+				fragment_index, fragment.time_offset, cube_index, event.time_offset, shift,
+			)
+		}
+		return
+	}
+
+	// Measured from the cube's own lane, because that is the surface its
+	// columns grow out of. A fragment on the far wall is the corridor
+	// minus its own offset away from that surface.
+	distance :=
+		event.lane == fragment.lane ? fragment.offset : f32(core.TRACK_SPAN) - fragment.offset
+
+	if distance - half < cube_reach(event) {
+		fmt.printf(
+			"WARNING: pattern %d puts a fragment at %.2fs, %.0f px off the %v lane, inside the cube pattern %d may draw at %.2fs+%.2f — it reaches %.0f px into the corridor\n",
+			fragment_index, fragment.time_offset, fragment.offset, fragment.lane,
+			cube_index, event.time_offset, shift, cube_reach(event),
 		)
 	}
 }

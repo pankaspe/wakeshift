@@ -496,8 +496,14 @@ main :: proc() {
 					core.FIXED_TIMESTEP,
 				)
 
-				// the front advances with distance, not with time
-				game.update_corruption(&corruption, world)
+				// the front takes its cut of the ground just covered and
+				// hands back whatever the fragments bought (F2)
+				game.update_corruption(
+					&corruption,
+					world,
+					difficulty,
+					core.FIXED_TIMESTEP,
+				)
 
 				// depth is how far the *character* travelled, so a step
 				// spent pinned against a cube scores nothing
@@ -510,13 +516,18 @@ main :: proc() {
 				// never an ending, so unlike the collision check below it
 				// runs whatever else this step decided — and it reports
 				// *where* each one was, so the frame can burst there.
-				taken := game.collect_fragments(
+				//
+				// Two counts, and they are not interchangeable: the burst
+				// is paid out of what fitted in the array, the ground off
+				// the Corruption out of what was actually taken.
+				reported, taken := game.collect_fragments(
 					&fragments,
 					player,
 					world,
 					pickups[picked_count:],
 				)
-				picked_count += taken
+				picked_count += reported
+				game.repay_corruption(&corruption, taken)
 
 				// out of room: the front caught up. Checked before the
 				// obstacles because it is the ending the whole design is
@@ -746,7 +757,7 @@ main :: proc() {
 				0,
 				pickup_timer,
 			)
-			ui.draw_hud(score, fragments, palettes)
+			ui.draw_hud(score, palettes)
 
 			// C5: the one instruction, over the live run and gone in a few
 			// seconds (ui/screens.odin). Only here, never over a paused or
@@ -766,7 +777,7 @@ main :: proc() {
 					0,
 					pickup_timer,
 				)
-			ui.draw_hud(score, fragments, palettes)
+			ui.draw_hud(score, palettes)
 			ui.draw_pause_overlay(pause_menu, palettes)
 
 		case .GameOver:
@@ -785,7 +796,7 @@ main :: proc() {
 					fall,
 					pickup_timer,
 				)
-			ui.draw_game_over(score, high_score, palettes)
+			ui.draw_game_over(score, fragments, high_score, palettes)
 
 		case .Options:
 			// Opened from the pause menu, the frozen run stays visible behind
