@@ -1,68 +1,37 @@
 # Wake Shift
 
-A one-button reflex arcade game about running through a dream that is going out behind you —
-written in [Odin](https://odin-lang.org/) with [raylib](https://www.raylib.com/), no engine.
+A procedural maze you run through at speed, while the world goes out behind you — written in
+[Odin](https://odin-lang.org/) with [raylib](https://www.raylib.com/), no engine.
 
-![Version](https://img.shields.io/badge/version-0.7.0--alpha-blue)
+![Version](https://img.shields.io/badge/version-0.8.0--alpha-blue)
 ![Language](https://img.shields.io/badge/Odin-dev--2026--07-blue)
 ![Library](https://img.shields.io/badge/raylib-5.5-green)
-![Status](https://img.shields.io/badge/status-in%20development-orange)
+![Status](https://img.shields.io/badge/status-being%20rewritten-red)
 
-You run forward automatically. `SPACE` flips gravity, throwing you between the floor — **the Real
-world** — and the ceiling, **the Dream**. Behind you, from the left, the **Corruption** eats the
-world and keeps coming. The distance between you and it is the only health bar there is, and it is
-drawn at full size in the picture you are already looking at.
-
-The twist is what happens when you get it wrong: **a mistake costs ground, not the run.**
-
----
-
-## What is in it
-
-**The corridor.** A straight floor and a straight ceiling, a fixed distance apart, and all the
-relief between them made of **bricks**: towers, plateaus, staircases, canyons, ridges, and two
-facing towers wherever the world closes in. The corridor used to undulate and pinch on its own —
-one vocabulary for the ground and another for the things standing on it. There is one now.
-
-**The cube** — *do not be here, or you pay.* It does not kill; it **blocks**. You are stopped
-against its face and you lose ground for as long as you stay. Its shape is **data, not code**: a
-run of columns — `{1,2,3}` is a staircase, `{3,0,0,3}` two towers with a canyon between them — and
-the same numbers are what blocks you, what holds you up, and what gets drawn, so a step you can
-see is a step you can stand on. **A pattern does not write those numbers.** It declares a *form*
-and the bounds around it, and the run's own generator draws the columns inside them, so one
-authored moment is a different ridge on every seed. Welded into the floor's own line, read by its
-right angles. Because it is not lethal, it is the only danger allowed on both lanes at once, and a
-mirrored pair is a choice about which price to pay. Land on top of one and you ride it.
-
-**The hole** — *do not be here.* The line simply stops: the only discontinuity in the game. The
-lane turns out of the corridor at the lip and the stroke ends — down off the floor, up off the
-ceiling, the same mark mirrored. It takes you when there is nothing under your centre, and you see
-yourself go in.
-
-**The Corruption.** A front advancing from the left, faster the deeper you go. It is not a timer —
-it stops short of a clean runner — it is how expensive your mistakes have become. The world's line
-frays into dust as it arrives.
-
-**The pen.** Near the right edge, the world is being *written*: one x beyond which nothing is
-drawn, so obstacles do not appear, the line reaches them. Two mirrored fronts, one making and one
-unmaking.
-
-**The curve.** Difficulty is one continuous function of **distance travelled** — not a clock, and
-not a set of tiers. Two knobs move on deliberately different curves: the air between patterns is
-spent early, and the draw's lean toward the patterns that ask more bites late. On top of both,
-every pattern declares the distance it becomes available at, so a long run keeps meeting shapes it
-has not met before. Scroll speed is not part of it: it never worked as a difficulty knob and the
-code says so now.
+> **Being rewritten.** Wake Shift spent its first months as a one-button gravity-flip runner. It
+> was pretty and it did not hook anyone, for a reason that turned out to be measurable: the player
+> was asked the same single question — *which lane is free* — from the first metre to the last, and
+> the level generator drew from thirty hand-written patterns, so within minutes there was nothing
+> left to see. On 6 September 2026 the gameplay was replaced with a maze. The renderer, the
+> Corruption and the whole engineering spine carried over; the old game is preserved in the git
+> history and its notes in `docs/archive/`.
 
 ---
 
-## Controls
+## What it is
 
-| | |
-|---|---|
-| `SPACE` | flip between floor and ceiling — the only gameplay key there is, and there will never be a second |
-| `ESC` | pause |
-| `F11` | fullscreen |
+The corridor between a floor and a ceiling is an **endless procedural maze** that scrolls past you.
+The two lanes are no longer places to stand: they are the maze's boundary.
+
+You move with **WASD / arrows**, and you **slide until a wall stops you** — every input is a
+commitment with an outcome you can see before you make it, never a steering correction.
+
+Behind you, from the left, the **Corruption** eats the world and keeps coming. The distance between
+you and it is the only health bar there is, drawn at full size in the picture you are already
+looking at. **Fragments** picked up along the way slow it down.
+
+A meter charges as you run. Full, the world turns **Dream** for a while — faster, richer, more
+dangerous — and then falls back to Real.
 
 ---
 
@@ -73,29 +42,13 @@ Cavandoli](https://en.wikipedia.org/wiki/La_Linea_(TV_series)) — a man who wal
 continuous line that *is* his world, drawn ahead of him and rubbed out behind. That is not a
 reference bolted on: it is this game's premise, told by somebody else fifty years earlier.
 
-So almost everything on screen is a stroke, and exactly two things are filled: the field, and you.
-The field's colour *is* which world you are in, and it lags behind you by half a second so a burst
-of flips washes instead of strobing.
+Everything on screen is one stroke — a neon polyline with a bright core and an additive halo — on a
+filled, vignetted field, with a real frame-wide bloom pass over the finished frame. Exactly two
+things are filled: the field, and you. The world is **written** by a pen near the right edge and
+**unwritten** by the Corruption on the left, and both of those are a clip rather than an animation.
 
-**You are a small filled square in the colour of the lane you are standing on** — teal below,
-violet above — with no outline at all, so it reads as a piece of the lane rather than as something
-standing in front of it. It was a robed figure under a pointed hood, and a stick figure before
-that; both went the same way, because a shape this size drawn with a 4 px pen cannot hold detail
-and every feature that does not read is noise. All the character is in the movement now: it
-stretches as it launches and lands with a bounce, it pulses on a beat below and floats slowly
-above.
-
-One rule keeps the rest readable now that everything else is line:
-
-> **The world curves, the danger corners.**
-
-The corridor's relief has right angles and means it; the horizons bend. Among the strokes, a right
-angle means *this costs you*. The player is a square too — and that is exactly why the player is
-the one filled thing in the corridor, because fill is what says which square is you.
-
-Everything is drawn from primitives — one neon polyline with a bright core and an additive halo,
-a palette, and a real frame-wide bloom pass. **There are no art assets in this repository and
-there will not be any.**
+Apart from one open-licence font (`assets/fonts/`), there are no art assets and there will not be
+any.
 
 ---
 
@@ -121,26 +74,19 @@ odin run src                          # play
 ## Under the hood
 
 **The simulation is deterministic, and that is a product feature rather than tidiness.** Seeded
-generation, input recorded as data, and a fixed 60 Hz timestep mean a run is reproducible from its
-seed and its input log alone. Every personal best is stored with the manifest that reproduces it,
-which is what makes server-side leaderboard validation, replays and ghosts possible later without
-changing anything.
+generation, input recorded as data and a fixed 60 Hz timestep mean a run is reproducible from its
+seed and its input log alone — which is what makes server-side leaderboard validation, replays and
+ghosts possible later without changing anything. *(The input log is being extended for the new
+control scheme.)*
 
 **Saves are sealed, and this README will not oversell it.** The payload is CBOR sealed with
 ChaCha20-Poly1305, and a file that fails to authenticate is rejected and reset rather than trusted.
 But the key ships inside the binary, so it is a deterrent against editing a save in a text editor —
 not security. The real defence is replaying the manifest on a server.
 
-**Obstacles are events in time, never pixel positions.** Their place on screen is derived every
-frame from the world's clock and its speed, so scroll speed can change without a single authored
-pattern moving. Difficulty is measured in distance, so buying speed will buy score and difficulty
-together.
-
-**The pattern pool is checked by arithmetic, not by care.** At startup every pattern and every
-ordered pair of patterns is walked: no two lethal windows may face each other across the corridor,
-a facing pair must be within its width bounds *on every seed it can draw*, two cubes on one lane
-may not overlap in x, and every pattern must contain its own windows — which is what makes any two
-patterns safe to string together at any spacing.
+**The generator has one invariant**, and it replaces a whole machine of hand-checked pattern
+fairness rules: from wherever the player is, a path onward exists. Being stuck is always a
+consequence of the route they chose, never of a maze that had no answer.
 
 ---
 
@@ -154,12 +100,10 @@ There is no roadmap. The next step is decided one at a time.
 
 ## Credits
 
-Built by [@pankaspe](https://github.com/pankaspe) as an exercise in learning Odin, with
-development assistance from Claude.
+Built by [@pankaspe](https://github.com/pankaspe) as an exercise in learning Odin, with development
+assistance from Claude.
 
-Gravity-flip is a well-worn subgenre (G-Switch, Gravity Guy and many others). The mechanic is not
-what makes this one different; the Corruption at your back, and the fact that a mistake takes
-ground instead of ending the run, are expected to do that work.
+Megrim by Daniel Johnson, under the SIL Open Font License 1.1 (`assets/fonts/OFL.txt`).
 
 *La Linea* and its character are the property of their rights holders. Nothing here copies them:
 the debt is to the idea of a world made of one line, and the figure on screen is our own.
