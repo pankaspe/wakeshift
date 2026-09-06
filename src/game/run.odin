@@ -32,6 +32,7 @@ reset_run :: proc(
 	world: ^World,
 	score: ^Score,
 	obstacles: ^[dynamic]Obstacle,
+	fragments: ^Fragments,
 	generator: ^PatternGenerator,
 	corruption: ^Corruption,
 	seed: u64,
@@ -43,5 +44,11 @@ reset_run :: proc(
 
 	delete(obstacles^)
 	obstacles^ = nil
+
+	// Both the list and the count, because the count is the run's and not
+	// the player's: it is what F2 will spend against the Corruption.
+	delete(fragments.live)
+	fragments^ = Fragments{}
+
 	generator^ = new_pattern_generator(all_patterns, 2.0, seed)
 }

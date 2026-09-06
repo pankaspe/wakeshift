@@ -128,23 +128,61 @@ draw_cut_shape :: proc(top, bottom: []rl.Vector2, eaten, written: bool, stroke: 
 	}
 
 	path := make([dynamic]rl.Vector2, 0, len(top) + len(bottom), context.temp_allocator)
+
+	// Appends unless it would repeat the point already there.
+	//
+	// The two chains are allowed to **share their endpoints**. A box's top
+	// and bottom edges are separate lines and never do, which is why this
+	// went unnoticed for as long as the floating cube was the only caller;
+	// F1 briefly drew the fragment as a diamond outline, whose chains meet
+	// at its left and right vertices, and joining those puts one point in
+	// the path twice. A zero-length segment has no direction and this
+	// stroke mitres its joins off the segment normals, so a duplicate is
+	// not a wasted vertex — it is a NaN in the ribbon and a mark that
+	// silently does not appear.
+	//
+	// **Nothing exercises it today**: the fragment became a filled shape at
+	// the next playtest and no current caller shares an endpoint. The guard
+	// stays because the failure is silent and the fix is eight lines, which
+	// is the trade this project has already lost twice (see the winding
+	// rule in stroke.odin).
+	step :: proc(path: ^[dynamic]rl.Vector2, point: rl.Vector2) {
+		if len(path) > 0 {
+			last := path[len(path) - 1]
+			if abs(last.x - point.x) < 0.01 && abs(last.y - point.y) < 0.01 {
+				return
+			}
+		}
+		append(path, point)
+	}
+
 	if written {
 		#reverse for point in top {
-			append(&path, point)
+			step(&path, point)
 		}
 		for point in bottom {
-			append(&path, point)
+			step(&path, point)
 		}
 	} else {
 		for point in top {
-			append(&path, point)
+			step(&path, point)
 		}
 		#reverse for point in bottom {
-			append(&path, point)
+			step(&path, point)
 		}
 	}
 
 	mark.closed = !eaten && !written
+
+	// A closed path joins its last point back to its first, so a repeat
+	// across that seam is the same degenerate segment as any other.
+	if mark.closed && len(path) > 1 {
+		first, last := path[0], path[len(path) - 1]
+		if abs(last.x - first.x) < 0.01 && abs(last.y - first.y) < 0.01 {
+			pop(&path)
+		}
+	}
+
 	draw_stroke(path[:], mark)
 }
 

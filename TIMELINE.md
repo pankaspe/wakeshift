@@ -199,6 +199,11 @@ nucleo, non solo la tinta: senza, stava 22 valori su 255 sotto la linea; con, 4.
 tocca `PLAYER_SIZE`, non il disegno — un corpo disegnato più piccolo della sua scatola mostrerebbe
 un cubo che blocca senza toccare. Densità in calo di circa tre punti per banda, picco al 66,5%.
 
+**C5 — Il prompt del tasto** → Un testo solo, `PRESS SPACE TO SHIFT`, in dissolvenza al centro
+del corridoio all'inizio di ogni run. Non è un tutorial e non è una pausa: il gioco gira sotto e
+il primo ostacolo sta già arrivando. Sfuma via al primo flip del giocatore, o dopo tre secondi se
+non preme. Stato di presentazione in `main`, sul clock del frame, mai dentro uno step.
+
 ---
 
 ## Dove sta il gioco adesso
@@ -214,19 +219,63 @@ Su 200 run che non toccano mai il tasto la morte mediana è a **3,4 s** — cont
 della v1.3. Un bot avido che guarda una mossa avanti arriva a 23 700 px (depth 2375) e muore sempre
 per Corruzione, mai in un buco; in cima alla curva, 40 su 40 sopravvivono un minuto ai soli buchi.
 
-Manca il **feedback** — niente dice al giocatore che è salito di un gradino — e manca l'ingresso.
+Il tasto ora si insegna (C5). Manca il **feedback**: niente dice al giocatore che è salito di un
+gradino.
 
 ---
 
-## In corso — il feedback e l'ingresso
+## 6 settembre 2026 — fase F, la ragione per flippare
 
-Il mondo è costruito e la curva c'è (C1, C2, C3). Quello che resta non è meccanica: è dire al
-giocatore cosa sta succedendo, e insegnargli il tasto.
+Un playtest ha detto che il gioco scorre ma non aggancia: si schiva e basta, non c'è una vera
+scelta e non c'è un motivo per andare nell'Onirico. Le misure lo confermavano già — un bot che
+guarda una mossa avanti arriva a 23 700 px e muore **60 volte su 60 per Corruzione, mai in un
+buco**, e in cima alla curva 40 bot su 40 sopravvivono un minuto ai soli ostacoli. La Corruzione
+decide già ogni partita ed è l'unica cosa passiva del gioco.
+
+**F1 — Il frammento** → Un rombo vuoto, sospeso, il primo **premio** del gioco. Non è un terzo
+ostacolo e non sta in `ObstacleType`: la regola dei "due elementi" parla di pericoli, e un
+frammento non blocca, non uccide e non si risponde. Lista propria, stream proprio sul `Pattern`,
+stesso orologio degli eventi. Alla presa esplode in particelle. Per ora conta e basta: l'economia
+è F2.
+
+**Una rappresentazione, tre collocazioni** → Corsia più scostamento dentro il corridoio. A metà
+corpo è "lo prendi correndo lì"; a metà corridoio nessun corpo fermo ci arriva — **misurato a
+145 px fuori portata da entrambe le corsie** — quindi si prende solo a mezzo flip, e la finestra
+è di **233 ms**, che è `(24 + 38) / 270`: la tolleranza è la dimensione del rombo diviso la
+velocità. È la prima volta che i 0,167 s che il flip passa nel corridoio contengono qualcosa.
+
+**Il playtest sceglie il soffitto** → Via la collocazione a mezz'aria: era quella intelligente, ma
+a mano risultava pignola invece che abile. Resta il rombo sulla corsia Onirica, che è poi la forma
+che serve a F2. Rimpicciolito da 24 a 16 px e **riempito**: sotto i 20 px un contorno è quasi tutto
+pennino, quindi "più piccolo" e "pieno" sono la stessa richiesta. Alone primitivo giù da 0,42 a
+0,15 — a riempirlo ci pensa il bloom, che è la risposta che CLAUDE.md dà già ogni volta.
+
+**Il blocco risponde** → Alla presa il quadrato fa un pop **uniforme** su entrambi gli assi, 0,20 s
+di sola discesa. Tutto il resto che il blocco fa è anticorrelato — battito, atterraggio, flip
+schiacciano un asse mentre allungano l'altro — quindi crescere su tutti e due è l'unico movimento
+che gli altri non sanno produrre, e si legge come un evento diverso invece che come un atterraggio
+più forte. Moltiplica la scala esistente, non la sostituisce.
+
+**Terza eccezione al pieno, consapevole** → Le cose piene erano due, il campo e il personaggio, e
+il pieno è ciò che dice "questo sei tu". Il discriminante si sposta da *pieno* a **quadrato
+pieno**: il rombo è ruotato, è meno di metà del corpo, ed è l'unico che usa il colore `accent`.
+
+---
+
+## In corso — la fase F
+
+Due pattern (`pattern_fragment_pair`, `_run`) esistono **per essere buttati**: F3 sparge i
+frammenti sul pool vero. Misurato: sulla corsia la finestra di raccolta è **200 ms** esatti,
+`(16+38)/270`, ed è l'unica manopola che ha. E un rombo messo dove il giocatore già si trova è
+**gratis** — una run che non tocca mai il tasto lo raccoglie — quindi collocarli è tutto il lavoro
+che resta da fare per dargli un senso.
 
 | | Task | Modello |
 |---|---|---|
-| **C4** | **Il feedback dello scalino** → Ogni tot distanza un burst particellare dice "sei salito di un gradino", senza scriverlo. Da far percepire, non da spiegare. `fx/particles.odin` c'è già: il pool è fisso, ha un generatore di casualità proprio che **non è quello della run** — e non deve diventarlo, o due replay della stessa run divergerebbero. Emesso dal clock del frame, mai dentro uno step. | Sonnet |
-| **C5** | **L'intro e il tutorial** → I primi secondi: un testo in fadeIn insegna `SPACE`, poi il gioco entra. **Rischio noto**: l'aria morta è esattamente ciò che ha chiuso la v1.3, e dieci secondi in cui non succede niente sono lunghissimi alla seconda run. Tenere l'intro corta e far arrivare il primo ostacolo presto. | Sonnet |
-
-**Decisioni ancora aperte (C5)**: quanto dura l'intro, e se si ripete a ogni run o solo alla prima.
+| **F2** | **L'economia** → La Corruzione guadagna sempre, con un ritmo che cresce con la curva; i frammenti la ricacciano indietro. Qui il gioco cambia natura. Va **dopo** F1 e non prima: un fronte che avanza senza niente da spendergli contro è un conto alla rovescia, che è l'obiezione che `corruption.odin` fa già agli inseguitori. Si accetta consapevolmente che `front_x` smetta di essere una funzione pura della distanza e che "chi non sbaglia non è mai in pericolo" decada. | Opus |
+| **F3** | **Il pool si riempie** → I frammenti nella collocazione vincente su tutto il pool, i tre prototipi via, più piattaforme fluttuanti. Qui serve anche il controllo che oggi manca: un rombo dentro un cubo, da scrivere contro i **limiti** dichiarati della skyline e non contro l'esito, come fa già `get_max_width`. | Sonnet |
+| **F4** | **Onirico = veloce** → Il mondo accelera quando sei sul soffitto: il giocatore fa il tempo del gioco con un tasto. Richiede di ridefinire la banda di velocità e **rivalidare il pool**, che è controllato alla velocità più lenta di una run. | Opus |
+| **F5** | **Le due lane** → Reale pulito e ad alto contrasto, Onirico ricco e più difficile da leggere, così la differenza visiva *è* la differenza di difficoltà. Modifica la regola "il campo cambia colore col mondo, il tratto mai". | Sonnet |
+| **F6** | **Far fallire il bot avido** → Pattern dove la mossa localmente giusta frega due secondi dopo. Bersaglio misurabile col bot che esiste già. | Sonnet |
+| **C4** | **Il feedback dello scalino** → **Accantonato dall'autore il 6 settembre**, da rivalutare. Il burst particellare che serviva è nato comunque, come feedback della presa di un frammento. | Sonnet |
 

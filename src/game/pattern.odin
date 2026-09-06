@@ -108,9 +108,18 @@ PatternEvent :: struct {
 }
 
 Pattern :: struct {
-	events:   []PatternEvent,
+	events:    []PatternEvent,
 
-	duration: f32, // total length of the pattern, in seconds
+	// The rewards, kept in their own stream rather than mixed into the
+	// events (fragment.odin). A fragment is not a danger, so none of the
+	// machinery below has anything to say about one: it cannot make a
+	// lane lethal, cannot face another across the corridor, and cannot
+	// overlap a cube on its own lane in a way the renderer would drop.
+	// Nil for most of the pool, which is what leaves the existing 28
+	// patterns untouched.
+	fragments: []FragmentEvent,
+
+	duration:  f32, // total length of the pattern, in seconds
 
 	// How much this pattern asks of the player, 0..DEMAND_LEVELS-1. Not a
 	// difficulty score for its own sake: it is what the curve leans on to
@@ -121,7 +130,7 @@ Pattern :: struct {
 	//   1  two decisions, or one that has to be read rather than reflexed
 	//   2  three decisions, or two that arrive close together
 	//   3  a burst: no time to settle between answers
-	demand:   int,
+	demand:    int,
 
 	// Pixels of world scrolled before this pattern can be drawn at all.
 	//
@@ -532,6 +541,53 @@ pattern_float_pair := Pattern {
 	min_depth = 27000,
 }
 
+// --- F1: the fragments, on the ceiling ---
+//
+// The playtest picked the on-lane placement on the **Dream** side and
+// threw out the corridor one (fragment.odin has the argument). These two
+// are what is left of the three prototypes, and they are still temporary:
+// F3 spreads fragments across the real pool and deletes them.
+//
+// Their cubes stand on the floor, opposite the diamonds, so nothing here
+// can be a fragment buried inside a skyline — the one fault
+// report_fragment_faults cannot see yet.
+
+// The primitive: two diamonds on the ceiling, and a bump on the floor to
+// make going up worth something.
+pattern_fragment_pair := Pattern {
+	events    = []PatternEvent {
+		{time_offset = 0.2, lane = .Real, obstacle_type = .Cube, shape = SHAPE_BUMP},
+	},
+	fragments = []FragmentEvent {
+		{time_offset = 0.25, lane = .Dream, offset = FRAGMENT_ON_LANE},
+		{time_offset = 0.50, lane = .Dream, offset = FRAGMENT_ON_LANE},
+	},
+	duration  = 0.9,
+	demand    = 0,
+}
+
+// A run of five along the ceiling. Not a second placement — several of
+// the first — and the reason to have it is that a line of them is a
+// **route** rather than a pickup: it says stay up here for a while, and
+// staying is the thing that will cost something once F2 exists.
+//
+// The staircase on the floor is what makes the stretch worth committing
+// to rather than dipping in and out of.
+pattern_fragment_run := Pattern {
+	events    = []PatternEvent {
+		{time_offset = 0.3, lane = .Real, obstacle_type = .Cube, shape = SHAPE_STAIRS_UP},
+	},
+	fragments = []FragmentEvent {
+		{time_offset = 0.45, lane = .Dream, offset = FRAGMENT_ON_LANE},
+		{time_offset = 0.65, lane = .Dream, offset = FRAGMENT_ON_LANE},
+		{time_offset = 0.85, lane = .Dream, offset = FRAGMENT_ON_LANE},
+		{time_offset = 1.05, lane = .Dream, offset = FRAGMENT_ON_LANE},
+		{time_offset = 1.25, lane = .Dream, offset = FRAGMENT_ON_LANE},
+	},
+	duration  = 1.5,
+	demand    = 1,
+}
+
 // The whole pool, in the order it unlocks. There is one list since C3:
 // what a run has available is Pattern.min_depth against the distance it
 // has covered, not membership of a tier (difficulty.odin).
@@ -564,6 +620,10 @@ all_patterns := []Pattern {
 	pattern_ravine_real,
 	pattern_ravine_dream,
 	pattern_gauntlet,
+
+	// F1. Temporary — see the block above the two of them.
+	pattern_fragment_pair,
+	pattern_fragment_run,
 }
 
 
@@ -678,6 +738,7 @@ generator_rng :: proc(generator: ^PatternGenerator) -> rand.Generator {
 generate_ahead :: proc(
 	generator: ^PatternGenerator,
 	obstacles: ^[dynamic]Obstacle,
+	fragments: ^Fragments,
 	current_time: f32,
 ) {
 	rng := generator_rng(generator)
@@ -697,6 +758,20 @@ generate_ahead :: proc(
 					event.cube_phase,
 					rng,
 				),
+			)
+		}
+
+		// The rewards, on the same clock as the dangers and drawn from no
+		// randomness at all: a fragment is a placement the author chose,
+		// and there is nothing about it for a seed to decide (fragment.odin).
+		for event in pattern.fragments {
+			append(
+				&fragments.live,
+				Fragment {
+					arrival_time = generator.generated_until + event.time_offset,
+					lane = event.lane,
+					offset = event.offset,
+				},
 			)
 		}
 
@@ -782,6 +857,9 @@ validate_pattern_pool :: proc(pool: []Pattern) {
 			report_containment_faults(pattern, index, event)
 			report_skyline_faults(event, index)
 		}
+		for fragment in pattern.fragments {
+			report_fragment_faults(fragment, index)
+		}
 		report_conflicts(pattern, index, pattern, index, 0)
 	}
 
@@ -857,6 +935,35 @@ report_containment_faults :: proc(pattern: Pattern, index: int, event: PatternEv
 // The corridor is TRACK_SPAN tall and no longer moves, so anything over
 // CUBE_MAX_HEIGHT reaches the other lane — always, rather than at some
 // legal span.
+// A fragment has to be somewhere a body can be.
+//
+// The offset is measured into the corridor from its own lane's surface,
+// so zero is the surface itself and TRACK_SPAN is the opposite lane.
+// Outside that band the diamond is either buried in the terrain or
+// beyond the far wall, and both are a mark the player cannot act on —
+// which is the one failure this project keeps paying for in other forms
+// (a hitbox that does not match what is drawn).
+//
+// **It cannot yet check the one fault that matters most**: a fragment
+// sitting inside a cube. A skyline is drawn from the run's seed at the
+// moment the obstacle is created, so what a column occupies is not known
+// until then, and a static check would have to be written against the
+// declared *bounds* rather than the outcome — the same discipline
+// get_max_width already follows. Worth doing when the placements settle
+// (F3); for now the prototype patterns keep their fragments clear of
+// their own cubes by hand.
+@(private)
+report_fragment_faults :: proc(fragment: FragmentEvent, index: int) {
+	if fragment.offset < 0 || fragment.offset > core.TRACK_SPAN {
+		fmt.printf(
+			"WARNING: pattern %d has a fragment %.0f px off its lane, outside the corridor (0..%d)\n",
+			index,
+			fragment.offset,
+			int(core.TRACK_SPAN),
+		)
+	}
+}
+
 @(private)
 report_skyline_faults :: proc(event: PatternEvent, index: int) {
 	shape := event.shape

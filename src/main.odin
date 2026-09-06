@@ -54,11 +54,13 @@ CORRUPTION_FILTER_ENABLED :: false
 draw_gameplay :: proc(
 	world: game.World,
 	obstacles: []game.Obstacle,
+	fragments: []game.Fragment,
 	player: game.Player,
 	corruption: game.Corruption,
 	palettes: core.PaletteSet,
 	particles: fx.Particles,
 	falling: f32 = 0,
+	pickup: f32 = -1,
 ) {
 	// The world exists between the two fronts: written by the pen on the
 	// right, eaten by the Corruption on the left. Both are a clip, and
@@ -70,11 +72,18 @@ draw_gameplay :: proc(
 		render.draw_obstacle(obstacle, world, palettes, front)
 	}
 
+	// After the dangers and before the character: a fragment is suspended
+	// in the corridor, so it belongs in front of the world it hangs in and
+	// behind the body that takes it.
+	for fragment in fragments {
+		render.draw_fragment(fragment, world, palettes, front)
+	}
+
 	// The dust the world's line throws off as it reaches the front. Drawn
 	// with the world because it *is* the world, a moment later.
 	fx.draw_particles(particles)
 
-	render.draw_player(player, world, obstacles, palettes, falling)
+	render.draw_player(player, world, obstacles, palettes, falling, pickup)
 
 	// Last, over everything: the front is in front of the world it is
 	// eating. This is the edge; the fraying is the dust above.
@@ -239,6 +248,10 @@ main :: proc() {
 	// obstacle list, filled in continuously by the pattern generator (section 9-10)
 	obstacles: [dynamic]game.Obstacle
 
+	// the rewards, on the same clock and from the same patterns, in their
+	// own list because a fragment is not a danger (game/fragment.odin)
+	fragments: game.Fragments
+
 	// seed for the current run: decides every random choice the level
 	// generator makes. Drawn fresh here, at the composition root, because
 	// it is an input to the run — a replay would set it from a recorded
@@ -288,6 +301,23 @@ main :: proc() {
 	// this: nothing to fall through.
 	fell_through: bool
 	fall_started: f32
+
+	// C5 — the one-time SPACE prompt. It fades in at the start of every
+	// run, centred in the corridor, and fades out the instant the player
+	// first flips, or after a few seconds if they never do (ui/screens.odin).
+	// Presentation only: advanced from the frame clock, reset by hand at the
+	// two run-start sites below, and no simulation step ever reads it — the
+	// game is already running underneath it, which is the whole point.
+	// intro_dismissed_at stays negative until the first flip.
+	intro_timer: f32 = 0
+	intro_dismissed_at: f32 = -1
+
+	// Seconds since the last fragment was taken, for the block's pop
+	// (render/player.odin). Presentation like the two above: advanced from
+	// the frame clock, reset by hand at the two run-start sites, and never
+	// read by a step. It starts past the animation's own length so that a
+	// run does not open mid-pop.
+	pickup_timer: f32 = 999
 
 	// Simulation input waiting for a step to consume it. Needed because a
 	// frame and a step are no longer the same thing: a frame that runs no
@@ -344,6 +374,16 @@ main :: proc() {
 			platform.save_settings(settings)
 		}
 
+		// Fragments taken during this frame's steps, and where they were.
+		// A frame may run several steps and each may collect, so it
+		// accumulates across them and is spent once by the draw below.
+		//
+		// Frame-scoped on purpose: it is the hand-off from simulation to
+		// presentation, so it must not outlive the frame that filled it. A
+		// value that survives would be a burst played twice.
+		pickups: [game.FRAGMENT_MAX_PER_STEP]game.FragmentPickup
+		picked_count := 0
+
 		// ============================================================
 		// UPDATE — one switch, reads input and advances game logic.
 		// Runs once per frame, BEFORE anything is drawn.
@@ -355,9 +395,21 @@ main :: proc() {
 				switch main_menu.selected {
 				case 0:
 					run_seed = rand.uint64()
-					game.reset_run(&player, &world, &score, &obstacles, &generator, &corruption, run_seed)
+					game.reset_run(
+						&player,
+						&world,
+						&score,
+						&obstacles,
+						&fragments,
+						&generator,
+						&corruption,
+						run_seed,
+					)
 					fx.clear_particles(&particles)
 					fell_through = false
+					intro_timer = 0
+					intro_dismissed_at = -1
+					pickup_timer = 999
 					accumulator = 0
 					pending_input = core.Input{}
 					core.destroy_run_recorder(&recorder)
@@ -379,6 +431,19 @@ main :: proc() {
 				pause_menu.selected = 0
 				game_state = .Paused
 			}
+
+			// C5: the intro prompt lives on the frame clock, not on a step,
+			// so it is advanced here and frozen whenever a step does not run
+			// (paused, game over). input.flip is set only on the frame of the
+			// press, so latch the dismiss time once and leave it.
+			intro_timer += frame_time
+			if input.flip && intro_dismissed_at < 0 {
+				intro_dismissed_at = intro_timer
+			}
+
+			// The block's pop runs on the same clock, and is restarted below
+			// by whatever the steps collected.
+			pickup_timer += frame_time
 
 			// Hold this frame's flip until a step takes it (see pending_input).
 			pending_input.flip = pending_input.flip || input.flip
@@ -439,7 +504,19 @@ main :: proc() {
 				game.update_score(&score, world, player, core.FIXED_TIMESTEP)
 
 				// keep generating obstacles ahead of the player
-				game.generate_ahead(&generator, &obstacles, world.elapsed_time)
+				game.generate_ahead(&generator, &obstacles, &fragments, world.elapsed_time)
+
+				// take whatever the body is touching. It is a reward and
+				// never an ending, so unlike the collision check below it
+				// runs whatever else this step decided — and it reports
+				// *where* each one was, so the frame can burst there.
+				taken := game.collect_fragments(
+					&fragments,
+					player,
+					world,
+					pickups[picked_count:],
+				)
+				picked_count += taken
 
 				// out of room: the front caught up. Checked before the
 				// obstacles because it is the ending the whole design is
@@ -481,6 +558,7 @@ main :: proc() {
 				// drop obstacles that are off-screen,
 				// so the list stays short instead of growing all run
 				game.remove_finished_obstacles(&obstacles, world)
+				game.remove_finished_fragments(&fragments, world)
 
 				// The run ended inside this step: stop simulating, whatever
 				// time is left in the accumulator belongs to the next run.
@@ -489,6 +567,14 @@ main :: proc() {
 					pending_input = core.Input{}
 					break
 				}
+			}
+
+			// Restarted once per frame rather than once per collection: two
+			// fragments taken in the same frame are one pop, because two
+			// pops a sixtieth of a second apart is a flicker, not an
+			// acknowledgement.
+			if picked_count > 0 {
+				pickup_timer = 0
 			}
 
 		case .Paused:
@@ -537,9 +623,21 @@ main :: proc() {
 		case .GameOver:
 			if input.confirm {
 				run_seed = rand.uint64()
-				game.reset_run(&player, &world, &score, &obstacles, &generator, &corruption, run_seed)
+				game.reset_run(
+						&player,
+						&world,
+						&score,
+						&obstacles,
+						&fragments,
+						&generator,
+						&corruption,
+						run_seed,
+					)
 				fx.clear_particles(&particles)
 				fell_through = false
+				intro_timer = 0
+				intro_dismissed_at = -1
+				pickup_timer = 999
 				accumulator = 0
 				pending_input = core.Input{}
 				core.destroy_run_recorder(&recorder)
@@ -604,6 +702,21 @@ main :: proc() {
 		// would be the only thing on screen that had not stopped.
 		if game_state == .Playing {
 			render.emit_fray(&particles, world, corruption, player, palettes, frame_time)
+
+			// The one thing that says a fragment counted. Emitted here
+			// rather than where it was collected, because a burst is
+			// presentation and the step that took it may not know that
+			// particles exist — the simulation handed over a position and a
+			// lane, and this is what becomes of them.
+			for index in 0 ..< picked_count {
+				render.burst_fragment(
+					&particles,
+					pickups[index].at,
+					pickups[index].lane,
+					palettes,
+				)
+			}
+
 			fx.update_particles(&particles, frame_time)
 		}
 
@@ -625,17 +738,35 @@ main :: proc() {
 			draw_gameplay(
 				interpolated_world(world, accumulator),
 				obstacles[:],
+				fragments.live[:],
 				interpolated_player(player, accumulator),
 				corruption,
 				palettes,
 				particles,
+				0,
+				pickup_timer,
 			)
-			ui.draw_hud(score, palettes)
+			ui.draw_hud(score, fragments, palettes)
+
+			// C5: the one instruction, over the live run and gone in a few
+			// seconds (ui/screens.odin). Only here, never over a paused or
+			// finished frame.
+			ui.draw_intro_prompt(intro_timer, intro_dismissed_at, palettes)
 
 		case .Paused:
 			// draw the frozen gameplay frame underneath, then the overlay on top
-			draw_gameplay(world, obstacles[:], player, corruption, palettes, particles)
-			ui.draw_hud(score, palettes)
+			draw_gameplay(
+					world,
+					obstacles[:],
+					fragments.live[:],
+					player,
+					corruption,
+					palettes,
+					particles,
+					0,
+					pickup_timer,
+				)
+			ui.draw_hud(score, fragments, palettes)
 			ui.draw_pause_overlay(pause_menu, palettes)
 
 		case .GameOver:
@@ -643,7 +774,17 @@ main :: proc() {
 			if fell_through {
 				fall = (display_time - fall_started) / render.PLAYER_DEATH_FALL_TIME
 			}
-			draw_gameplay(world, obstacles[:], player, corruption, palettes, particles, fall)
+			draw_gameplay(
+					world,
+					obstacles[:],
+					fragments.live[:],
+					player,
+					corruption,
+					palettes,
+					particles,
+					fall,
+					pickup_timer,
+				)
 			ui.draw_game_over(score, high_score, palettes)
 
 		case .Options:
@@ -651,7 +792,17 @@ main :: proc() {
 			// it — the same overlay relationship the pause screen has, so
 			// changing a setting mid-run does not look like leaving it.
 			if options_return == .Paused {
-				draw_gameplay(world, obstacles[:], player, corruption, palettes, particles)
+				draw_gameplay(
+					world,
+					obstacles[:],
+					fragments.live[:],
+					player,
+					corruption,
+					palettes,
+					particles,
+					0,
+					pickup_timer,
+				)
 			}
 			ui.draw_options_screen(options_screen, palettes)
 		}

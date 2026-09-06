@@ -50,9 +50,61 @@ draw_main_menu :: proc(menu: Menu, high_score: f32, palettes: core.PaletteSet) {
 // health bar, and how deep you are is the one number a player has any
 // attention left to read. A tier name told them something they could
 // already feel.
-draw_hud :: proc(score: game.Score, palettes: core.PaletteSet) {
+// The fragment count is here **only for F1**, and it is the readout of a
+// prototype rather than a HUD element the design asked for. What a
+// fragment is worth is meant to be said by the Corruption's front moving
+// backwards, which is a thing the player is already looking at; a number
+// in a corner is the stand-in until F2 makes that true. Delete it then.
+draw_hud :: proc(score: game.Score, fragments: game.Fragments, palettes: core.PaletteSet) {
 	score_text := fmt.ctprintf("Depth: %.0f", score.value)
 	rl.DrawText(score_text, 20, 20, 24, core.with_alpha(palettes.current.light, TEXT_PRIMARY))
+
+	fragment_text := fmt.ctprintf("Fragments: %d", fragments.collected)
+	rl.DrawText(
+		fragment_text,
+		20,
+		50,
+		20,
+		core.with_alpha(palettes.current.accent, TEXT_SECONDARY),
+	)
+}
+
+// C5 — the one instruction the game ever gives: how to change lane.
+// Centred in the corridor, drawn only while actually playing, and gone
+// within a few seconds. It fades in at the start of every run and fades
+// out again the instant the player first flips (dismissed_at >= 0), or
+// after INTRO_PROMPT_HOLD if they never do.
+//
+// It is not a tutorial and it is not a pause. The run is live underneath
+// it and the first obstacle is already on its way — a screen where
+// nothing happens while the player reads is exactly what killed v1.3, so
+// the text sits on top of a running game and never in front of it. Keep
+// it short for the same reason (pillar 2).
+INTRO_PROMPT_Y :: 342
+INTRO_PROMPT_SIZE :: 30
+INTRO_PROMPT_FADE :: 0.5
+INTRO_PROMPT_HOLD :: 3.0
+INTRO_PROMPT_ALPHA :: 0.92
+
+draw_intro_prompt :: proc(elapsed: f32, dismissed_at: f32, palettes: core.PaletteSet) {
+	// A negative dismissed_at means the player has not flipped yet, so the
+	// prompt holds for its full lifetime; once they have, the hold ends at
+	// the moment they did and the fade-out follows from there.
+	hold_end: f32 = dismissed_at >= 0 ? dismissed_at : INTRO_PROMPT_HOLD
+
+	fade_in := clamp(elapsed / INTRO_PROMPT_FADE, 0, 1)
+	fade_out := 1 - clamp((elapsed - hold_end) / INTRO_PROMPT_FADE, 0, 1)
+	alpha := min(fade_in, fade_out) * INTRO_PROMPT_ALPHA
+	if alpha <= 0 {
+		return
+	}
+
+	draw_centered_text(
+		"PRESS SPACE TO SHIFT",
+		INTRO_PROMPT_Y,
+		INTRO_PROMPT_SIZE,
+		core.with_alpha(palettes.current.light, alpha),
+	)
 }
 
 // Pushes the frozen gameplay frame back behind an overlay. Uses the

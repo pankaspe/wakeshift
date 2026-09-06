@@ -132,19 +132,42 @@ emit :: proc(particles: ^Particles, stream: int, emitter: Emitter, dt: f32) {
 			particles.debt[stream] = 0
 			return
 		}
-
-		particles.pool[particles.count] = Particle {
-			position = emitter.origin +
-			rl.Vector2{jitter(particles, emitter.spread.x), jitter(particles, emitter.spread.y)},
-			velocity = emitter.velocity +
-			rl.Vector2{jitter(particles, emitter.scatter.x), jitter(particles, emitter.scatter.y)},
-			drag = emitter.drag,
-			life = max(emitter.life + jitter(particles, emitter.life_jitter), 0.05),
-			size = max(emitter.size + jitter(particles, emitter.size_jitter), 0.5),
-			color = emitter.color,
-		}
-		particles.count += 1
+		spawn(particles, emitter)
 	}
+}
+
+// Emits a whole number of particles at once, for something that
+// *happened* rather than something that is happening.
+//
+// It keeps no fractional debt and takes no stream index, and both of
+// those are the same fact: a burst is an instant, so there is nothing
+// about it to carry into the next frame. That is exactly what a rate
+// cannot express — emit with a huge rate and a small dt still rounds
+// against the debt of whatever stream it was handed.
+burst :: proc(particles: ^Particles, emitter: Emitter, count: int) {
+	for _ in 0 ..< count {
+		if particles.count >= PARTICLE_CAPACITY {
+			return
+		}
+		spawn(particles, emitter)
+	}
+}
+
+// Puts one particle in the pool. Shared so that a burst and a stream
+// cannot drift apart in what an Emitter means.
+@(private)
+spawn :: proc(particles: ^Particles, emitter: Emitter) {
+	particles.pool[particles.count] = Particle {
+		position = emitter.origin +
+		rl.Vector2{jitter(particles, emitter.spread.x), jitter(particles, emitter.spread.y)},
+		velocity = emitter.velocity +
+		rl.Vector2{jitter(particles, emitter.scatter.x), jitter(particles, emitter.scatter.y)},
+		drag = emitter.drag,
+		life = max(emitter.life + jitter(particles, emitter.life_jitter), 0.05),
+		size = max(emitter.size + jitter(particles, emitter.size_jitter), 0.5),
+		color = emitter.color,
+	}
+	particles.count += 1
 }
 
 // Advances the pool by one frame and retires whatever has finished.

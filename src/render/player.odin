@@ -130,6 +130,27 @@ STRETCH_AMOUNT :: 0.16 // vertical stretch at the peak of a flip
 SETTLE_DURATION :: 0.22 // length of the post-landing squash bounce
 SETTLE_SQUASH_AMOUNT :: 0.20
 
+// The block acknowledging a fragment: one quick pop and back (phase F1).
+//
+// **Uniform on both axes, and that is the whole design of it.** Every
+// other motion the block has is *anti*-correlated — the run's beat, the
+// landing bounce and the flip's stretch all squash one axis exactly as
+// they stretch the other, because all three are about a surface being
+// pressed against. Growing in both at once is the one thing none of them
+// can produce, so it reads as a different kind of event rather than as a
+// louder landing. Nothing had to be added to the palette or the outline
+// to say so.
+//
+// It multiplies whatever scale the block already has rather than
+// replacing it, so a fragment taken mid-flip pops the stretch instead of
+// cancelling it.
+//
+// A pure decay with no oscillation, for the same reason: the landing
+// already owns the bounce. Full amount on the frame it happens and gone
+// in a fifth of a second — an acknowledgement, not an animation.
+PICKUP_DURATION :: 0.20
+PICKUP_AMOUNT :: 0.20
+
 // --- The idle motion: a beat in the Real world, a float in the Dream ---
 
 // Pixels of world scroll per beat. Tied to distance rather than to time,
@@ -285,12 +306,25 @@ new_player_pose :: proc(player: game.Player, scale: rl.Vector2, lift: f32) -> Pl
 // PLAYER_DEATH_FALL_TIME once they have gone through a hole. It is the
 // only argument here that is not a fact about the simulation: the run has
 // ended by the time it is anything but zero.
+// How much bigger the block is, this many seconds after taking a
+// fragment. One outside the window, which is where a run starts and where
+// it spends almost all of its time.
+@(private)
+pickup_pop :: proc(pickup: f32) -> f32 {
+	if pickup < 0 || pickup >= PICKUP_DURATION {
+		return 1
+	}
+	remaining := 1 - pickup / PICKUP_DURATION
+	return 1 + PICKUP_AMOUNT * remaining * remaining
+}
+
 draw_player :: proc(
 	player: game.Player,
 	world: game.World,
 	obstacles: []game.Obstacle,
 	palettes: core.PaletteSet,
 	falling: f32 = 0,
+	pickup: f32 = -1,
 ) {
 	// The terrain is drawn against the world nudged forward by the
 	// leftover fraction of a simulation step (main/interpolated_world),
@@ -304,6 +338,14 @@ draw_player :: proc(
 	squash, lift := player_idle(stride, world.elapsed_time, palettes.world_t)
 
 	scale := get_player_scale(player, squash)
+
+	// The fragment pop rides on top of whatever the block was already
+	// doing, so it never cancels a flip's stretch or a landing's bounce.
+	// The pose still anchors the result to the surface being touched, so
+	// growing does not lift the block off the lane.
+	pop := pickup_pop(pickup)
+	scale *= pop
+
 	pose := new_player_pose(player, scale, lift)
 
 	// Through the hole. Away from the corridor — down off the floor, up
