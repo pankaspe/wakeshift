@@ -340,17 +340,92 @@ step e non guarda avanti — quindi il preavviso perso vale quasi niente per lui
 
 ---
 
+## 6 settembre 2026 — il playtest della fase F
+
+Giocata vera, due run finite a **depth 2158 e 2417** con 18 e 22 frammenti raccolti: più di quanti
+ne prenda il bot, e comunque morte per Corruzione. Quattro cose, e tre sono la stessa cosa.
+
+**F4 esce.** La velocità diversa fra le due corsie *spinge a stare sempre in alto per andare più
+veloce*, e quella spinta è falsa: la run finisce alla stessa distanza a qualunque ritmo, quindi
+andare veloce non fa guadagnare niente. Il meccanismo insegna una lezione che l'economia non paga —
+il tipo peggiore. Torna la velocità unica; la difficoltà la devono fare **i mattoncini**.
+L'argomento di F4 — *è un orologio, non una velocità* — resta scritto, perché Slancio (R6.3) andrà
+a sbattere nello stesso muro.
+
+**L'economia ha un incrocio, e il playtest ci è finito dentro.** A 20 000 px il fronte mangia 0,090
+px per px e l'offerta massima ne paga 0,072–0,096: da lì in poi nemmeno prendere *tutto* basta.
+Non è bravura del giocatore, è aritmetica, ed è la stessa che `corruption.odin` si era già scritta
+in testa senza chiudere il conto.
+
+**Metà del pool non si vede mai.** La curva finisce a 50 000 px e gli sblocchi sono spalmati fino a
+40 000, ma una run finisce a 15 000–24 000: cresta, forra, guanto e cancello fluttuante non li
+incontra nessuno. È anche la ragione per cui **le piattaforme non arrivano** — quella che si
+sblocca prima sta a 18 000, cioè oltre dove si muore.
+
+**E un errore costa poco.** Un cubo mancato costa ~40 px su 360 di corridoio: nove errori a run.
+"L'utente deve essere attento" non lo fanno più ostacoli, lo fa un errore che pesa.
+
+---
+
+## 6 settembre 2026 — F7, la taratura
+
+**Via F4.** La velocità per corsia è sparita: una sola velocità, la difficoltà la fanno i
+mattoncini. Resta scritto in `world.odin` *perché* era costruita come un orologio e non come una
+velocità — alzare `scroll_speed` fa scivolare il bordo dello schermo di 322 px, e Slancio (R6.3)
+andrà a sbattere nello stesso muro.
+
+**Dieci pattern su trenta non venivano mai estratti.** Misurato: ogni piattaforma fluttuante e ogni
+demand 3 — cresta, forra, guanto, burst, coppia di buchi. La curva era tarata su 50 000 px e gli
+sblocchi arrivavano a 40 000, ma una run finisce fra i 10 000 e i 24 000. I due terzi più difficili
+del pool erano **contenuto morto**, ed è per questo che il gioco non chiedeva attenzione. Curva a
+20 000, sblocchi tutti entro 6400: adesso compaiono tutti e trenta, e nella parte alta di una run
+dominano i demand 3.
+
+**Il fronte e la densità non condividono più una curva.** Erano lo stesso numero per ordine, e
+comprimerlo per far vedere il pool rendeva il fronte affamato subito: la run mediana era crollata
+da 17 000 a 10 160 px *e* i pattern profondi continuavano a non uscire. Ora la densità sale in
+20 000 px e l'appetito del fronte in 50 000. Sono due assi diversi.
+
+**L'economia pagava meno di quanto si potesse raccogliere.** A 0,030..0,180 l'appetito superava
+l'incasso di una raccolta *perfetta* attorno ai 15 000 px — le tue due run a depth 2158 e 2417 con
+18 e 22 gemme non erano una questione di bravura, era aritmetica. Ora il rombo vale **100** invece
+di 60 e la retta è tirata perché un buon raccoglitore vada in pari verso i 30 000 px e uno perfetto
+oltre i 45 000: il fronte vince sempre alla fine, ma tardi.
+
+**`DIFFICULTY_GAP_TOP` da 0 a 0,25.** Non è densità, è la regola di F3 che si difende: il rombo si
+prende con un viaggio di andata e ritorno sul soffitto, e a gap zero il pattern dopo comincia prima
+che il viaggio possa avvenire. Misurato, il bot passa da 7,2 a 8,1 gemme a run.
+
+**La manopola per "un errore deve pesare" è inerte, e il perché vale più del numero.** Spazzato
+`PLAYER_RECOVERY_RATIO` da 0,0 a 2,0: risultati **identici byte per byte** su 60 run. Strumentando
+le morti si vede perché — la x più bassa che una run tocca *è* la x in cui muore. Non si muore
+qualche secondo dopo un errore, si muore **dentro** un errore: un pin da cui non si esce. Il tasso
+di recupero governa una restituzione che non avviene mai. Quello che prezzerebbe davvero un errore
+è atterrare sopra un cubo, che oggi è gratis.
+
+**E il bot aveva un bug che invalidava le misure.** In una coppia affacciata valutava le due corsie
+pari e non premeva: restava incastrato fino alla morte. Con `narrows` e `gauntlet` spostati presto,
+ogni numero sulla lunghezza delle run ne era viziato. Insegnato a flippare quando è bloccato: la
+mediana passa da 10 700 a 12 920 px.
+
+---
+
 ## In corso — la fase F
 
-Il pool ha **trentuno** pattern e sedici portano un frammento. La finestra di raccolta sulla
-corsia è **200 ms** esatti, `(16+38)/270`, ed è l'unica manopola che il rombo ha; il resto lo
-decide dove sta. Un bot avido che raccoglie arriva a 16 100 px (60 s) e muore tre volte su
-sessanta in un buco — il premio che tira una risposta localmente giusta dentro una sbagliata,
-che è F6 in miniatura.
+Il pool ha **trenta** pattern e sedici portano un frammento — i due prototipi di F1 sono usciti in
+F3 e le due piattaforme fluttuanti nuove sono entrate. Misurato senza giocatore su bande da 2500 px:
+una corsia è minacciata dal **19,1%** della prima banda al **48,2%** della ottava, con 0,9–1,3
+frammenti per 1000 px. Un bot avido che raccoglie arriva a **12 920 px (depth 1292)** in 48 secondi.
 
 | | Task | Modello |
 |---|---|---|
+| **F8** | **Prezzare l'atterraggio su un cubo** → La vera manopola di "un errore deve pesare", trovata misurando: `PLAYER_RECOVERY_RATIO` è inerte perché non si muore *dopo* un errore, si muore dentro. Oggi cadere sopra un cubo è gratis (sta in CLAUDE.md fra i problemi noti dal 5 settembre), quindi quasi ogni contatto costa una rottura di ritmo e non terreno. | Opus |
+| **F9** | **Timewarp** → Il secondo premio: raro, nei posti difficili, e ferma o rallenta l'appetito del fronte per un tratto. Marchio suo, distinto dal rombo, leggibile in due secondi. Da rivalutare dopo aver giocato F7: se l'economia adesso si regge, questo è un premio e non una toppa. | Opus |
+| **F10** | **Il font** → Megrim, SIL OFL 1.1, nessun Reserved Font Name: si può incorporare e ridistribuire tenendo `OFL.txt` e il copyright. Da mettere in `assets/fonts/` e caricare **dai byte** (`#load` + `LoadFontFromMemory`), così il binario resta autosufficiente. È un carattere da display: la leggibilità dell'HUD a 20 px va guardata prima di adottarlo ovunque (pilastro 2). | Sonnet |
 | **F5** | **Le due lane** → Reale pulito e ad alto contrasto, Onirico ricco e più difficile da leggere, così la differenza visiva *è* la differenza di difficoltà. Modifica la regola "il campo cambia colore col mondo, il tratto mai". | Sonnet |
-| **F6** | **Far fallire il bot avido** → Pattern dove la mossa localmente giusta frega due secondi dopo. Bersaglio misurabile col bot che esiste già. | Sonnet |
+| **F6** | **Far fallire il bot avido** → Pattern dove la mossa localmente giusta frega due secondi dopo. Bersaglio misurabile col bot che esiste già — che adesso sa anche uscire da un pin. | Sonnet |
 | **C4** | **Il feedback dello scalino** → **Accantonato dall'autore il 6 settembre**, da rivalutare. Il burst particellare che serviva è nato comunque, come feedback della presa di un frammento. | Sonnet |
 
+**Un dettaglio da decidere**: il record salvato è **4998**, di un equilibrio che non esiste più.
+Nessuna run di oggi ci arriva vicino, quindi ogni schermata di fine partita dice "hai fallito".
+O si azzera quando l'equilibrio cambia, o si accetta.

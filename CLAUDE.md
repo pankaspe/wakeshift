@@ -502,11 +502,23 @@ paid at 12370, so the economy is worth **+46% of a run**. The front's *average* 
 within 3 px of where the old fixed slide held it (80 against 83) and the **peak** is what moved,
 176 to 251 — F2 changes what the front is without quietly changing how hard the game is.
 
-**The gain survived F3 replacing the entire supply it was tuned against**, and that is worth
-knowing before touching it: the anchor to re-check is the collecting bot's *mean front* (84 px,
-against 83 for the pre-F2 fixed slide), not the run length, which moved from 12370 px to 16150
-once the pool started paying properly. Re-measure whenever the supply moves, and re-measure that
-number.
+**The F playtest recalibrated all of it, and the shape of what it found matters more than the
+numbers.** At 0.030..0.180 the front's appetite passed even a *perfect* collector's income around
+15000 px, so the report — "I cannot take the diamonds any more, the Corruption reaches me", at
+depth 2158 and 2417 with 18 and 22 fragments, better collecting than the bot manages — was
+arithmetic rather than skill. The refund went to 100 and the gain line is now drawn so a good
+collector breaks even near 30000 px and a perfect one past 45000: the front still always wins, but
+late enough that working the ceiling is worth doing.
+
+- **The gain has its own distance and it is no longer `DIFFICULTY_FULL_DISTANCE`.** They shared one
+  number out of tidiness, and compressing that number to make the pool visible starved the player
+  before they reached it. Density tops out in 20000 px; the front's appetite takes 50000.
+- **For a competent collector the gain constants are nearly inert.** Swept over 0.030..0.100 and
+  0.040..0.140, the bot's median moved by 23 px in 10700. They price bad collecting, which is their
+  job; they no longer decide when a good run ends. What decides it is a cube.
+- **A bigger refund has diminishing returns, and the clamp is why**: the larger the payment, the
+  more of it lands on a front already at the left edge and is discarded. 60 to 100 bought the bot
+  900 px, not 1600.
 
 ### Where a fragment goes, and the one check that keeps it honest
 
@@ -526,8 +538,14 @@ them.
   diamond to be reachable at all. What is charged is a flip and arriving at the next pattern from
   the ceiling, and the curve raises that price on its own as it closes the air between patterns.
 - **The tails those placements need are not the dead air C2 deleted.** C2 cut lead-in and tail that
-  contained nothing. These hold the reward — but they do cost density: 4 to 10 points of
-  "threatened" per band, peak 71.1% down to 61.0%.
+  contained nothing. These hold the reward — but they do cost density, 4 to 10 points of
+  "threatened" per band when they landed.
+- **`DIFFICULTY_GAP_TOP` is a floor because of this rule, not a density knob.** It was zero on C2's
+  reasoning that a pattern holds its own windows so no gap is unfair. True, and not the whole story:
+  a diamond is paid for with a round trip to the ceiling, and at zero gap the next pattern starts
+  before the trip can happen. The playtest's first complaint was that the diamonds had become
+  uncollectable. It is 0.25 now, and however dense the world gets it may not close past the point
+  where its own reward can be reached.
 - **`report_fragment_burial` is the check F1 could not write.** A diamond inside a cube or over a
   hole, against the skyline's **declared bounds** and never its drawn columns — widest draw,
   tallest draw, and for a floating cube the reach of its whole orbit. It checks the far lane too,
@@ -918,40 +936,24 @@ Four things the implementation established, all found by measuring before writin
   differently: brighter drives the halo toward white and saturates, wider keeps it soft and
   covers more air. The Dream is the soft one, so most of the growth is in the reach.
 
-### The player sets the world's clock
+### F4 was built, measured, played and removed the same day
 
-F4, `game/world.odin`. The world runs at `WORLD_PACE_DREAM` seconds per real second while the
-character is on the ceiling and `WORLD_PACE_REAL` on the floor — 1.35 against 1.0, which is 364
-px/s of screen against 270 and 2.52 seconds of look-ahead against 3.41.
+For one commit the world ran at 1.35 seconds per real second on the ceiling and 1.0 on the floor.
+Both halves of that are worth keeping.
 
-- **It is a clock, not a speed, and that is the whole implementation.** Raising `scroll_speed` is
-  the obvious build and it is wrong: an obstacle's x is `anchor + (arrival - now) * speed`, so a
-  higher speed multiplies the distance to everything not yet arrived. Measured, the naive version
-  slides one obstacle 247 px across a single flip and the right edge of the screen 322 px — and it
-  is not even faster in the sense that matters, because arrival *times* do not move, so only the
-  spacing grows. Leaving `scroll_speed` alone and advancing `elapsed_time` by `pace` instead makes
-  the largest single-step move of any obstacle 6.08 px, which is exactly one step at the ceiling's
-  rate.
-- **`scroll_speed` is now the base rate, not the rate anything moves at.** Everything that means
-  "how much world went by this step" goes through `game.get_scroll_rate`. Code written before F4
-  read `scroll_speed` for both, so check any use of it that predates this.
-- **The pool needed no revalidation**, which is not what F4 was expected to need. Every window the
-  fairness check computes is `(body + width) / scroll_speed` *world* seconds and `scroll_speed`
-  does not move, so the geometry is pace-invariant by construction. That property is the reason to
-  build it this way, not a lucky consequence of it.
-- **The pace is a cost, not a purchase.** A run ends when the front reaches the character, the
-  front gains per pixel, and depth *is* distance — so a run dies at the same distance and scores
-  the same number at any pace. Going fast earns the same sooner, never more. What makes the ceiling
-  worth visiting is the fragments F3 put there, and the pace is their price.
-- **The difficulty lands entirely on the one clock that does not dilate**: the flip is
-  `FLIP_DURATION` of *real* time, because "the gesture never changes with the world" is older than
-  this phase, so at pace 1.35 it costs 0.216 world seconds instead of 0.160. Anything else added
-  on the player's side has to decide which clock it is on, and the default is real.
-- **The pace rides the journey's clock, never the drawn body's height.** `get_player_pace_t` is in
-  `game/player.odin` for that reason: `render/palette.odin`'s `world_t` is derived from
-  `position.y`, and a body standing on a twelve-unit tower is 324 px up a 390 px corridor while
-  still plainly on the floor. Reading that would accelerate the world because the character climbed
-  a staircase.
+- **Why it went.** It made the player want to live on the ceiling to go faster, and that want is
+  *false*: a run ends when the front reaches the character, the front gains per pixel, and depth is
+  distance — so a run dies at the same distance and scores the same number at any pace. Going fast
+  arrives at the same place sooner and never gets further. A mechanic that teaches a lesson the
+  economy does not pay is the worst kind there is, and this one was doing it with the only key the
+  game has.
+- **Why the implementation must outlive the idea**, and it is written up in `game/world.odin`:
+  raising `scroll_speed` is the obvious build and it is wrong, because an obstacle's x is
+  `anchor + (arrival - now) * speed`, so a higher speed multiplies the distance to everything not
+  yet arrived. Measured, that slides one obstacle 247 px across a single flip and the right edge of
+  the screen 322 px. Advancing `elapsed_time` faster instead — a **clock, not a speed** — moves
+  nothing: the largest single-step move of any obstacle was 6.08 px, exactly one step's worth.
+  **Slancio (roadmap R6.3) will meet this exact wall.** Build it as a clock.
 
 ### Colour has two systems, and they must not collide
 
@@ -1209,33 +1211,36 @@ Tracked here so they are not rediscovered. Nothing here is scheduled — the use
   that. It was invisible while a cube was a filled mass. Closing it
   needs the pushback to exceed the world's speed while penetrating, which would also make
   `velocity_x` drop below `-scroll_speed` and force `score.odin` to clamp.
-- **The pool has not been played since F3, and F3 moved its density.** 31 patterns. Measured in
-  5000 px bands with no player, at least one lane threatened runs 20.9 / 30.4 / 37.1 / 39.1 /
-  41.7 / 44.7 / 47.7 / 52.7 / 59.7 / 55.9 / 56.8 / 61.0%, and lethal 5.4 / 3.9 / 6.0 / 5.8 / 9.4 /
-  9.0 / 10.5 / 7.4 / 6.5 / 8.8 / 6.5 / 9.4%. Both are **4 to 10 points below the pre-F3 numbers**,
-  which ran 24.7 … 71.1%: the tails that hold the fragments are time when nothing threatens.
-  Taking `DIFFICULTY_GAP_OPEN` from 0.90 to 0.70 puts the opening band back at 24.2% but drops the
-  collecting bot's median run from 16150 px to 9930 — a difficulty decision rather than a
-  compensation, so it is the user's to make at a playtest.
-  **The lethal share is the one that is not monotone**, and it is a consequence of the lean rather
-  than an oversight: the deep pool holds more high-demand patterns without a hole in them than with
-  one, so a very deep run is busier and slightly less deadly than its own middle. Raising
-  `pattern_gap_pair` to demand 3 nearly halved the dip; closing it properly means authoring more
-  late patterns that carry a hole.
-  A greedy one-move-lookahead bot that collects has a median run of **15180 px in 47.6 seconds**
-  since F4 put a clock in the player's hand, dying 58 times out of 60 to the Corruption and 2 times
-  in a hole — the fragments pulling a locally right answer into a wrong one, which is F6 arriving
-  early. The same bot with fragments out of its valuation dies at 8440 px. **The bot understates
-  what the pace costs** and any conclusion from it should say so: it reacts in one step and never
-  looks ahead, so the 0.9 seconds of warning the ceiling takes away is worth almost nothing to it
-  and a great deal to a person. At the top of the curve, pinned there with the Corruption switched off, 40 of 40
-  bots survive a full minute: the endgame kills by ground loss, not by being unanswerable.
+- **The unlock schedule has to fit inside a run, and once it did not.** The F playtest measured
+  **ten of thirty patterns never drawn in a whole run** — every floating platform and every demand-3
+  shape — because C3 spread `min_depth` to 40000 px against a 50000 px curve while runs were ending
+  between 10000 and 24000. The hardest two thirds of the pool were dead content, which is why the
+  game had nothing to ask of an attentive player. The schedule finishes at 6400 px now and the curve
+  at 20000, and all thirty appear. **Re-check this whenever the economy moves**: an unlock past
+  where players die is not late content, it is no content.
+- **The pool has not been played since that recalibration.** 30 patterns. Measured in 2500 px bands
+  with no player, at least one lane threatened runs 19.1 / 28.3 / 33.4 / 39.6 / 43.4 / 43.6 / 47.2 /
+  48.2%, lethal 7.3 / 8.0 / 5.1 / 6.2 / 6.5 / 3.2 / 7.9 / 7.5%, with 0.9 to 1.3 fragments per
+  1000 px throughout. The mix is what changed rather than the amount: the demand-3 shapes now
+  dominate the second half of a run where they used to be absent from all of it.
+  A greedy one-move-lookahead bot that collects has a median run of **12920 px in 48 seconds**,
+  dying 58 times out of 60 to the Corruption and twice in a hole. **The bot understates two things
+  and had a bug in a third**: it reacts in one step so warning distance is worth almost nothing to
+  it, it collects far worse than a person (9.7 a run against the author's 18-22), and until the F
+  playtest it did not know how to flip out of a pin — it sat in a facing pair until it died, which
+  silently invalidated every run-length number measured in a pool where mirrored pairs are common.
+  **Check the death mode before trusting a median.**
 - **The runway is 360 px and a pin spends it at full scroll speed.** Not new and not C2's doing,
   but C2 made it matter: at 40% density a player who does not answer is pushed off the left edge
   in about 1.3 seconds of continuous pinning, which is why 177 of 200 idle runs end at the
-  Corruption rather than in a hole. `PLAYER_RECOVERY_RATIO` is the knob if a playtest says the
-  bleed is too fast; `CORRUPTION_MIN_RUNWAY` was the other one and F2 deleted it, because the
-  front does not stop short of the player any more.
+  Corruption rather than in a hole. `CORRUPTION_MIN_RUNWAY` used to be the other knob and F2 deleted
+  it, because the front does not stop short of the player any more.
+- **`PLAYER_RECOVERY_RATIO` is inert, and the reason is worth more than the number.** Swept from 0.0
+  to 2.0 across 60 replayed runs, every outcome was byte-identical. Instrumenting the deaths says
+  why: **the lowest x a run ever reaches is the x it dies at.** A run does not end some time after a
+  mistake, it ends *inside* one — a single pin the player never gets out of — so the rate at which
+  ground is repaid governs a repayment that never happens. The knob that would actually price a
+  mistake is the one below it: landing on a cube is free.
 - Menus, HUD and the options screen take their colours from the palette but still use raylib's
   default bitmap font. Everything drawn from primitives is crisp at native resolution and only
   the text is not (phase R7).

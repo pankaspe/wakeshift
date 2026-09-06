@@ -88,36 +88,38 @@
 * WHAT IT IS TUNED TO, MEASURED BY REPLAY
 *
 * 60 runs of the real simulation, driven by a bot that dodges one move
-* ahead — median distance at which the run ended, and where the front sat
-* while it lasted. Re-measured against F3's pool, which is the supply
-* that actually exists:
+* ahead and works its way out of a pin, after the F playtest recalibrated
+* everything:
 *
-*   collects nothing at all        8440 px  (31 s)   front mean 160, peak 355
+*   collects nothing at all         880 px  ( 3 s)
 *   dodges only, takes what it
-*     happens to run into          8440 px  (31 s)   front mean 155, peak 353
-*   collects, fragments unpaid     8440 px  (31 s)   front mean 160, peak 355
-*   collects, fragments paid      16150 px  (60 s)   front mean  84, peak 244
-*   the pre-F2 front, same bot    13850 px  (51 s)   front mean  83, peak 176
+*     happens to run into           9330 px  (35 s)   front mean 168
+*   collects                       12920 px  (48 s)   front mean  60
 *
-* The economy is worth **+91% of a run** to a player who works the
-* ceiling, and the front's *average* pressure on that player lands within
-* a pixel of where the old fixed slide held it — 84 against 83. That was
-* the calibration F2 chose the gain on, and F3 changing the whole supply
-* did not move it, so the constants below stayed where they were. What
-* moves instead is the peak, 176 px to 244: the front is allowed to get
-* close now, and getting it back is the play.
+* **The front is no longer what ends a good run, and that is the point of
+* the recalibration.** For the collecting bot it sits at 60 px of a 360
+* px runway and the run ends in a cube instead: measured, the lowest x a
+* run ever reaches *is* the x it dies at, so the fatal event is one pin
+* it cannot get out of rather than a front that caught up. Difficulty
+* went back to the bricks, which is where the playtest asked for it.
 *
-* The second row is F3's doing and it is the number that matters most
-* here. Before F3 a bot that did not want fragments collected 16.6 of
-* them a run anyway, because the prototypes put a cube opposite every
-* diamond and the dodge already went there; it now collects **0.7**
-* against a collector's 12.8. The reward stopped being free, which is
-* what makes the front's appetite a question the player answers rather
-* than a tax they pay.
+* Two consequences worth knowing before touching anything here:
 *
-* Three of the 60 collecting runs end in a hole, where none of the
-* dodging ones do. That is the reward pulling a greedy answer into a bad
-* one, which is the whole of F6 in miniature and arrived here for free.
+*   * the gain constants are nearly inert for a competent collector.
+*     Sweeping the pair over 0.030..0.100 and 0.040..0.140 moved the
+*     bot's median by 23 px in 10700. They still matter for everyone who
+*     collects *badly*, which is the whole point of them.
+*   * so is PLAYER_RECOVERY_RATIO, for the same reason and it is
+*     recorded there.
+*
+* THE BOT UNDERSTATES SOME THINGS AND ONE OF THEM IS ITS OWN
+*
+* It reacts in one step and never looks ahead, so warning distance is
+* worth almost nothing to it. And it had to be *taught* to flip out of a
+* pin: until the F playtest it sat in a facing pair until it died, which
+* silently invalidated every run-length number measured in a pool where
+* mirrored pairs were common. Check the death mode before trusting a
+* median.
 */
 package game
 
@@ -143,27 +145,60 @@ CORRUPTION_START_X :: 0
 // changing under the player. C3's lesson was that one curve saturates;
 // three curves that saturate together are the same mistake spread out.
 //
-// 0.030 costs a run that collects nothing its whole runway in 8440 px,
-// about 31 seconds. 0.180 is six times that, and a good run reaches
-// about t = 0.32 of the way to it — the top of the curve is where this
-// is aimed, not where it is played (see the header).
+// **Chosen against what a player can actually collect**, which is the
+// only calibration that means anything here. Supply is 0.9 to 1.3
+// fragments per 1000 px, so at CORRUPTION_REFUND a run collecting *all*
+// of it earns about 0.130 px of front per px of world and a good one
+// about 0.100. The line below is drawn so a good collector breaks even
+// around 30000 px and a perfect one only past 45000 — the front still
+// always wins in the end (that is the F2 promise), but it wins late
+// enough that working the ceiling is worth doing.
 //
-// Held at these values through F3, which replaced the entire supply they
-// were tuned against: the collecting bot's *average* pressure came out
-// at 84 px where F2 measured 84, so the calibration survived the pool
-// changing under it. Re-measure again whenever the supply moves; the
-// anchor to check is the mean front, not the run length.
-CORRUPTION_GAIN_OPEN :: 0.030
-CORRUPTION_GAIN_TOP :: 0.180
+// 0.040 costs a run that collects nothing its whole runway in about 8000
+// px, roughly 30 seconds, which is the number the phase opened with and
+// nothing has argued with.
+//
+// The F playtest is what moved them: at the old 0.030..0.180 the front's
+// appetite passed even a perfect collector's income at about 15000 px,
+// and the report was exactly that — "I cannot take the diamonds any
+// more, the Corruption reaches me" — at depth 2158 and 2417 with 18 and
+// 22 fragments collected, which is *better* collecting than the bot
+// manages. The player was not losing to skill, they were losing to
+// arithmetic.
+CORRUPTION_GAIN_OPEN :: 0.040
+CORRUPTION_GAIN_TOP :: 0.140
+
+// The distance the gain takes to travel between those two, and it is
+// **not** DIFFICULTY_FULL_DISTANCE any more.
+//
+// They shared one number until the F playtest, and sharing it was a
+// mistake that only showed up when the pool had to be made visible. The
+// world's density has to reach full early — a run that ends before it
+// has met the ridge, the ravine and the gauntlet has never played the
+// game — while the front's appetite has to grow across the *whole* of a
+// long run, or the same compression that reveals the pool starves the
+// player before they reach it. Measured: with one shared curve, pulling
+// it in far enough to show the deep patterns cut the median run from
+// 17000 px to 10160 and the deep patterns still never appeared.
+//
+// So the two are separate axes now: this one is long and the density one
+// is short. They were only ever the same because it was tidy.
+CORRUPTION_FULL_DISTANCE :: 50000
 
 // What one fragment buys back, in pixels of front.
 //
-// A sixth of the runway, and about one and a half bodies wide, which is
-// the smallest retreat that still reads as the front *moving* rather
-// than as the front flickering. Measured against the front's own gain,
-// one fragment nets 54 px of the 60 back at the opening: the world does
-// not stop being expensive while it is being paid for.
-CORRUPTION_REFUND :: 60
+// Between a quarter and a third of the runway, and about two and a half
+// bodies wide. It was 60 until the F playtest, and it went up rather
+// than the gain coming down because a bigger payment is the half of the
+// trade the player can *see*: the front visibly slides back when a
+// diamond is taken, and that is what makes collecting read as the thing
+// keeping you alive.
+//
+// Diminishing returns are real and they are the clamp's doing: the
+// bigger the payment, the more of it lands on a front already at the
+// left edge and is thrown away. Going from 60 to 100 bought the bot 900
+// px of run, not 1600.
+CORRUPTION_REFUND :: 100
 
 // How fast the front hands that back, in pixels per second.
 //
@@ -195,8 +230,13 @@ new_corruption :: proc() -> Corruption {
 }
 
 // How much ground the front takes per pixel of world, right now.
+//
+// A straight line in distance on its own scale. It reads Difficulty for
+// the distance and nothing else — the curve's own `t` belongs to the
+// density knobs, which top out far sooner (see CORRUPTION_FULL_DISTANCE).
 get_corruption_gain :: proc(difficulty: Difficulty) -> f32 {
-	return CORRUPTION_GAIN_OPEN + (CORRUPTION_GAIN_TOP - CORRUPTION_GAIN_OPEN) * difficulty.t
+	t := clamp(difficulty.depth / CORRUPTION_FULL_DISTANCE, 0, 1)
+	return CORRUPTION_GAIN_OPEN + (CORRUPTION_GAIN_TOP - CORRUPTION_GAIN_OPEN) * t
 }
 
 // One step of the economy: the front takes its cut of the ground the
@@ -212,10 +252,7 @@ update_corruption :: proc(
 	difficulty: Difficulty,
 	delta_time: f32,
 ) {
-	// The distance the world actually covered this step, so the front's
-	// appetite follows the pace the player is setting (world.odin) with
-	// nothing here having to know that it does.
-	corruption.front_x += get_corruption_gain(difficulty) * get_scroll_rate(world) * delta_time
+	corruption.front_x += get_corruption_gain(difficulty) * world.scroll_speed * delta_time
 
 	if corruption.owed > 0 {
 		paid := min(corruption.owed, f32(CORRUPTION_REFUND_SPEED) * delta_time)

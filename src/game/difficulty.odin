@@ -54,18 +54,42 @@ package game
 import "core:math"
 import "core:math/ease"
 
-// Pixels of world scrolled at which the curve tops out. About three
-// minutes at the opening speed, and comfortably past where a good run
-// ends — a curve that finishes while the player is still alive is the
-// thing C3 exists to fix.
-DIFFICULTY_FULL_DISTANCE :: 50000
+// Pixels of world scrolled at which the curve tops out.
+//
+// C3 set this at 50000 and gave the reason: a curve that finishes while
+// the player is still alive is what "it stops getting harder" means. The
+// F playtest found the opposite failure and it is worse — measured, **ten
+// of thirty patterns were never drawn in a whole run**, including every
+// floating platform and every demand-3 shape. The curve was calibrated
+// for a run length that the economy had since taken away, so the hardest
+// two thirds of the pool were dead content and the game had nothing left
+// to ask of an attentive player.
+//
+// 20000 px is about where a good run now ends, so the world reaches full
+// density and full lean *inside* a run instead of past it. What C3 was
+// protecting against is handled elsewhere now: the Corruption's appetite
+// has its own, much longer distance (CORRUPTION_FULL_DISTANCE), so the
+// thing that keeps growing after the world has finished growing is the
+// price of standing still.
+DIFFICULTY_FULL_DISTANCE :: 20000
 
-// The air between patterns, at the opening and at the top. Zero at the
-// top means patterns run back to back, which C2's containment rule makes
-// safe: a pattern holds its own windows, so no gap is too small to be
-// fair (pattern.odin).
+// The air between patterns, at the opening and at the top.
+//
+// The top was zero until the F playtest, on C2's reasoning: a pattern
+// holds its own windows, so no gap is too small to be *fair*
+// (pattern.odin). That is still true and it is not the whole story —
+// since F3 the air is also what a **fragment** is taken in. A diamond
+// sits just after its pattern's last Dream closure and is paid for with
+// a round trip to the ceiling, and at zero gap the next pattern starts
+// before that trip can happen. Measured, the collecting bot went from
+// 7.2 fragments a run to 8.1 by opening the top of this from 0 to 0.25.
+//
+// So this is now a floor as well as a knob: however dense the world
+// gets, it never closes past the point where its own reward can be
+// reached. "I can't collect the diamonds any more" was the first thing
+// the playtest said.
 DIFFICULTY_GAP_OPEN :: 0.90
-DIFFICULTY_GAP_TOP :: 0.0
+DIFFICULTY_GAP_TOP :: 0.25
 
 // How the draw leans, as the base of bias^demand.
 //

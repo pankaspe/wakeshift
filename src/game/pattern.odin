@@ -137,13 +137,22 @@ Pattern :: struct {
 	// The third thing the curve moves, and the only one that is per
 	// pattern (difficulty.odin has the other two). It replaced the tiers'
 	// `added_patterns`, which unlocked patterns in three jumps; spread
-	// across the whole curve instead, a long run keeps meeting shapes it
-	// has not met before, which is the part of "it gets harder" that
-	// density and draw bias cannot say.
+	// along a curve instead, a run keeps meeting shapes it has not met
+	// before, which is the part of "it gets harder" that density and draw
+	// bias cannot say.
 	//
 	// Zero is the opening set. Everything unlocked is still subject to the
 	// lean, so arriving in the pool and being met are two different
 	// things — which is exactly the mistake the old tier list made.
+	//
+	// **The whole schedule has to fit inside a run, and once it did not.**
+	// C3 spread it to 40000 px against a 50000 px curve; the F playtest
+	// measured runs ending at 10000 to 24000, so ten patterns — every
+	// floating platform and every demand-3 shape — were never drawn at
+	// all. The schedule now finishes at 6400 px, about half of a good
+	// run, and all thirty appear. Re-check this against the real run
+	// length whenever the economy moves: an unlock past where players die
+	// is not late content, it is no content.
 	min_depth: f32,
 }
 
@@ -295,7 +304,7 @@ pattern_stairs_real := Pattern {
 	},
 	duration  = 0.7,
 	demand    = 1,
-	min_depth = 1500,
+	min_depth = 600,
 }
 
 pattern_stairs_dream := Pattern {
@@ -305,7 +314,7 @@ pattern_stairs_dream := Pattern {
 	fragments = []FragmentEvent{{time_offset = 0.82, lane = .Dream, offset = FRAGMENT_ON_LANE}},
 	duration  = 0.94,
 	demand    = 1,
-	min_depth = 1500,
+	min_depth = 600,
 }
 
 // Two threats on opposite lanes: whichever lane you start on you move at
@@ -318,7 +327,7 @@ pattern_alternate := Pattern {
 	fragments = []FragmentEvent{{time_offset = 1.42, lane = .Dream, offset = FRAGMENT_ON_LANE}},
 	duration  = 1.54,
 	demand    = 1,
-	min_depth = 3000,
+	min_depth = 1000,
 }
 
 pattern_alternate_reverse := Pattern {
@@ -328,7 +337,7 @@ pattern_alternate_reverse := Pattern {
 	},
 	duration  = 1.3,
 	demand    = 1,
-	min_depth = 3000,
+	min_depth = 1000,
 }
 
 // --- From 5000 px: the shapes start meaning things ---
@@ -343,7 +352,7 @@ pattern_plateau_real := Pattern {
 	},
 	duration  = 1.2,
 	demand    = 1,
-	min_depth = 5000,
+	min_depth = 1500,
 }
 
 pattern_plateau_dream := Pattern {
@@ -354,7 +363,7 @@ pattern_plateau_dream := Pattern {
 	fragments = []FragmentEvent{{time_offset = 1.32, lane = .Dream, offset = FRAGMENT_ON_LANE}},
 	duration  = 1.44,
 	demand    = 1,
-	min_depth = 5000,
+	min_depth = 1500,
 }
 
 // A canyon: two towers with the lane's own surface between them. The
@@ -367,7 +376,7 @@ pattern_canyon_real := Pattern {
 	},
 	duration  = 0.9,
 	demand    = 1,
-	min_depth = 7000,
+	min_depth = 1900,
 }
 
 pattern_canyon_dream := Pattern {
@@ -377,7 +386,7 @@ pattern_canyon_dream := Pattern {
 	fragments = []FragmentEvent{{time_offset = 1.02, lane = .Dream, offset = FRAGMENT_ON_LANE}},
 	duration  = 1.14,
 	demand    = 1,
-	min_depth = 7000,
+	min_depth = 1900,
 }
 
 // A hole then a shape on the other side: the answer to the first is the
@@ -390,7 +399,7 @@ pattern_gap_then_cube := Pattern {
 	fragments = []FragmentEvent{{time_offset = 1.52, lane = .Dream, offset = FRAGMENT_ON_LANE}},
 	duration  = 1.64,
 	demand    = 1,
-	min_depth = 9000,
+	min_depth = 2300,
 }
 
 pattern_gap_then_cube_reverse := Pattern {
@@ -400,7 +409,7 @@ pattern_gap_then_cube_reverse := Pattern {
 	},
 	duration  = 1.4,
 	demand    = 1,
-	min_depth = 9000,
+	min_depth = 2300,
 }
 
 // Three in a row, tighter: the first answer has to be the setup for the
@@ -413,7 +422,7 @@ pattern_stagger := Pattern {
 	},
 	duration  = 1.9,
 	demand    = 2,
-	min_depth = 11000,
+	min_depth = 3000,
 }
 
 pattern_stagger_reverse := Pattern {
@@ -425,7 +434,7 @@ pattern_stagger_reverse := Pattern {
 	fragments = []FragmentEvent{{time_offset = 2.02, lane = .Dream, offset = FRAGMENT_ON_LANE}},
 	duration  = 2.14,
 	demand    = 2,
-	min_depth = 11000,
+	min_depth = 3000,
 }
 
 // A bump, then a ridge on the other lane. The two ends of what a cube can
@@ -443,7 +452,7 @@ pattern_bump_and_ridge := Pattern {
 	fragments = []FragmentEvent{{time_offset = 1.92, lane = .Dream, offset = FRAGMENT_ON_LANE}},
 	duration  = 2.04,
 	demand    = 1,
-	min_depth = 13000,
+	min_depth = 3600,
 }
 
 // **The constriction.** Two facing towers of unequal height, which is
@@ -464,7 +473,7 @@ pattern_narrows := Pattern {
 	fragments = []FragmentEvent{{time_offset = 0.62, lane = .Dream, offset = FRAGMENT_ON_LANE}},
 	duration  = 0.74,
 	demand    = 2,
-	min_depth = 15000,
+	min_depth = 4000,
 }
 
 // A cube that floats: it is up when it reaches the anchor, so a character
@@ -484,7 +493,7 @@ pattern_float_open := Pattern {
 	},
 	duration  = 1.6,
 	demand    = 1,
-	min_depth = 18000,
+	min_depth = 2600,
 }
 
 // --- From 21000 px: no room to settle ---
@@ -507,7 +516,7 @@ pattern_gap_pair := Pattern {
 	fragments = []FragmentEvent{{time_offset = 1.74, lane = .Dream, offset = FRAGMENT_ON_LANE}},
 	duration  = 1.86,
 	demand    = 3,
-	min_depth = 21000,
+	min_depth = 4300,
 }
 
 // The burst: four answers, no room at all.
@@ -521,7 +530,7 @@ pattern_burst := Pattern {
 	fragments = []FragmentEvent{{time_offset = 2.27, lane = .Dream, offset = FRAGMENT_ON_LANE}},
 	duration  = 2.39,
 	demand    = 3,
-	min_depth = 24000,
+	min_depth = 5000,
 }
 
 // A ridge on one lane and a ridge on the other, far enough apart in time
@@ -537,7 +546,7 @@ pattern_ridge_run := Pattern {
 	fragments = []FragmentEvent{{time_offset = 2.17, lane = .Dream, offset = FRAGMENT_ON_LANE}},
 	duration  = 2.29,
 	demand    = 3,
-	min_depth = 31000,
+	min_depth = 5400,
 }
 
 // A staircase down into a canyon and back up, all on one wall. Three
@@ -552,7 +561,7 @@ pattern_ravine_real := Pattern {
 	},
 	duration  = 2.4,
 	demand    = 3,
-	min_depth = 35000,
+	min_depth = 6000,
 }
 
 pattern_ravine_dream := Pattern {
@@ -564,7 +573,7 @@ pattern_ravine_dream := Pattern {
 	fragments = []FragmentEvent{{time_offset = 2.52, lane = .Dream, offset = FRAGMENT_ON_LANE}},
 	duration  = 2.64,
 	demand    = 3,
-	min_depth = 35000,
+	min_depth = 6000,
 }
 
 // The constriction, then a hole, then somewhere to land. The hardest
@@ -579,7 +588,7 @@ pattern_gauntlet := Pattern {
 	fragments = []FragmentEvent{{time_offset = 2.82, lane = .Dream, offset = FRAGMENT_ON_LANE}},
 	duration  = 2.94,
 	demand    = 3,
-	min_depth = 40000,
+	min_depth = 6400,
 }
 
 // Two of them, out of phase: the first is up as it passes and the second
@@ -599,7 +608,7 @@ pattern_float_pair := Pattern {
 	},
 	duration  = 2.7,
 	demand    = 2,
-	min_depth = 27000,
+	min_depth = 4700,
 }
 
 // --- The floating platforms ---
@@ -636,7 +645,7 @@ pattern_float_real := Pattern {
 	fragments = []FragmentEvent{{time_offset = 1.72, lane = .Dream, offset = FRAGMENT_ON_LANE}},
 	duration  = 1.94,
 	demand    = 1,
-	min_depth = 20000,
+	min_depth = 3300,
 }
 
 // One on each wall, out of phase and far enough apart in time that their
@@ -657,7 +666,7 @@ pattern_float_gate := Pattern {
 	},
 	duration  = 1.45,
 	demand    = 2,
-	min_depth = 33000,
+	min_depth = 5700,
 }
 
 // The whole pool, in the order it unlocks. There is one list since C3:

@@ -33,9 +33,7 @@ new_score :: proc() -> Score {
 // Depth is how far the *character* travelled this step, which is not the
 // same as how far the world scrolled.
 //
-// The world comes at them at its own rate — which since F4 is faster on
-// the ceiling than on the floor (world.odin), so depth per second is one
-// of the things the player buys by going up; their own screen x moves too.
+// The world comes at them at scroll_speed; their own screen x moves too.
 // Add the two and the arithmetic says the right thing at every moment
 // without a single branch: pinned against a cube the character's x falls
 // at exactly the scroll speed, the two cancel, and depth stops. Running
@@ -43,6 +41,6 @@ new_score :: proc() -> Score {
 // the world does, and the run they lost is repaid in score as well as in
 // room. **Blocking costs depth, and nothing here had to be told that.**
 update_score :: proc(score: ^Score, world: World, player: Player, delta_time: f32) {
-	travelled := (get_scroll_rate(world) + player.velocity_x) * delta_time
+	travelled := (world.scroll_speed + player.velocity_x) * delta_time
 	score.value += max(travelled, 0) / PIXELS_PER_DEPTH
 }
