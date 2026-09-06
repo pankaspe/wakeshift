@@ -173,10 +173,10 @@ CORRUPTION_START_X :: 0
 // So the fix is three numbers and only one of them is in this file: the
 // runway grew (core/screen.odin), the world slowed (game/world.odin), and
 // the appetite came down to what a run with no income can pay. At 220 px/s
-// the front now takes 3.1 px/s, which is 141 seconds to cross the opening
-// runway on its own — the front is the clock the player can see, and it is
-// not supposed to be the thing that kills them while they are still
-// playing well.
+// the front now takes 3.1 px/s, which is 176 seconds to cross the opening
+// runway of 541 px on its own — the front is the clock the player can see,
+// and it is not supposed to be the thing that kills them while they are
+// still playing well.
 //
 // **When fragments land (L3/L4) these have to be redrawn against the new
 // income, not nudged.** That is the same mistake as above, one phase later.
