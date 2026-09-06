@@ -52,18 +52,24 @@ polilinee prima di essere disegnati.
 
 ## In corso — la fase L
 
-Si va a passi piccoli, uno alla volta, e si rivede il piano dopo ognuno.
+Si va a passi piccoli, uno alla volta, e si rivede il piano dopo ognuno. Lo stato si aggiorna a ogni
+passo che atterra: ✅ fatto · 🟡 in parte · ⬜ da fare.
 
-| | Task | Note |
-|---|---|---|
-| **L1** | **La griglia e lo scivolamento** → Prototipo grezzo su un ramo: celle, muri, movimento a quattro direzioni che scivola fino all'ostacolo, la Corruzione che già c'è. Labirinto anche solo abbozzato. Serve a rispondere a una domanda sola: **a questa velocità un labirinto si legge e diverte?** | prima decisione: dimensione della cella e del corpo |
-| **L2** | **Il generatore vero** → L'invariante del cammino garantito, poi rami e vicoli ciechi attorno. I parametri (densità, lunghezza dei muri, ramificazione, vicoli) sono continui e crescono con la distanza. | qui vive tutta la difficoltà |
-| **L3** | **Frammenti e Corruzione nel labirinto** → L'economia riadattata: dove stanno i rombi in un labirinto perché costino qualcosa, e quanto rallentano il fronte. | |
-| **L4** | **La barra e la fase Onirica** → Cosa carica la barra, quanto dura l'Onirico, e cosa cambia lassù oltre al colore (pilastro 6). | |
-| **L5** | **Il disegno del labirinto** → I muri come tratto al neon. `STROKE_MAX_POINTS` e il costo delle draw call vanno **misurati**, non supposti: uno schermo di labirinto sono centinaia di segmenti corti invece di una polilinea lunga. | rischio tecnico noto |
-| **L6** | **Punteggio, HUD, font** → Cosa si segna in un labirinto. Megrim (SIL OFL 1.1, nessun Reserved Font Name) in `assets/fonts/`, caricato dai byte così il binario resta autosufficiente. | |
-| **L7** | **Audio** → Tenuto per ultimo per scelta dell'autore, che intanto prova il gioco con musiche diverse in sottofondo. | |
+| | | Task | Note |
+|---|---|---|---|
+| ✅ | **L1** | **La griglia e lo scivolamento** → Celle, muri, movimento a quattro direzioni che scivola fino all'ostacolo, la Corruzione che già c'è. Serve a rispondere a una domanda sola: **a questa velocità un labirinto si legge e diverte?** | cella 60, 12 righe, corpo 38. Il codice c'è; **la domanda la risponde il playtest**, non il commit |
+| 🟡 | **L2** | **Il generatore vero** → L'invariante del cammino garantito, poi rami e vicoli ciechi attorno. I parametri (densità, lunghezza dei muri, ramificazione, vicoli) sono continui e crescono con la distanza. | invariante, intreccio e misura ci sono. Mancano: i parametri che **crescono** con la distanza, e la riparazione deterministica della trappola 1/1000 |
+| ⬜ | **L3** | **Frammenti e Corruzione nel labirinto** → Dove stanno i rombi in un labirinto perché costino qualcosa. Il BFS del generatore dà già il costo di deviazione di ogni cella: si piazzano per misura. | |
+| ⬜ | **L4** | **La barra e la fase Onirica** → Cosa carica la barra, quanto dura l'Onirico, e cosa cambia lassù oltre al colore (pilastro 6). | attraversamento di un muro + il fronte che arretra |
+| 🟡 | **L5** | **Il disegno del labirinto** → I muri come tratto al neon. `STROKE_MAX_POINTS` e il costo delle draw call vanno **misurati**, non supposti. | misurato: **82 tratti a schermo contro 562**, frame a 13,35 ms. Il rischio tecnico è chiuso; il giudizio estetico no |
+| ⬜ | **L6** | **Punteggio, HUD, font** → Cosa si segna in un labirinto. Megrim (SIL OFL 1.1, nessun Reserved Font Name) in `assets/fonts/`, caricato dai byte così il binario resta autosufficiente. | |
+| ⬜ | **L7** | **Audio** → Tenuto per ultimo per scelta dell'autore, che intanto prova il gioco con musiche diverse in sottofondo. | |
+| ⬜ | **L8** | **Livelli e portali** → Il livello è un checkpoint dentro una run continua: il fronte arretra, la barra resta, la difficoltà sale di un gradino, lo scroll non si ferma un frame. | deciso il 6 settembre |
+| ⬜ | **L9** | **Allenamento** → Ogni livello raggiunto giocabile da solo, a seed fisso e senza Corruzione. Stesso generatore, seed noto, fronte spento. | deciso il 6 settembre |
+
+L'ordine dopo L1 lo decide l'autore: la tabella dice cosa c'è da fare, non in che sequenza.
 
 **Da sistemare quando il labirinto è reale**: il `RunManifest` registra solo i tick del flip, quindi
-con quattro direzioni non riproduce più una run. Il record salvato (4998) è di un equilibrio che non
-esiste più e non sarà comparabile.
+con quattro direzioni **non riproduce più una run** — confermato con L1, e il tenere premuto è input
+di simulazione che nemmeno le pressioni da sole basterebbero a ricostruire. Il record salvato (4998)
+è di un equilibrio che non esiste più e non sarà comparabile.
