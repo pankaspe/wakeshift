@@ -63,8 +63,12 @@ appetito del fronte −71%. I vecchi erano calibrati su un'economia di frammenti
 
 Secondo playtest: ancora troppo veloce, e tornare indietro con A era impagabile. Il fronte passa da
 coordinate schermo a coordinate mondo e avanza da solo; la telecamera segue il corpo, avanti e
-indietro, con un ritardo di 0,18 s. Chi corre bene se lo lascia dietro **fuori campo** e guadagna
-tempo per leggere. Fermo si muore in 10,5 s invece di 1,26. Muri un terzo più spessi.
+indietro. Chi corre bene se lo lascia dietro **fuori campo** e guadagna tempo per leggere. Fermo si
+muore in 10,5 s invece di 1,26. Muri un terzo più spessi.
+
+**Verificato al terzo playtest: si gioca con gusto e ci si può fermare a pensare.** Il verdetto
+definitivo però è rimandato alla taratura finale del gameplay: questa è una base accettata, non una
+chiusura.
 
 ---
 
@@ -75,7 +79,7 @@ passo che atterra: ✅ fatto · 🟡 in parte · ⬜ da fare.
 
 | | | Task | Note |
 |---|---|---|---|
-| ✅ | **L1** | **La griglia e lo scivolamento** → Celle, muri, movimento a quattro direzioni che scivola fino all'ostacolo, la Corruzione che già c'è. Serve a rispondere a una domanda sola: **a questa velocità un labirinto si legge e diverte?** | cella 60, 12 righe, corpo 38. **Playtest 6 settembre: sì, si legge.** L'economia del terreno è stata ritarata subito dopo |
+| ✅ | **L1** | **La griglia e lo scivolamento** → Celle, muri, movimento a quattro direzioni che scivola fino all'ostacolo, la Corruzione che già c'è. Serve a rispondere a una domanda sola: **a questa velocità un labirinto si legge e diverte?** | cella 60, 12 righe, corpo 38. **Sì a entrambe**, in tre playtest: si legge, e dopo che la Corruzione è entrata nel mondo si gioca con gusto. Taratura fine rimandata |
 | 🟡 | **L2** | **Il generatore vero** → L'invariante del cammino garantito, poi rami e vicoli ciechi attorno. I parametri (densità, lunghezza dei muri, ramificazione, vicoli) sono continui e crescono con la distanza. | invariante, intreccio e misura ci sono. Mancano: i parametri che **crescono** con la distanza, e la riparazione deterministica della trappola 1/1000 |
 | ⬜ | **L3** | **Frammenti e Corruzione nel labirinto** → Dove stanno i rombi in un labirinto perché costino qualcosa. Il BFS del generatore dà già il costo di deviazione di ogni cella: si piazzano per misura. | |
 | ⬜ | **L4** | **La barra e la fase Onirica** → Cosa carica la barra, quanto dura l'Onirico, e cosa cambia lassù oltre al colore (pilastro 6). | attraversamento di un muro + il fronte che arretra |
