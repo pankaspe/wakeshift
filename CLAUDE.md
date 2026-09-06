@@ -18,8 +18,10 @@ What still binds:
 
 - **What it looks like** → `docs/inspiration/La_Linea.png`. A filled, vignetted field and one
   continuous glowing stroke that *is* the world. The maze is drawn in exactly that stroke.
-- **What has been built, in order** → `TIMELINE.md` (Italian; the author's file). One line per piece
-  of work, and **there is no roadmap**: the author decides the next step, one at a time.
+- **What is done and what is left** → `TIMELINE.md` (Italian; the author's file). It is a **board,
+  not a history**: one row per step, its status, and which model should take it. The history lives in
+  `git log`, where the commit messages carry the argument. There is still no roadmap in the sense
+  that matters — the board says what, never when, and the author picks the next one.
 - **How we work** → this file.
 
 `docs/` is deliberately **not tracked by git**: it is the author's working material and lives only
@@ -67,7 +69,8 @@ raylib as `import rl "vendor:raylib/v55"` — never `v6`, the linker expectation
 
 ## Picking up in a new session
 
-1. **`TIMELINE.md`** — what exists, one line each. It is history, not a plan.
+1. **`TIMELINE.md`** — the board: what is done, what is left, which model each step wants, and the
+   author's next recommended step. Read `git log` for why any of it is the way it is.
 2. **This file** — the architecture rules and conventions, which are what actually bind.
 3. The header comment of whatever file you are about to touch. Every one states its responsibility
    and the decisions behind it, and that is where the *why* lives.
@@ -127,11 +130,11 @@ Five traps, all learned the hard way and all still live:
 4. **Report honestly.** If a phase is partially done, say which part and why. If a test fails, show
    the output.
 5. Keep `odin check src` green at every intermediate step, especially during file moves.
-6. **Add one entry to `TIMELINE.md` when a piece of work lands**: a title, the model that did the
-   work on the line under it, and at most seventy words on what changed. Nothing else goes there —
-   no rationale, no measurements, no plans. The model line exists because the author plans their
-   own budget from it; the aggregate at the foot of that file is counted from the commits'
-   `Co-Authored-By` trailers and must never be estimated.
+6. **Update the board in `TIMELINE.md` when a piece of work lands**: move the row's status, and say
+   in its Note what is still missing. Keep it lean — it is the file the author opens first, and a
+   row that grows into a paragraph stops being readable at a glance. Nothing else goes there: no
+   rationale, no measurements, no narrative. Those go in the commit message and in the comment of
+   the constant they justify.
 
    What was learned is **moved somewhere it will be read again**, and that is never the timeline: a
    library trap into the comment of the file that hits it, an architecture rule into this file, a

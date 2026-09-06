@@ -23,7 +23,7 @@ screen, which buys you the seconds you need to read the maze; hesitate, backtrac
 it comes back into view. Its absence *is* the reading — there is no meter.
 
 Fragments, the Dream phase and levels are designed and not yet built. **[TIMELINE.md](TIMELINE.md)**
-says where each piece stands, and which model wrote it.
+says where each piece stands.
 
 ---
 
