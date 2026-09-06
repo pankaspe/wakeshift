@@ -53,8 +53,9 @@ draw_gameplay :: proc(
 ) {
 	// The world exists between the two fronts: written by the pen on the
 	// right, eaten by the Corruption on the left. Both are a clip, and
-	// both of them are this one number and DRAW_FRONT_X.
-	render.draw_maze(maze, world, palettes, corruption.front_x)
+	// both of them are this one number and DRAW_FRONT_X. The left one is
+	// usually off the picture, and clipping to it then costs nothing.
+	render.draw_maze(maze, world, palettes, game.get_corruption_screen_x(corruption, world))
 
 	// The dust the world's line throws off as it reaches the front. Drawn
 	// with the world because it *is* the world, a moment later.
@@ -69,15 +70,23 @@ draw_gameplay :: proc(
 
 // Returns a copy of the world advanced by the leftover fraction of a
 // simulation step, for drawing only. Every wall's screen x derives from
-// scroll_offset, so nudging that one value forward smooths the whole scene
-// without any of them needing to know a fixed timestep exists.
+// the camera, so running the camera's own chase over the leftover time
+// smooths the whole scene without any of it needing to know a fixed
+// timestep exists.
+//
+// It is handed the *interpolated* body, not the stepped one, or the camera
+// would be chasing where the player was rather than where they are drawn.
 //
 // Never feed the result back into the simulation: it is a display-only
 // extrapolation, and the real world state is the one that was stepped.
-interpolated_world :: proc(world: game.World, accumulator: f32) -> game.World {
+interpolated_world :: proc(
+	world: game.World,
+	ahead_player: game.Player,
+	accumulator: f32,
+) -> game.World {
 	ahead := world
 	ahead.elapsed_time += accumulator
-	ahead.scroll_offset += ahead.scroll_speed * accumulator
+	game.advance_camera(&ahead, accumulator, game.get_player_world(ahead_player).x)
 	return ahead
 }
 
@@ -324,21 +333,24 @@ main :: proc() {
 				// from inside a draw (game/maze.odin).
 				game.ensure_maze_ahead(&maze, world)
 
-				// The camera must run before the body: the body's screen
-				// position is read against this step's camera.
-				game.update_world(&world, core.FIXED_TIMESTEP, game.get_player_world(player).x)
-
+				// The body moves first now, and then the camera follows it.
+				// The order used to be the other way round because the
+				// camera was the thing setting the pace; it is a camera
+				// again (game/world.odin), so it goes second.
 				game.update_player(&player, &maze, step_input, core.FIXED_TIMESTEP)
 
-				// The front takes its cut of the ground just covered.
-				game.update_corruption(&corruption, world, core.FIXED_TIMESTEP)
+				game.update_world(&world, core.FIXED_TIMESTEP, game.get_player_world(player).x)
+
+				// The front comes on through the world, on its own clock
+				// and never on the camera's.
+				game.update_corruption(&corruption, player, core.FIXED_TIMESTEP)
 
 				game.update_score(&score, player)
 
 				// Out of room: the front caught up. The only ending there
 				// is, which is the design working rather than a
 				// simplification (pillar 7).
-				if game.corruption_has_reached(corruption, player, world) {
+				if game.corruption_has_reached(corruption, player) {
 					game_state = .GameOver
 					if score.value > high_score {
 						high_score = score.value
@@ -432,13 +444,7 @@ main :: proc() {
 		rl.ClearBackground(palettes.neutral.deep)
 
 		background_t = render.chase_background_t(background_t, palettes.world_t, frame_time)
-		render.draw_background(
-			background,
-			palettes,
-			background_t,
-			display_time,
-			showing_run ? world.scroll_offset : display_time * game.INITIAL_SCROLL_SPEED,
-		)
+		render.draw_background(background, palettes, background_t, display_time)
 
 		// Only while actually playing, not for every state that *shows* a
 		// run: a paused frame is a still, and dust drifting across one
@@ -453,10 +459,11 @@ main :: proc() {
 			ui.draw_main_menu(main_menu, high_score, palettes)
 
 		case .Playing:
+			ahead_player := interpolated_player(player, accumulator)
 			draw_gameplay(
 				&maze,
-				interpolated_world(world, accumulator),
-				interpolated_player(player, accumulator),
+				interpolated_world(world, ahead_player, accumulator),
+				ahead_player,
 				corruption,
 				palettes,
 				particles,
@@ -493,7 +500,7 @@ main :: proc() {
 			fx.apply_corruption(
 				&corruption_fx,
 				disp.render_target,
-				corruption.front_x / core.SCREEN_WIDTH,
+				game.get_corruption_screen_x(corruption, world) / core.SCREEN_WIDTH,
 			)
 		}
 

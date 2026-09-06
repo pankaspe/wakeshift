@@ -111,7 +111,7 @@ fray_points :: proc(
 	floor, ceiling: rl.Vector2,
 	ok: bool,
 ) {
-	x := corruption.front_x
+	x := game.get_corruption_screen_x(corruption, world)
 	if x <= 0 {
 		return {}, {}, false
 	}
@@ -146,7 +146,7 @@ emit_fray :: proc(
 		return
 	}
 
-	rate := f32(FRAY_RATE_BASE) + FRAY_RATE_PRESSURE * game.get_corruption_pressure(corruption, player, world)
+	rate := f32(FRAY_RATE_BASE) + FRAY_RATE_PRESSURE * game.get_corruption_pressure(corruption, player)
 
 	lane :: proc(origin: rl.Vector2, outward: f32, rate: f32, palette: core.Palette) -> fx.Emitter {
 		return fx.Emitter {
@@ -174,12 +174,15 @@ draw_corruption :: proc(
 	world: game.World,
 	palettes: core.PaletteSet,
 ) {
-	x := corruption.front_x
+	x := game.get_corruption_screen_x(corruption, world)
 	if x <= 0 {
-		return // still off the left edge: nothing to draw
+		// Off the left of the picture, which is not an omission: a player
+		// far enough ahead is *supposed* to see no threat at all, and the
+		// front's absence is the clearest health bar there is.
+		return
 	}
 
-	pressure := game.get_corruption_pressure(corruption, player, world)
+	pressure := game.get_corruption_pressure(corruption, player)
 	presence := CORRUPTION_EDGE_BASE + CORRUPTION_EDGE_PRESSURE * pressure
 
 	top := rl.Vector2{x, 0}

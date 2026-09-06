@@ -21,14 +21,19 @@ SCREEN_HEIGHT :: 720
 // starts here and every other column follows from the grid — so the
 // second job is gone and the second name went with it.
 //
-// **THE RUNWAY AND THE PREVIEW ARE THE SAME 1280 PX, SPLIT BY THIS**
+// **IT IS NOT THE HEALTH BAR ANY MORE, AND THAT FREED IT**
 //
-// Every pixel this moves right is health bought with warning time, and
-// every pixel left is the reverse. There is no third place for either to
-// come from, which is why the first maze playtest could not be answered
-// by this constant alone: moving it right *and* slowing the world by a
-// matching proportion buys the health without spending the warning, and
-// neither does that on its own. At 560 against a 220 px/s world the block
-// sees 3.05 s of maze ahead of it — which is what it saw at 360 against
-// 270, to within a twentieth of a second.
-PLAYER_HOME_X :: 560
+// It was, while the front lived in screen space: how far the body sat
+// from the left edge *was* the room it had left, so every pixel this
+// moved right was health bought with warning time and there was no third
+// place for either to come from. The Corruption moved into the world
+// after the first maze playtest (game/corruption.odin) and took the
+// health bar with it, which leaves this constant with one job instead of
+// two — deciding how much maze is visible ahead of the body.
+//
+// So it moved *left*, not right. At 440 the block sees 792 px of maze in
+// front of it, a little over thirteen columns, which is three or four
+// moves of reading. What is behind it is now only the distance the front
+// has to cross on screen before it arrives: 2.3 s at the opening speed,
+// which is warning and not health.
+PLAYER_HOME_X :: 440

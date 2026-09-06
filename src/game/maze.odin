@@ -66,7 +66,7 @@ CHUNK_COLUMNS :: 32
 // one behind the Corruption. Fixed, so the maze never allocates.
 CHUNK_SLOTS :: 5
 
-// Where column 0 lands on screen at scroll_offset 0. Chosen so the first
+// Where column 0 lands on screen at camera 0. Chosen so the first
 // cell's centre sits exactly on core.PLAYER_HOME_X.
 MAZE_ORIGIN_X :: f32(core.PLAYER_HOME_X) - CELL_SIZE * 0.5
 
@@ -310,8 +310,8 @@ cell_centre_y :: proc(row: int) -> f32 {
 
 // World x to screen x. The one conversion; nothing else may invent its
 // own, or the maze slides against the body drawn on it.
-maze_screen_x :: proc(world_x: f32, scroll_offset: f32) -> f32 {
-	return MAZE_ORIGIN_X + world_x - scroll_offset
+maze_screen_x :: proc(world_x: f32, camera_x: f32) -> f32 {
+	return MAZE_ORIGIN_X + world_x - camera_x
 }
 
 // --- Generation ---
@@ -914,7 +914,7 @@ generate_chunk :: proc(maze: ^Maze, chunk: ^Chunk, index: int) {
 // The columns the screen covers, with a margin so a wall entering from the
 // right is already there when its first pixel is.
 get_visible_columns :: proc(world: World, margin: int = 1) -> (first, last: int) {
-	left := world.scroll_offset - MAZE_ORIGIN_X
+	left := world.camera_x - MAZE_ORIGIN_X
 	first = int(left / CELL_SIZE) - margin
 	last = int((left + f32(core.SCREEN_WIDTH)) / CELL_SIZE) + margin
 	if first < 0 {

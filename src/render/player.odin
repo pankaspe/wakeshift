@@ -108,7 +108,7 @@ new_player_pose :: proc(player: game.Player, world: game.World) -> PlayerPose {
 	scale := get_player_scale(player)
 	return PlayerPose {
 		centre = rl.Vector2 {
-			game.maze_screen_x(position.x, world.scroll_offset),
+			game.maze_screen_x(position.x, world.camera_x),
 			position.y,
 		},
 		size = rl.Vector2{game.PLAYER_SIZE * scale.x, game.PLAYER_SIZE * scale.y},

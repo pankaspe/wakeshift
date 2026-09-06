@@ -165,14 +165,14 @@ chase_background_t :: proc(current: f32, target: f32, dt: f32) -> f32 {
 //
 // background_t is the *chased* position, not the player's own — see the
 // file header. time is wall time and drives nothing but the breathing.
-// scroll is how far the world has travelled, for the parallax alone:
-// the run's own scroll_offset in a game, the wall clock behind a menu.
+//
+// It took a `scroll` argument until the parallax went: nothing behind the
+// maze moves with the world any more.
 draw_background :: proc(
 	background: Background,
 	palettes: core.PaletteSet,
 	background_t: f32,
 	time: f32,
-	scroll: f32,
 ) {
 	// The same two-segment blend the palette itself uses, so the field
 	// passes through the neutral world instead of averaging past it.

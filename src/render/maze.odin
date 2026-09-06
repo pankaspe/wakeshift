@@ -44,11 +44,13 @@ WORLD_STROKE_THICKNESS :: 2.8
 // to be lifted by the same amount, the block included.
 WORLD_CORE_LIGHT :: 0.5
 
-// The corridor's own edge against everything inside it. One rung for the
-// boundary, three quarters for the walls, so the eye reads the outside of
-// the world before it reads its furniture.
-MAZE_BOUND_WEIGHT :: 1.0
-MAZE_WALL_WEIGHT :: 0.75
+// The corridor's own edge against everything inside it. The boundary is
+// heavier than the walls so the eye reads the outside of the world before
+// it reads its furniture, and the ratio between them is what carries that
+// — not the absolute weights, which went up a third after the first
+// playtest asked for a slightly heavier line.
+MAZE_BOUND_WEIGHT :: 1.3
+MAZE_WALL_WEIGHT :: 1.0
 
 MAZE_GLOW :: 0.40
 MAZE_SPREAD :: 4.0
@@ -115,8 +117,8 @@ draw_maze :: proc(
 				run = col
 			}
 			if !present && run >= 0 {
-				x0 := game.maze_screen_x(f32(run) * game.CELL_SIZE, world.scroll_offset)
-				x1 := game.maze_screen_x(f32(col) * game.CELL_SIZE, world.scroll_offset)
+				x0 := game.maze_screen_x(f32(run) * game.CELL_SIZE, world.camera_x)
+				x1 := game.maze_screen_x(f32(col) * game.CELL_SIZE, world.camera_x)
 				if start, end, ok := clipped_span(x0, x1, left, right); ok {
 					draw_stroke_line(rl.Vector2{start, y}, rl.Vector2{end, y}, stroke)
 				}
@@ -128,7 +130,7 @@ draw_maze :: proc(
 	// Vertical runs: one per unbroken column of west walls. A whole run is
 	// on one x, so it is in or out of the window as a unit.
 	for col_boundary in first ..= last + 1 {
-		x := game.maze_screen_x(f32(col_boundary) * game.CELL_SIZE, world.scroll_offset)
+		x := game.maze_screen_x(f32(col_boundary) * game.CELL_SIZE, world.camera_x)
 		if x < left || x > right {
 			continue
 		}

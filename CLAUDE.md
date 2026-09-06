@@ -304,6 +304,17 @@ animation, and anything new that draws itself must truncate the same way rather 
   one boundary that threatens nothing. The draw front is marked by *absence* plus a nib.
 - **The Corruption's own lit edge is drawn with primitives and must stay drawn.** A lethal front
   nobody can see is the one thing that would kill without showing the blow coming.
+- **The left front lives in the world, and the camera follows the body.** It was a screen x with the
+  camera running past it at a constant speed until the first maze playtest, and measured, that made
+  the camera the game's real threat: 96% of the ground a player lost was the camera and 4% was the
+  thing with a name on it. Reading a maze takes time a runner never needed, so a camera that charges
+  for standing still prices out the only way the game can be played. Two rules come out of the swap
+  and both are load-bearing:
+  - **Death compares two world positions, never two screen ones.** That is what lets the camera lag,
+    chase, and be as pretty as it likes without any of it reaching the thing that decides a run.
+  - **A front off the picture is not a missing front.** Being far enough ahead that there is nothing
+    to see is the reward, and it is the clearest health bar the game has. Do not draw a marker, a
+    meter or an arrow for it — the empty edge *is* the reading.
 - **A shape cut at one end is open there and closed at the end it finished**, so anything that can be
   half-written has to be built from the pen outward. A shape whose outline runs from its left edge
   rightward leaves both loose ends on the left when clipped — capped at the pen and open at the end

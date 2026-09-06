@@ -59,6 +59,15 @@ appetito del fronte −71%. I vecchi erano calibrati su un'economia di frammenti
 
 ---
 
+## 6 settembre 2026 — la Corruzione entra nel mondo, la telecamera torna una telecamera
+
+Secondo playtest: ancora troppo veloce, e tornare indietro con A era impagabile. Il fronte passa da
+coordinate schermo a coordinate mondo e avanza da solo; la telecamera segue il corpo, avanti e
+indietro, con un ritardo di 0,18 s. Chi corre bene se lo lascia dietro **fuori campo** e guadagna
+tempo per leggere. Fermo si muore in 10,5 s invece di 1,26. Muri un terzo più spessi.
+
+---
+
 ## In corso — la fase L
 
 Si va a passi piccoli, uno alla volta, e si rivede il piano dopo ognuno. Lo stato si aggiorna a ogni

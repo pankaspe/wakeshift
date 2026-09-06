@@ -18,9 +18,9 @@ import "core:math"
 // that the convergence landed on the same beat as the difficulty tiers;
 // C3 put difficulty on distance, so the two are only in step while speed
 // is constant, which it is until the player can buy it (roadmap R6.3).
-// Moving this onto scroll_offset would be a no-op today and correct
-// afterwards, but it changes the look, so it waits for a playtest to ask
-// for it (Design Doc, section 3).
+// Moving it onto distance instead of seconds would be the honest version
+// now that the camera no longer runs at a fixed speed, but it changes the
+// look, so it waits for a playtest to ask for it.
 CONVERGENCE_START_TIME :: 30
 CONVERGENCE_FULL_TIME :: 100
 

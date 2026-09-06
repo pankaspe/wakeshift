@@ -42,12 +42,6 @@ PLAYER_SIZE :: 38
 // its chunks against (see MazeParams.max_ratio).
 RUNNER_SPEED :: 900
 
-// How far right the block may get before the camera is dragged along with
-// it. Being ahead is worth safety, not an ever-emptier screen: past this
-// point the picture would run out of maze to show before the player
-// reached it.
-RUNNER_MAX_SCREEN_X :: 760
-
 Player :: struct {
 	// The cell the body is leaving. At rest, the cell it is in.
 	col:       int,
@@ -81,13 +75,7 @@ get_player_world :: proc(player: Player) -> rl.Vector2 {
 }
 
 get_player_screen_x :: proc(player: Player, world: World) -> f32 {
-	return maze_screen_x(get_player_world(player).x, world.scroll_offset)
-}
-
-// How much room is left between the body and the front. The whole health
-// bar, in one number (Design Doc §6).
-get_player_runway :: proc(player: Player, world: World, front_x: f32) -> f32 {
-	return get_player_screen_x(player, world) - PLAYER_SIZE * 0.5 - front_x
+	return maze_screen_x(get_player_world(player).x, world.camera_x)
 }
 
 // Which way the four keys point this step. .None if none of them went
