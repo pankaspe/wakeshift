@@ -127,8 +127,11 @@ Five traps, all learned the hard way and all still live:
 4. **Report honestly.** If a phase is partially done, say which part and why. If a test fails, show
    the output.
 5. Keep `odin check src` green at every intermediate step, especially during file moves.
-6. **Add one entry to `TIMELINE.md` when a piece of work lands**: a title and at most seventy words
-   on what changed. Nothing else goes there — no rationale, no measurements, no plans.
+6. **Add one entry to `TIMELINE.md` when a piece of work lands**: a title, the model that did the
+   work on the line under it, and at most seventy words on what changed. Nothing else goes there —
+   no rationale, no measurements, no plans. The model line exists because the author plans their
+   own budget from it; the aggregate at the foot of that file is counted from the commits'
+   `Co-Authored-By` trailers and must never be estimated.
 
    What was learned is **moved somewhere it will be read again**, and that is never the timeline: a
    library trap into the comment of the file that hits it, an architecture rule into this file, a

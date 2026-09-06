@@ -6,6 +6,7 @@ lo decide l'autore, uno alla volta.
 ---
 
 ## 6 settembre 2026 — si riparte: il labirinto
+*Opus 5*
 
 Il gioco a due corsie è archiviato. Ha funzionato come esercizio di stile e ha prodotto un motore
 grafico che ci teniamo tutto, ma il playtest ha detto la stessa cosa tre volte in tre modi diversi:
@@ -41,6 +42,7 @@ non verbo di navigazione). I frammenti fanno **un mestiere solo**: rallentano il
 ---
 
 ## 6 settembre 2026 — L1: la griglia, lo scivolamento, il generatore
+*Opus 5*
 
 Il gioco a due corsie esce dal codice: 11 file cancellati. Al suo posto una griglia di 12 righe da 60
 px, il corpo che scivola in quattro direzioni finché un muro non lo ferma, e un generatore a chunk
@@ -51,6 +53,7 @@ polilinee prima di essere disegnati.
 ---
 
 ## 6 settembre 2026 — il primo playtest, e la Corruzione non era il problema
+*Opus 5*
 
 **Il labirinto si legge e si gioca: L1 ha la sua risposta.** Il fronte però sembrava velocissimo, e
 misurato non lo era — prendeva 10,8 px/s mentre la telecamera ne prendeva 270 per ogni secondo
@@ -60,6 +63,7 @@ appetito del fronte −71%. I vecchi erano calibrati su un'economia di frammenti
 ---
 
 ## 6 settembre 2026 — la Corruzione entra nel mondo, la telecamera torna una telecamera
+*Opus 5*
 
 Secondo playtest: ancora troppo veloce, e tornare indietro con A era impagabile. Il fronte passa da
 coordinate schermo a coordinate mondo e avanza da solo; la telecamera segue il corpo, avanti e
@@ -95,3 +99,25 @@ L'ordine dopo L1 lo decide l'autore: la tabella dice cosa c'è da fare, non in c
 con quattro direzioni **non riproduce più una run** — confermato con L1, e il tenere premuto è input
 di simulazione che nemmeno le pressioni da sole basterebbero a ricostruire. Il record salvato (4998)
 è di un equilibrio che non esiste più e non sarà comparabile.
+
+---
+
+## Chi ha scritto cosa
+
+Ogni voce qui sopra porta il modello che ha fatto il lavoro. Questa tabella è l'aggregato su tutta la
+storia del repository, contato dai trailer `Co-Authored-By` dei commit — **non è una stima**.
+
+| periodo | commit | modello | che lavoro |
+|---|---|---|---|
+| 31 lug – 4 ago 2026 | 19 | non tracciato | l'alfa a due corsie, prima che la convenzione esistesse |
+| 18 ago e 2 set 2026 | 2 | **Sonnet 5** | aggiornamento roadmap; refactor dei package + revisione design v1.1 |
+| ago – 6 set 2026 | 73 | **Opus 5** | tutto il resto: gameplay, generatore, render, misure, documenti |
+
+Si ricontano da soli, in qualunque momento:
+
+```bash
+git log --format="%b" | grep -c "Claude Sonnet 5"
+git log --format="%h %ad %s" --date=short --grep="Claude Sonnet 5"
+```
+
+**Da qui in avanti ogni voce nuova dichiara il modello sotto il titolo.**
