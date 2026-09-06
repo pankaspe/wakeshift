@@ -186,7 +186,10 @@ draw_background :: proc(
 	// Under the vignette, and out of the same lagged palette the field
 	// itself is drawn from: the horizons belong to the background, not to
 	// the world standing in front of it.
-	draw_parallax(field, scroll)
+	// The parallax went with the two-lane game (RL/L1). It lived in the
+	// sky above the corridor and below it, and the maze is now the whole
+	// screen: there is no band left that is not the world, and curves
+	// drawn behind a maze read as more maze. Pillar 2 settles it.
 
 	edge := core.dim_color(field.deep, VIGNETTE_DEPTH)
 	rl.DrawTexturePro(

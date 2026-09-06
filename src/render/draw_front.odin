@@ -73,7 +73,7 @@ NIB_SPREAD :: 4.5
 // for the same reason: the pen belongs to neither world, and it must not
 // change colour when the player flips.
 draw_nib :: proc(point: rl.Vector2, palettes: core.PaletteSet) {
-	nib := new_stroke(palettes.neutral.accent, TERRAIN_STROKE_THICKNESS * NIB_WEIGHT)
+	nib := new_stroke(palettes.neutral.accent, WORLD_STROKE_THICKNESS * NIB_WEIGHT)
 	nib.glow = NIB_GLOW
 	nib.spread = NIB_SPREAD
 	nib.core_light = 0.6

@@ -1,497 +1,161 @@
 /*
 * Player
-* Holds the player character state and drives the flip state machine
-* (Design Doc, section 4). Drawing lives separately in the render package:
-* nothing under game/ ever draws.
+* The block, and the one verb it has: it is sent in a direction and it
+* travels until a wall stops it.
 *
-* The whole control scheme is one sentence, and the code is arranged so
-* that sentence is literally what runs:
+* EVERY MOVE IS A COMMITMENT (pillar 1)
 *
-*     A flip is one journey from wall to wall, and there is nothing else.
+* There is no steering. A press picks a direction, the body leaves, and
+* nothing — including another press — can change where it is going until
+* it arrives. What the next press buys is the *next* journey, which is why
+* one press is latched while the current one finishes rather than dropped:
+* a game about reading two moves ahead has to let the second one be given
+* early.
 *
-* One key, one gesture (Design Doc, pillar 1). The v1.x version of this
-* file had a second: holding the key stopped the journey at its midpoint,
-* in a third state. That state is gone, and with it the only reason the
-* journey had to be long — the midpoint was the tap/hold decision point,
-* so the journey had to take long enough to reach it *after* an ordinary
-* tap had ended. Without that constraint the flip can be what it should
-* have been all along: fast enough to be a reflex.
+* Junctions passed in the middle of a slide are not offered. The body only
+* turns where something stopped it, which is what makes the length of the
+* straight runs a difficulty knob and not a decoration: a long corridor is
+* fast and asks nothing, a short one is slow and asks constantly.
 *
-* Since R2.1 the character also moves **horizontally**, and that axis is
-* the whole of the rewrite. A cube does not kill: it stops you against its
-* face, the face scrolls away with the world, and you are dragged
-* backwards toward the Corruption. Running free you claw the ground back,
-* at two thirds of the speed you lose it. How far the character sits from
-* the front is the only health bar the game has.
+* THE BODY LIVES ON THE GRID, AND THE GRID ANSWERS FOR IT
 *
-* The two axes are independent and resolved in one place, in this order:
-* the press, then the journey, then the ground, then where the body
-* actually is. The order matters exactly once — a tap frees you from a
-* cube on the same step it is pressed, because the journey has already
-* started by the time the ground is resolved.
-*
-* A press that arrives mid-journey is **buffered**, not dropped and not
-* blended into the journey in progress: it takes off the instant that
-* journey lands, carrying the overshoot with it so the rhythm stays
-* exact. Two flips back to back therefore work at the full FLIP_DURATION
-* cadence with no dead frame between them.
-*
-* The buffer is **one deep, deliberately**. Measured: five presses on five
-* consecutive steps produce two flips, not five. A deeper queue would let
-* mashing bank flips the player can no longer see coming, and the
-* character would keep turning over after they stopped asking — which is
-* a worse bug than the one the buffer exists to fix. One press ahead is
-* forgiveness; five is the game playing itself.
-*
-* It first shipped with a curve that lingered at the threshold, on the
-* theory that a flip which visibly slows through the middle teaches the
-* third state before anyone tries to use it. Playtest killed it: the
-* character came off the wall at three times average speed, stopped dead
-* mid-air, then shot away again, and what that reads as is a hitch in the
-* one gesture the whole game is made of. The lesson is worth keeping
-* around, because it will come up again in phases 9 and 11 — a flourish
-* placed *on the player's own motion* is not decoration, it is friction.
-* Teach with the background, the light, the particles; never by making
-* the character do something it didn't ask to do.
+* Collision is a question to the maze about a wall between two cells, not
+* an overlap between two rectangles. The block is drawn centred in its
+* cell and is smaller than the cell, so the air around it is presentation
+* and costs nothing: there is no pixel at which it can catch on a corner,
+* because no pixel is ever consulted.
 */
 package game
 
 import "../core"
-import "core:math"
 import rl "vendor:raylib/v55"
 
-// Player reference size in pixels (Design Doc, section 6: ~40-50px).
-//
-// It came down from 45 on 6 September, by playtest: with the character
-// drawn as a filled block rather than as a figure, 45 read as too much of
-// the corridor. **The simulation's box came down with it and not just the
-// drawing** — a body drawn smaller than the box that blocks it would show
-// a cube stopping the character before touching them, which is the "mark
-// and hitbox disagree" failure this project has already paid for twice.
-//
-// Four things are derived from it and all four stay legal at 38:
-// MIRROR_MIN_WIDTH (the legal band for a facing pair becomes [38, 54],
-// and SHAPE_FACING is 54), CUBE_MAX_HEIGHT (a 12-unit column tops out at
-// 231 against a hanging body ending at 203, so 28 px of daylight instead
-// of 21), the fairness windows (which get shorter, so a pool that was
-// legal stays legal), and "a body is never on one column" — 38 is still
-// comfortably over CUBE_UNIT's 27.
+// The block, against a 60 px cell: 0.63 of the corridor, so it clears
+// comfortably without rattling. Kept from the two-lane game, where the
+// same number was arrived at for a different reason and happens to be
+// right for this one.
 PLAYER_SIZE :: 38
 
-// Player state machine (Design Doc, sections 3-4).
-PlayerState :: enum {
-	Real, // settled on the floor
-	Dream, // settled on the ceiling
-	Transitioning, // mid-journey between the two
-}
+// How fast a slide travels, in px/s. It has to be well clear of the
+// scroll speed or a perfect run would still lose ground: at 270 px/s of
+// scroll this is 3.33x, which is also the budget the generator measures
+// its chunks against (see MazeParams.max_ratio).
+RUNNER_SPEED :: 900
 
-// How long the whole journey takes, wall to wall.
-//
-// Constant in *time*, never in space: the corridor changes width along
-// the track and the gesture must not change with it. A flip the player
-// has to recalibrate at every curve stops being a reflex, which is the
-// one thing this game asks of them.
-FLIP_DURATION :: 0.16
-
-// How fast the character claws back ground once nothing is blocking them,
-// as a fraction of the world's scroll speed.
-//
-// A fraction rather than a number of pixels, so that buying Slancio
-// (roadmap R6.3) makes a mistake cost more *and* take proportionally as
-// long to repay — the trade stays honest at every speed.
-//
-// Deliberately under 1: ground is lost at the full scroll speed and won
-// back at two thirds of it, so a brief mistake is repaid in about half
-// again the time it took to make, and three close together are a real
-// problem.
-//
-// **It is also, measured, inert — and the reason is worth more than the
-// number.** The F playtest asked for a mistake to cost more, and this is
-// the knob that looks like it. Swept from 0.0 to 2.0 across 60 replayed
-// runs, every outcome was byte-identical. Instrumenting the deaths says
-// why: the lowest x a run ever reaches *is* the x it dies at. A run does
-// not end some time after a mistake, it ends **inside** one — a single
-// pin the player never gets out of — so the rate at which ground is
-// repaid governs a repayment that never happens.
-//
-// What would actually price a mistake is in CLAUDE.md's known issues:
-// landing on top of a cube is free, so most contact costs a rhythm break
-// rather than ground. Change that and this number starts to bite.
-PLAYER_RECOVERY_RATIO :: 0.66
-
-// Duration of the invulnerability grace period, in seconds.
-//
-// Deliberately shorter than the journey. It exists to forgive the flip
-// started at the last possible instant, and the player is clear of the
-// lane they were in long before it expires. Covering the *whole* journey
-// instead would hand out a much worse deal than it sounds: presses queue,
-// so a player mashing the key would be permanently untouchable.
-INVULNERABILITY_DURATION :: 0.10
-
-// How fast a settled body drops when the thing it was standing on stops
-// being there, in pixels per second.
-//
-// The game has no gravity — every vertical movement it has is a scripted
-// journey — so walking off the leading edge of a cube needs a speed of
-// its own or it is a 54 px teleport in one frame. At this it takes about
-// four frames, which is short enough to read as falling off rather than
-// as a second kind of flip.
-PLAYER_FALL_SPEED :: 900
+// How far right the block may get before the camera is dragged along with
+// it. Being ahead is worth safety, not an ever-emptier screen: past this
+// point the picture would run out of maze to show before the player
+// reached it.
+RUNNER_MAX_SCREEN_X :: 760
 
 Player :: struct {
-	position:              rl.Vector2,
-	size:                  rl.Vector2,
-	lane:                  core.Lane, // the wall we are on, or the one we left
-	state:                 PlayerState,
-	target_lane:           core.Lane, // the wall this journey ends at
-	transition_timer:      f32, // seconds travelled along the journey; frozen while suspended
-	is_invulnerable:       bool,
-	invulnerability_timer: f32, // seconds elapsed since invulnerability started
-	settle_timer:          f32, // seconds since landing, drives the post flip squash bounce
+	// The cell the body is leaving. At rest, the cell it is in.
+	col:       int,
+	row:       int,
 
-	// A press that arrived while a journey was already running. Consumed
-	// the instant that journey lands, with the overshoot carried into the
-	// next one, so a burst of taps keeps its rhythm instead of being
-	// quantised to whenever the code happened to notice.
-	flip_queued:           bool,
+	// The journey, if one is under way. .None means at rest.
+	dir:       core.Direction,
+	to_col:    int,
+	to_row:    int,
+	travelled: f32, // px covered so far
+	length:    f32, // px the whole journey covers
 
-	// True on any step a cube is holding the character back. Presentation
-	// reads it, and so does anything that wants to know why the ground is
-	// going the wrong way.
-	is_blocked:            bool,
-
-	// How fast the character is moving across the screen, px/s. Derived
-	// rather than integrated: the pin sets a position directly, so the
-	// velocity is measured after the fact from where the body ended up.
-	//
-	// It is what turns scroll into *distance travelled*: pinned, it is
-	// exactly minus the scroll speed, and the two cancel to zero (see
-	// score.odin). Blocking costs depth without a single line that says
-	// so.
-	velocity_x:            f32,
+	// One press held for the moment the body arrives. Exactly one: a queue
+	// would let a player type a route in advance and stop reading the maze.
+	queued:    core.Direction,
 }
 
-// Creates a player anchored to the floor, in the Real lane.
 new_player :: proc() -> Player {
-	player_size := rl.Vector2{PLAYER_SIZE, PLAYER_SIZE}
+	return Player{col = 0, row = MAZE_START_ROW}
+}
 
-	// settle_timer starts at zero, so a run opens with the landing bounce
-	// already playing (render/player.odin) and the character arrives
-	// rather than appearing. It is a consequence of the zero value rather
-	// than a line of code, and it is kept deliberately: the alternative is
-	// a block that is simply there on frame one.
-	return Player {
-		position = rl.Vector2{core.PLAYER_HOME_X, get_lane_y(.Real, player_size)},
-		size     = player_size,
-		lane     = .Real,
-		state    = .Real,
+// Where the body is in world pixels, interpolated along its journey.
+get_player_world :: proc(player: Player) -> rl.Vector2 {
+	from := rl.Vector2{cell_centre_x(player.col), cell_centre_y(player.row)}
+	if player.dir == .None || player.length <= 0 {
+		return from
 	}
+	to := rl.Vector2{cell_centre_x(player.to_col), cell_centre_y(player.to_row)}
+	t := clamp(player.travelled / player.length, 0, 1)
+	return from + (to - from) * t
 }
 
-// Where the player's box sits for a given world state.
-//
-// The journey is between the two walls, and since phase 7.5 the walls
-// are the terrain, so both of its endpoints are sampled fresh every step
-// rather than captured when the flip began. A flip that starts before a
-// change in the ground and ends after it therefore always lands on the
-// ground that is actually there — at the cost of a path that curves a
-// little while the terrain slides underneath, which is the trade the
-// alternative (aiming at where the ground will be on arrival) makes in
-// reverse, with a target the player cannot see yet.
-//
-// It is a pure function of the player and the world on purpose: the
-// simulation calls it with the stepped world, and render calls it with
-// the world nudged forward by the leftover fraction of a step, so the
-// character rides the same interpolated ground the terrain is drawn on
-// instead of stepping down it at the tick rate.
-// It takes the obstacle list because since 5 September the ground is not
-// only the track: a cube the body is already above is something it stands
-// *on* (world.odin, get_support_y). Both endpoints of a journey are
-// resolved that way too, so a flip onto an occupied lane aims at the top
-// of the box instead of at the floor underneath it.
-get_player_y :: proc(player: Player, world: World, obstacles: []Obstacle) -> f32 {
-	switch player.state {
-	case .Real, .Dream:
-		return get_stand_y(
-			world,
-			obstacles,
-			player.lane,
-			player.position.x,
-			player.size,
-			player.position.y,
-		)
+get_player_screen_x :: proc(player: Player, world: World) -> f32 {
+	return maze_screen_x(get_player_world(player).x, world.scroll_offset)
+}
 
-	case .Transitioning:
-		// player.lane is still the lane we left; target_lane is the one we
-		// are going to. Both endpoints are resampled every step, so a
-		// journey that starts before a change in the corridor and ends
-		// after it lands on the ground that is actually there — and a
-		// corridor that narrows mid-flip simply shortens the path rather
-		// than moving the target out from under the arithmetic.
-		from := get_stand_y(
-			world,
-			obstacles,
-			player.lane,
-			player.position.x,
-			player.size,
-			player.position.y,
-		)
-		to := get_stand_y(
-			world,
-			obstacles,
-			player.target_lane,
-			player.position.x,
-			player.size,
-			player.position.y,
-		)
-		return from + (to - from) * flip_progress(player.transition_timer / FLIP_DURATION)
+// How much room is left between the body and the front. The whole health
+// bar, in one number (Design Doc §6).
+get_player_runway :: proc(player: Player, world: World, front_x: f32) -> f32 {
+	return get_player_screen_x(player, world) - PLAYER_SIZE * 0.5 - front_x
+}
+
+// Which way the four keys point this step. .None if none of them went
+// down; when two arrive on the same step the order here decides, and it
+// puts forward first because forward is what the game is about.
+input_direction :: proc(input: core.Input) -> core.Direction {
+	switch {
+	case input.move_right:
+		return .Right
+	case input.move_left:
+		return .Left
+	case input.move_up:
+		return .Up
+	case input.move_down:
+		return .Down
 	}
-	return player.position.y
+	return .None
 }
 
-// Where along the journey we are (0 at the wall we left, 1 at the wall we
-// are heading to) after a fraction t of its duration.
-//
-// One constant speed, and it is deliberate rather than lazy. Anything
-// that leaves the wall faster than average has to give the time back
-// before the midpoint — that is arithmetic, not a tuning choice — and
-// giving it back means decelerating in mid-air, which is the hitch that
-// playtest threw out. A straight line is the only shape with no hitch to
-// give back.
-//
-// The two ends are also the two places a discontinuity in speed is
-// *right*: leaving is a push, and arriving is a landing, which the
-// squash-and-stretch bounce already absorbs (render/player.odin).
-//
-// It stays a named procedure rather than being inlined because a future
-// game feel pass will be tempted to shape it, and the comment above is
-// the argument it has to beat.
-flip_progress :: proc(t: f32) -> f32 {
-	return clamp(t, 0, 1)
+@(private = "file")
+start_slide :: proc(player: ^Player, maze: ^Maze, dir: core.Direction) {
+	to_col, to_row, cells := maze_slide(maze, player.col, player.row, dir)
+	if cells == 0 {
+		return
+	}
+	player.dir = dir
+	player.to_col = to_col
+	player.to_row = to_row
+	player.length = f32(cells) * CELL_SIZE
+	player.travelled = 0
 }
 
-// Advances the player state machine for one simulation step.
+// One simulation step of the body.
 //
-// Both input and delta_time arrive as arguments rather than being polled
-// from raylib in here: the same input and the same timestep must always
-// produce the same run, which is what makes a run recordable and
-// replayable (see core/input.odin).
-//
-update_player :: proc(
-	player: ^Player,
-	world: World,
-	obstacles: []Obstacle,
-	input: core.Input,
-	delta_time: f32,
-) {
-	was_at := player.position.x
+// A press is taken whenever it arrives and spent when the body is free.
+// The overshoot of the step that completes a journey is carried into the
+// next one rather than thrown away, so the speed is exactly RUNNER_SPEED
+// however the steps fall.
+update_player :: proc(player: ^Player, maze: ^Maze, input: core.Input, delta_time: f32) {
+	if pressed := input_direction(input); pressed != .None {
+		player.queued = pressed
+	}
 
-	// A press either starts a journey or is remembered until the current
-	// one lands. Only one is remembered at a time — see the file header
-	// for why a deeper buffer is worse rather than better.
-	if input.flip {
-		if player.state == .Transitioning {
-			player.flip_queued = true
-		} else {
-			start_flip(player)
+	if player.dir == .None {
+		if player.queued != .None {
+			start_slide(player, maze, player.queued)
+			player.queued = .None
 		}
-	}
-
-	switch player.state {
-	case .Transitioning:
-		advance_flip(player, delta_time)
-	case .Real, .Dream:
-	// settled on a wall: nothing to advance
-	}
-
-	// Invulnerability runs on its own timer, independent from the journey,
-	// since the two durations are deliberately different.
-	if player.is_invulnerable {
-		player.invulnerability_timer += delta_time
-		if player.invulnerability_timer >= INVULNERABILITY_DURATION {
-			player.is_invulnerable = false
-		}
-	}
-
-	player.settle_timer += delta_time
-
-	// Horizontal, after the journey: a tap frees the character from a cube
-	// on the same step it is pressed, because by now they are already
-	// travelling and nothing on a lane can hold them.
-	advance_ground(player, world, obstacles, delta_time)
-	player.velocity_x = (player.position.x - was_at) / delta_time
-
-	// One place decides where the body is, for every state: the walls
-	// moved under it this step even if the player did nothing, and the
-	// ground under them changes with x as well as with time.
-	// One place decides where the body is, for every state: the walls moved
-	// under it this step even if the player did nothing, the ground under
-	// them changes with x as well as with time, and since 5 September a
-	// cube they came down onto is part of that ground.
-	//
-	// A settled body **falls** toward a support that has dropped away
-	// rather than snapping to it: riding a cube off its leading edge is a
-	// 54 px drop, and the game has no gravity to spread it over. Rising
-	// ground is not eased — a floor coming up under you has already
-	// arrived — and neither is a journey, which owns its own path.
-	target := get_player_y(player^, world, obstacles)
-	if player.state == .Transitioning {
-		player.position.y = target
-	} else {
-		fall := PLAYER_FALL_SPEED * delta_time
-		toward_ground := player.lane == .Real ? target > player.position.y : target < player.position.y
-		if toward_ground {
-			player.position.y += clamp(target - player.position.y, -fall, fall)
-		} else {
-			player.position.y = target
-		}
-	}
-}
-
-// Runs the character back toward where they belong, then pushes them out
-// of anything solid they ran into. **Move first, resolve second** — the
-// order is not cosmetic.
-//
-// The obvious arrangement is the other way round: look for a cube, and if
-// there is one, pin against its face. It self-destructs. Pinning places
-// the character exactly at the face, which is *not* an overlap, so the
-// next step finds nothing blocking, lets them creep forward, and the step
-// after that pins them again. Measured, is_blocked flickered every other
-// step while the character was plainly stuck — a lie to anything that
-// reads it, and a wrong answer to the one question the whole design turns
-// on.
-//
-// Moving first makes the contact real: they try to advance, they overlap,
-// they are pushed back, and is_blocked means what it says. It also gets
-// the dragging for free — the face is scrolling left, so being pushed
-// behind it every step *is* losing ground at exactly the world's speed,
-// with nobody having to say the word.
-//
-// **A cube holds the character; it never drags them.** That is the last
-// line, and it is what makes the mirrored pair a price rather than an
-// execution (roadmap R4.1). Placing the body at a cube's face is a
-// *forward* clamp when the cube is ahead — but a character who lands on
-// a lane that is already occupied is behind that face by up to a whole
-// flip's worth of ground, and the same clamp would then yank them
-// backwards in a single step. Capping the loss at the world's own scroll
-// says the only thing that is physically true: nothing pushes you back
-// faster than the world moves. Two consequences fall out of it, and both
-// are load-bearing —
-//
-//   * velocity_x can never be below -scroll_speed, so the depth
-//     arithmetic in score.odin (which adds the two) can never go
-//     negative and never has to clamp.
-//   * a pair of cubes facing each other across the corridor terminates.
-//     Pinned, the character holds station in the world; flipping is the
-//     only thing that buys ground, so each flip advances them by
-//     flip_clearance and enough of them work past the box. What they pay
-//     is exactly its width, which is what the design says a cube costs.
-@(private)
-advance_ground :: proc(
-	player: ^Player,
-	world: World,
-	obstacles: []Obstacle,
-	delta_time: f32,
-) {
-	entry_x := player.position.x
-
-	recovery := world.scroll_speed * PLAYER_RECOVERY_RATIO * delta_time
-	player.position.x = min(player.position.x + recovery, core.PLAYER_HOME_X)
-
-	player.is_blocked = false
-	for obstacle in obstacles {
-		// The face is the blocking *column's* left edge, not the
-		// obstacle's: inside a skyline the body is held by whichever
-		// column it has reached, and standing on a low step means the
-		// wall is the next one along (collision.odin).
-		face, blocked := get_blocking_face(player^, obstacle, world)
-		if !blocked {
-			continue
-		}
-		player.is_blocked = true
-		player.position.x = min(player.position.x, face - player.size.x)
-	}
-
-	player.position.x = max(player.position.x, entry_x - world.scroll_speed * delta_time)
-}
-
-// How much ground one flip buys against something standing still in the
-// world, in pixels.
-//
-// While the character is settled and blocked they hold station in the
-// world: the recovery is cancelled by the pin. Mid-flip nothing on a lane
-// can reach them, so the recovery runs unopposed, and this is all of it.
-// It is the unit the price of a mirrored pair is counted in.
-flip_clearance :: proc(scroll_speed: f32) -> f32 {
-	return scroll_speed * PLAYER_RECOVERY_RATIO * FLIP_DURATION
-}
-
-// How many flips it takes to work past a cube of the given width when the
-// opposite lane offers no way out. The body has to clear its own length
-// as well as the box, which is why a mirrored pair is never free even of
-// a cube with no width at all.
-mirror_flip_cost :: proc(width: f32, scroll_speed: f32) -> int {
-	clearance := flip_clearance(scroll_speed)
-	if clearance <= 0 {
-		return 0
-	}
-	return int(math.ceil((f32(PLAYER_SIZE) + width) / clearance))
-}
-
-// How much ground the character has left, in pixels: the distance from
-// the Corruption front to their trailing edge. This is the health bar,
-// and there is no other.
-get_player_runway :: proc(player: Player, front_x: f32) -> f32 {
-	return player.position.x - front_x
-}
-
-@(private)
-start_flip :: proc(player: ^Player) {
-	player.target_lane = core.opposite_lane(player.lane)
-	player.state = .Transitioning
-	player.transition_timer = 0
-	player.flip_queued = false
-
-	player.is_invulnerable = true
-	player.invulnerability_timer = 0
-}
-
-@(private)
-advance_flip :: proc(player: ^Player, delta_time: f32) {
-	player.transition_timer += delta_time
-	if player.transition_timer < FLIP_DURATION {
 		return
 	}
 
-	// Journey complete: settle onto the wall it was always headed for.
-	// The position is not written here — get_player_y answers with the
-	// settled wall from this step on, and it is the same value the
-	// journey was approaching, so the landing has nothing to snap to.
-	overshoot := player.transition_timer - FLIP_DURATION
-	player.lane = player.target_lane
-	player.state = .Real if player.lane == .Real else .Dream
-	player.settle_timer = 0 // landing moment: start the squash bounce from zero
-
-	// A press that arrived mid-journey takes off again immediately, from
-	// the wall just landed on, carrying the overshoot with it. Carrying it
-	// is what keeps a burst of taps rhythmic: without it every queued flip
-	// would start on a step boundary and the second of two fast taps would
-	// land up to a whole step late.
-	if player.flip_queued {
-		start_flip(player)
-		player.transition_timer = overshoot
+	player.travelled += RUNNER_SPEED * delta_time
+	if player.travelled < player.length {
+		return
 	}
-}
 
-// How far through the body's turn-over the player is, 0..1. The body
-// turns faster than it travels — the whip is over well before the journey
-// ends — so nothing about the body is still moving on its own at the
-// moment it lands. Two animations resolving at once read as one stutter.
-FLIP_WHIP_DURATION :: 0.10
+	overshoot := player.travelled - player.length
+	player.col = player.to_col
+	player.row = player.to_row
+	player.dir = .None
+	player.travelled = 0
+	player.length = 0
 
-get_whip_progress :: proc(player: Player) -> f32 {
-	if player.state != .Transitioning {
-		return 1
+	if player.queued != .None {
+		start_slide(player, maze, player.queued)
+		player.queued = .None
+		if player.dir != .None {
+			player.travelled = min(overshoot, player.length)
+		}
 	}
-	return clamp(player.transition_timer / FLIP_WHIP_DURATION, 0, 1)
 }

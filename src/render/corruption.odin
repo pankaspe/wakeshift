@@ -115,9 +115,9 @@ fray_points :: proc(
 	if x <= 0 {
 		return {}, {}, false
 	}
-	return rl.Vector2{x, game.get_surface_y(.Real)},
-		rl.Vector2{x, game.get_surface_y(.Dream)},
-		true
+	// The corridor's two edges. They used to be the two lanes; they are
+	// the maze's floor and ceiling now, and the dust reads the same.
+	return rl.Vector2{x, f32(core.SCREEN_HEIGHT)}, rl.Vector2{x, 0}, true
 }
 
 // Throws one frame's worth of dust off both lanes.
@@ -139,12 +139,14 @@ emit_fray :: proc(
 	palettes: core.PaletteSet,
 	dt: f32,
 ) {
+	// context: the front eats from the left and the dust is what the world
+	// comes apart into behind it.
 	floor, ceiling, ok := fray_points(world, corruption)
 	if !ok {
 		return
 	}
 
-	rate := f32(FRAY_RATE_BASE) + FRAY_RATE_PRESSURE * game.get_corruption_pressure(corruption, player)
+	rate := f32(FRAY_RATE_BASE) + FRAY_RATE_PRESSURE * game.get_corruption_pressure(corruption, player, world)
 
 	lane :: proc(origin: rl.Vector2, outward: f32, rate: f32, palette: core.Palette) -> fx.Emitter {
 		return fx.Emitter {
@@ -169,6 +171,7 @@ emit_fray :: proc(
 draw_corruption :: proc(
 	corruption: game.Corruption,
 	player: game.Player,
+	world: game.World,
 	palettes: core.PaletteSet,
 ) {
 	x := corruption.front_x
@@ -176,7 +179,7 @@ draw_corruption :: proc(
 		return // still off the left edge: nothing to draw
 	}
 
-	pressure := game.get_corruption_pressure(corruption, player)
+	pressure := game.get_corruption_pressure(corruption, player, world)
 	presence := CORRUPTION_EDGE_BASE + CORRUPTION_EDGE_PRESSURE * pressure
 
 	top := rl.Vector2{x, 0}

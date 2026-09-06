@@ -35,13 +35,12 @@ CONVERGENCE_FULL_TIME :: 100
 // depend on where the track happens to have carried them, which is not
 // something the palette has any business knowing about.
 get_world_t :: proc(player: game.Player, world: game.World) -> f32 {
-	half := player.size.y * 0.5
-
-	center := player.position.y + half
-	real_center := game.get_lane_y(.Real, player.size) + half
-	dream_center := game.get_lane_y(.Dream, player.size) + half
-
-	return clamp((real_center - center) / (real_center - dream_center), 0, 1)
+	// Zero for the whole of L1: the Dream is a phase of the run, not a
+	// place in the corridor, and the phase does not exist yet. It stays a
+	// procedure rather than a constant because everything downstream —
+	// palette, bloom, glow gain — is already written against it, and the
+	// Dream will set it without touching any of them.
+	return 0
 }
 
 get_depth_t :: proc(world: game.World) -> f32 {

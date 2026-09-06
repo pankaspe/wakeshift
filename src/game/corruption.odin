@@ -231,11 +231,9 @@ new_corruption :: proc() -> Corruption {
 
 // How much ground the front takes per pixel of world, right now.
 //
-// A straight line in distance on its own scale. It reads Difficulty for
-// the distance and nothing else — the curve's own `t` belongs to the
-// density knobs, which top out far sooner (see CORRUPTION_FULL_DISTANCE).
-get_corruption_gain :: proc(difficulty: Difficulty) -> f32 {
-	t := clamp(difficulty.depth / CORRUPTION_FULL_DISTANCE, 0, 1)
+// A straight line in distance on its own scale.
+get_corruption_gain :: proc(depth: f32) -> f32 {
+	t := clamp(depth / CORRUPTION_FULL_DISTANCE, 0, 1)
 	return CORRUPTION_GAIN_OPEN + (CORRUPTION_GAIN_TOP - CORRUPTION_GAIN_OPEN) * t
 }
 
@@ -246,13 +244,8 @@ get_corruption_gain :: proc(difficulty: Difficulty) -> f32 {
 // front is already at the left edge is discarded by the clamp at the
 // bottom rather than by an ordering accident — the discarding is the
 // rule, and it should be one line that says so.
-update_corruption :: proc(
-	corruption: ^Corruption,
-	world: World,
-	difficulty: Difficulty,
-	delta_time: f32,
-) {
-	corruption.front_x += get_corruption_gain(difficulty) * world.scroll_speed * delta_time
+update_corruption :: proc(corruption: ^Corruption, world: World, delta_time: f32) {
+	corruption.front_x += get_corruption_gain(world.scroll_offset) * world.scroll_speed * delta_time
 
 	if corruption.owed > 0 {
 		paid := min(corruption.owed, f32(CORRUPTION_REFUND_SPEED) * delta_time)
@@ -281,14 +274,14 @@ repay_corruption :: proc(corruption: ^Corruption, fragments: int) {
 }
 
 // True once the front has caught up: the run is over.
-corruption_has_reached :: proc(corruption: Corruption, player: Player) -> bool {
-	return player.position.x <= corruption.front_x
+corruption_has_reached :: proc(corruption: Corruption, player: Player, world: World) -> bool {
+	return get_player_screen_x(player, world) - PLAYER_SIZE * 0.5 <= corruption.front_x
 }
 
 // 0..1, how much of the runway is gone. Presentation reads it; the
 // simulation does not, because the thing that matters is the distance
 // itself and this is only a way of describing it.
-get_corruption_pressure :: proc(corruption: Corruption, player: Player) -> f32 {
+get_corruption_pressure :: proc(corruption: Corruption, player: Player, world: World) -> f32 {
 	full := f32(core.PLAYER_HOME_X - CORRUPTION_START_X)
-	return clamp(1 - get_player_runway(player, corruption.front_x) / full, 0, 1)
+	return clamp(1 - get_player_runway(player, world, corruption.front_x) / full, 0, 1)
 }

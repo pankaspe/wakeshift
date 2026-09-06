@@ -9,9 +9,8 @@
 *      calls, neither a game nor a render concern in its own right
 *   2. Window + one-time setup — settings are read from disk *before*
 *      the window exists, so it is created in the mode and size the
-*      player left it in (platform/settings, roadmap T2.5.5)
-*   3. State declarations (one variable per subsystem, roughly in the
-*      order each subsystem was introduced across the roadmap sections)
+*      player left it in (platform/settings)
+*   3. State declarations, one variable per subsystem
 *   4. Main loop:
 *      - UPDATE: reads input, then advances the simulation in fixed steps
 *        (core/time.odin) — a frame may run zero, one, or several
@@ -30,93 +29,48 @@ import "ui"
 import "core:math/rand"
 import rl "vendor:raylib/v55"
 
-// Draws terrain, every obstacle, then the player on top — the gameplay
-// scene itself, on top of a background already drawn, with no HUD or
-// overlay. Playing draws this live; Paused
-// and GameOver draw the same frozen scene underneath their own overlay,
-// so without this helper the three calls would repeat identically in
-// every case of the DRAW switch below.
 // Whether the Corruption still drains the finished frame to black behind
 // its front (fx/corruption.odin).
 //
-// Off since RL.6, because the world is a line now and the Corruption is
-// the line ceasing to be there: the terrain is clipped at the front and
-// frays into dust, so behind it there is nothing left to drain — only the
-// field, and a field with no drawing on it is what "the world is not
-// here" looks like on paper.
-//
-// The shader is kept and still compiles, and this is the one line that
-// brings it back. Going to black came out of a playtest (R2.6), so it is
-// undone by another playtest rather than on paper; the roadmap asks for
-// the two to be compared on screen before the file is deleted.
+// Off since RL.6, because the world is a line and the Corruption is the
+// line ceasing to be there: the maze is clipped at the front, so behind it
+// there is nothing left to drain — only the field, and a field with no
+// drawing on it is what "the world is not here" looks like on paper.
 CORRUPTION_FILTER_ENABLED :: false
 
+// Draws the maze, then the block on top — the gameplay scene itself, on a
+// background already drawn, with no HUD or overlay. Playing draws this
+// live; Paused and GameOver draw the same frozen scene under their own
+// overlay, so without this helper the three calls would repeat in every
+// case of the DRAW switch below.
 draw_gameplay :: proc(
+	maze: ^game.Maze,
 	world: game.World,
-	obstacles: []game.Obstacle,
-	fragments: []game.Fragment,
 	player: game.Player,
 	corruption: game.Corruption,
 	palettes: core.PaletteSet,
 	particles: fx.Particles,
-	falling: f32 = 0,
-	pickup: f32 = -1,
 ) {
 	// The world exists between the two fronts: written by the pen on the
 	// right, eaten by the Corruption on the left. Both are a clip, and
 	// both of them are this one number and DRAW_FRONT_X.
-	front := corruption.front_x
-
-	render.draw_terrain(world, obstacles, palettes, front)
-	for obstacle in obstacles {
-		render.draw_obstacle(obstacle, world, palettes, front)
-	}
-
-	// After the dangers and before the character: a fragment is suspended
-	// in the corridor, so it belongs in front of the world it hangs in and
-	// behind the body that takes it.
-	for fragment in fragments {
-		render.draw_fragment(fragment, world, palettes, front)
-	}
+	render.draw_maze(maze, world, palettes, corruption.front_x)
 
 	// The dust the world's line throws off as it reaches the front. Drawn
 	// with the world because it *is* the world, a moment later.
 	fx.draw_particles(particles)
 
-	render.draw_player(player, world, obstacles, palettes, falling, pickup)
+	render.draw_player(player, world, palettes)
 
 	// Last, over everything: the front is in front of the world it is
 	// eating. This is the edge; the fraying is the dust above.
-	render.draw_corruption(corruption, player, palettes)
-}
-
-// Returns a copy of the player advanced by the same leftover fraction of
-// a step the world is, for drawing only.
-//
-// Without it the picture is **asymmetric**, and that is a bug you can
-// see: the cube is drawn where it will be a fraction of a step from now
-// and the character where they were at the last whole one, so a body
-// pinned against a face is drawn up to one step's scroll *inside* it —
-// 4.5 px at 60 Hz and the opening speed. The simulation was always right;
-// only the drawing was late. It went unnoticed for as long as a cube was
-// a filled mass that hid the overlap, and stopped being invisible in RL.2
-// when the cube became an outline with the character standing in it.
-//
-// Exact rather than a guess in the one case that matters. A pinned
-// character's velocity_x is exactly -scroll_speed, which is exactly what
-// the face they are pinned against is doing, so the two move together and
-// the contact is drawn where the simulation put it: touching.
-interpolated_player :: proc(player: game.Player, accumulator: f32) -> game.Player {
-	ahead := player
-	ahead.position.x += player.velocity_x * accumulator
-	return ahead
+	render.draw_corruption(corruption, player, world, palettes)
 }
 
 // Returns a copy of the world advanced by the leftover fraction of a
-// simulation step, for drawing only. Terrain scroll and every obstacle
-// position derive from world time, so nudging that one value forward
-// smooths the whole scene without any of them needing to know that a
-// fixed timestep exists.
+// simulation step, for drawing only. Every wall's screen x derives from
+// scroll_offset, so nudging that one value forward smooths the whole scene
+// without any of them needing to know a fixed timestep exists.
 //
 // Never feed the result back into the simulation: it is a display-only
 // extrapolation, and the real world state is the one that was stepped.
@@ -127,90 +81,57 @@ interpolated_world :: proc(world: game.World, accumulator: f32) -> game.World {
 	return ahead
 }
 
+// Returns a copy of the player advanced by the same fraction the world is,
+// for drawing only.
+//
+// Without it the picture is **asymmetric**, and that is a bug you can see:
+// the maze is drawn where it will be a fraction of a step from now and the
+// block where it was at the last whole one, so a body sliding along a wall
+// is drawn up to one step's scroll out of place. Exact rather than a
+// guess: a slide is perfectly linear in distance.
+interpolated_player :: proc(player: game.Player, accumulator: f32) -> game.Player {
+	if player.dir == .None {
+		return player
+	}
+	ahead := player
+	ahead.travelled = min(ahead.travelled + game.RUNNER_SPEED * accumulator, ahead.length)
+	return ahead
+}
+
 main :: proc() {
 	// --- Window + one-time setup ---
 
-	// Read first, before there is a window to read them for: nothing on
-	// this path touches raylib (platform/save.odin), which is what lets the
-	// window be born in the right mode instead of flashing through a
-	// default one (roadmap T2.5.5).
 	settings := platform.load_settings()
-
-	// Born in the mode the settings ask for, and hidden until it is set up
-	// (platform/window.odin). Resizable so the window can be dragged to any
-	// size; combined with Display's letterboxed scaling, the game always
-	// fills whatever size it ends up at.
 	platform.open_window(settings, "Wake Shift")
 	defer rl.CloseWindow()
-	// disable raylib's default ESC-closes-window behavior: we use ESC to pause instead
+	// ESC pauses instead of closing the window
 	rl.SetExitKey(.KEY_NULL)
-
 	platform.show_window()
 
-	// Frames left in which to re-assert the window's bounds after a mode
-	// change. A window manager applies its own constraints a frame or two
-	// late, so the mode set above has to be insisted on for a moment
-	// (platform/window.odin).
 	window_settle := platform.WINDOW_SETTLE_FRAMES
 
-	// canvas the whole game draws to. Game code keeps working in 1280x720
-	// coordinates; the target itself is allocated at the real output
-	// resolution and rebuilt whenever that changes (platform/display.odin).
 	disp := platform.new_display()
 	defer platform.destroy_display(disp)
 
-	// Bloom runs on the finished frame, between the canvas closing and
-	// the blit to the window (fx/bloom.odin). It allocates its own
-	// buffers on the first frame and re-allocates them whenever the
-	// frame's size changes, so nothing here has to tell it about resizes.
 	bloom := fx.new_bloom()
 	defer fx.destroy_bloom(bloom)
 
-	// The colour dying from the left, applied to the finished frame after
-	// the bloom (fx/corruption.odin). The *edge* of the front is drawn in
-	// the world instead, so the player can still see it if this shader
-	// fails to compile.
 	corruption_fx := fx.new_corruption()
 	defer fx.destroy_corruption(corruption_fx)
 
-	// The dust the world's line comes apart into behind the front
-	// (fx/particles.odin, render/corruption.odin). A fixed pool, advanced
-	// from the frame clock like every other piece of presentation state —
-	// it never reaches the simulation, and its randomness is its own.
 	particles := fx.new_particles()
 
-	// One level of noise over the finished frame, between the bloom and
-	// the Corruption (fx/dither.odin). The background is the whole screen
-	// now, so the banding in its gradients stopped being a detail.
 	dither := fx.new_dither()
 	defer fx.destroy_dither(dither)
 
-	// The vignette mask the background is drawn through, baked once
-	// (render/background.odin). render/ owns no globals, so main holds it
-	// the same way it holds the bloom's buffers.
 	background := render.new_background()
 	defer render.destroy_background(background)
 
-	// catch any pattern-authoring mistakes immediately at startup: one
-	// pool, every ordered pair, every seam (game/pattern.odin). It is one
-	// pool since C3 — the curve unlocks patterns continuously, so every
-	// pair can meet eventually and there is no per-tier set to check.
-	game.validate_pattern_pool(game.all_patterns)
+	// --- Persistent state (survives across runs) ---
 
-	// --- Persistent state (survives across runs, not reset by reset_run) ---
-
-	// personal best, loaded once at startup, saved on every new record (section 14)
 	high_score := platform.load_high_score()
 
-	// navigable menus, shared widget (section 13). The item arrays live
-	// here because a Menu borrows its rows rather than owning them (see
-	// ui/menu.odin) — they have to outlive the menu, and main's scope is
-	// the whole program.
-	main_menu_items := [?]ui.MenuItem {
-		{label = "Start Run"},
-		{label = "Options"},
-		{label = "Quit"},
-	}
+	main_menu_items := [?]ui.MenuItem{{label = "Start Run"}, {label = "Options"}, {label = "Quit"}}
 	pause_menu_items := [?]ui.MenuItem {
 		{label = "Resume"},
 		{label = "Options"},
@@ -219,153 +140,93 @@ main :: proc() {
 	main_menu := ui.new_menu(main_menu_items[:])
 	pause_menu := ui.new_menu(pause_menu_items[:])
 
-	// options screen, plus the state it returns to — it is reachable from
-	// both the main menu and the pause menu, and going "back" has to mean
-	// whichever one opened it (roadmap T2.5.7)
 	options_screen: ui.OptionsScreen
 	ui.init_options_screen(&options_screen)
 	options_return := game.GameState.MainMenu
 
-	// window sizes worth offering on the monitor the window is on. Rebuilt
-	// on entering the options screen and after a mode change, because a
-	// window moved to another monitor gets a different list.
 	resolution_storage: [core.MAX_WINDOW_RESOLUTIONS]core.Resolution
 	resolutions := platform.list_window_resolutions(resolution_storage[:])
 
 	should_quit := false
-
-	// overall application screen state — starts at the main menu (section 13)
 	game_state := game.GameState.MainMenu
 
-	// --- Per-run state (all reset together by reset_run, section 13/17) ---
+	// --- Per-run state (all reset together by reset_run) ---
 
-	// player: position, lane, flip/transition state (sections 1-4, 15)
 	player := game.new_player()
-
-	// world: scroll speed and elapsed time (section 5, 8)
 	world := game.new_world()
 
-	// obstacle list, filled in continuously by the pattern generator (section 9-10)
-	obstacles: [dynamic]game.Obstacle
-
-	// the rewards, on the same clock and from the same patterns, in their
-	// own list because a fragment is not a danger (game/fragment.odin)
-	fragments: game.Fragments
-
-	// seed for the current run: decides every random choice the level
-	// generator makes. Drawn fresh here, at the composition root, because
-	// it is an input to the run — a replay would set it from a recorded
-	// RunManifest instead (roadmap T2.8) and change nothing else.
+	// The seed for the current run: it decides every wall the generator
+	// draws. Taken fresh here, at the composition root, because it is an
+	// *input* to the run — a replay would set it from a recorded manifest
+	// and change nothing else.
 	run_seed := rand.uint64()
+	maze := game.new_maze(run_seed)
 
-	// pattern generator: starts 2 safe seconds in
-	generator := game.new_pattern_generator(game.all_patterns, 2.0, run_seed)
+	score := game.new_score()
+	corruption := game.new_corruption()
 
-	// records which ticks the player flipped on, so a run that sets a
-	// record can be stored as something replayable rather than a bare
-	// number (core/manifest.odin)
+	// The run's input log. It records flip ticks and a four-direction
+	// control scheme has no flips, so **a manifest saved today does not
+	// reproduce a run**. Kept live rather than deleted because everything
+	// around it — the seed, the tick count, the save path — is what a
+	// replay needs, and only the event type is wrong (see TIMELINE.md).
 	recorder := core.new_run_recorder(run_seed)
 	defer core.destroy_run_recorder(&recorder)
 
-	// run score, Dream Depth: the distance travelled, and the only score
-	score := game.new_score()
-
-	// the dream going out behind the player: a front advancing from the
-	// left, and the distance to it is the whole health bar (section 5)
-	corruption := game.new_corruption()
-
 	// --- Fixed timestep bookkeeping (core/time.odin) ---
 
-	// Real time seen but not yet simulated. Always drained below one full
-	// step by the end of a frame.
 	accumulator: f32 = 0
-
-	// Wall time since launch. Drives presentation that has no run behind
-	// it and must never be confused with world.elapsed_time, which is the
-	// simulation's own clock and advances in fixed steps.
 	display_time: f32 = 0
-
-	// Where the *background* thinks the player is, which is not quite
-	// where they are: it chases world_t on a lag of its own so a burst of
-	// flips washes the screen instead of strobing it
-	// (render/background.odin). Presentation only, like display_time —
-	// it is advanced from the frame clock and never enters a step. Starts
-	// between the two worlds, which is where the menu's drift lives.
 	background_t: f32 = 0.5
 
-	// The run's ending, for drawing only. A gap kills by being an absence,
-	// so the character has to be seen going through it rather than
-	// standing on nothing (render/player.odin) — and that is presentation:
-	// the run is already over, it runs on the frame clock, and no
-	// simulation step can see it. The Corruption's ending gets none of
-	// this: nothing to fall through.
-	fell_through: bool
-	fall_started: f32
-
-	// C5 — the one-time SPACE prompt. It fades in at the start of every
-	// run, centred in the corridor, and fades out the instant the player
-	// first flips, or after a few seconds if they never do (ui/screens.odin).
-	// Presentation only: advanced from the frame clock, reset by hand at the
-	// two run-start sites below, and no simulation step ever reads it — the
-	// game is already running underneath it, which is the whole point.
-	// intro_dismissed_at stays negative until the first flip.
 	intro_timer: f32 = 0
 	intro_dismissed_at: f32 = -1
 
-	// Seconds since the last fragment was taken, for the block's pop
-	// (render/player.odin). Presentation like the two above: advanced from
-	// the frame clock, reset by hand at the two run-start sites, and never
-	// read by a step. It starts past the animation's own length so that a
-	// run does not open mid-pop.
-	pickup_timer: f32 = 999
-
-	// Simulation input waiting for a step to consume it. Needed because a
-	// frame and a step are no longer the same thing: a frame that runs no
-	// step would otherwise drop the press, and one that runs two would
-	// apply it twice.
+	// Simulation input waiting for a step to consume it. A frame and a step
+	// are not the same thing: a frame that runs no step would otherwise
+	// drop the press, and one that runs two would apply it twice.
 	pending_input := core.Input{}
+
+	start_run :: proc(
+		player: ^game.Player,
+		world: ^game.World,
+		maze: ^game.Maze,
+		score: ^game.Score,
+		corruption: ^game.Corruption,
+		particles: ^fx.Particles,
+		recorder: ^core.RunRecorder,
+		accumulator: ^f32,
+		pending_input: ^core.Input,
+		intro_timer: ^f32,
+		intro_dismissed_at: ^f32,
+		seed: u64,
+	) {
+		game.reset_run(player, world, maze, score, corruption, seed)
+		fx.clear_particles(particles)
+		accumulator^ = 0
+		pending_input^ = core.Input{}
+		intro_timer^ = 0
+		intro_dismissed_at^ = -1
+		core.destroy_run_recorder(recorder)
+		recorder^ = core.new_run_recorder(seed)
+	}
 
 	// --- Main loop ---
 	for !rl.WindowShouldClose() && !should_quit {
-
-		// Anything formatted for this frame's HUD and menus is allocated
-		// from the temporary arena; released here so a long session does
-		// not accumulate a frame's worth of strings sixty times a second.
 		defer free_all(context.temp_allocator)
 
-		// A mode change is not one call but a short negotiation with the
-		// window manager (platform/window.odin), so for a moment afterwards
-		// the window is nudged toward the mode it was asked for. A no-op
-		// once it is there.
 		if window_settle > 0 {
 			window_settle -= 1
 			platform.apply_display_mode(settings)
 		}
-
-		// Rebuild the render target if the window changed size since the
-		// last frame — a drag, a monitor change, or the fullscreen switch
-		// below (platform/display.odin).
 		platform.update_display(&disp)
 
 		// The one clock read in the whole project, and the one keyboard
-		// poll, both here (core/input.odin). Clamped once, at the source:
-		// everything downstream is measuring the same frame.
+		// poll, both here. Clamped once, at the source.
 		frame_time := min(rl.GetFrameTime(), core.MAX_FRAME_TIME)
-
-		// Wall time since launch, for things that are drawn but not
-		// simulated: the menu's slow drift between the two worlds, the
-		// horizon's breathing on a screen with no run behind it. Never
-		// reaches the simulation — that advances only in whole steps of
-		// core.FIXED_TIMESTEP, out of the accumulator below.
 		display_time += frame_time
-
-		// Sample the keyboard exactly once per frame, here. Nothing
-		// downstream polls raylib for itself — see core/input.odin.
 		input := platform.read_input()
 
-		// F11 is the same switch the options screen offers, so it changes
-		// the setting rather than the window directly: however the mode was
-		// changed, it is what the next launch starts in.
 		if input.toggle_fullscreen {
 			settings.display_mode = settings.display_mode == .Fullscreen ? .Windowed : .Fullscreen
 			platform.apply_settings(settings)
@@ -374,20 +235,8 @@ main :: proc() {
 			platform.save_settings(settings)
 		}
 
-		// Fragments taken during this frame's steps, and where they were.
-		// A frame may run several steps and each may collect, so it
-		// accumulates across them and is spent once by the draw below.
-		//
-		// Frame-scoped on purpose: it is the hand-off from simulation to
-		// presentation, so it must not outlive the frame that filled it. A
-		// value that survives would be a burst played twice.
-		pickups: [game.FRAGMENT_MAX_PER_STEP]game.FragmentPickup
-		picked_count := 0
-
 		// ============================================================
-		// UPDATE — one switch, reads input and advances game logic.
-		// Runs once per frame, BEFORE anything is drawn.
-		// Add new per-frame gameplay logic inside the .Playing case.
+		// UPDATE
 		// ============================================================
 		switch game_state {
 		case .MainMenu:
@@ -395,25 +244,20 @@ main :: proc() {
 				switch main_menu.selected {
 				case 0:
 					run_seed = rand.uint64()
-					game.reset_run(
+					start_run(
 						&player,
 						&world,
+						&maze,
 						&score,
-						&obstacles,
-						&fragments,
-						&generator,
 						&corruption,
+						&particles,
+						&recorder,
+						&accumulator,
+						&pending_input,
+						&intro_timer,
+						&intro_dismissed_at,
 						run_seed,
 					)
-					fx.clear_particles(&particles)
-					fell_through = false
-					intro_timer = 0
-					intro_dismissed_at = -1
-					pickup_timer = 999
-					accumulator = 0
-					pending_input = core.Input{}
-					core.destroy_run_recorder(&recorder)
-					recorder = core.new_run_recorder(run_seed)
 					game_state = .Playing
 				case 1:
 					options_return = .MainMenu
@@ -432,110 +276,69 @@ main :: proc() {
 				game_state = .Paused
 			}
 
-			// C5: the intro prompt lives on the frame clock, not on a step,
-			// so it is advanced here and frozen whenever a step does not run
-			// (paused, game over). input.flip is set only on the frame of the
-			// press, so latch the dismiss time once and leave it.
+			// The intro prompt lives on the frame clock, not on a step, so
+			// it is advanced here and frozen whenever a step does not run.
 			intro_timer += frame_time
-			if input.flip && intro_dismissed_at < 0 {
+			if game.input_direction(input) != .None && intro_dismissed_at < 0 {
 				intro_dismissed_at = intro_timer
 			}
 
-			// The block's pop runs on the same clock, and is restarted below
-			// by whatever the steps collected.
-			pickup_timer += frame_time
-
-			// Hold this frame's flip until a step takes it (see pending_input).
-			pending_input.flip = pending_input.flip || input.flip
+			// Hold this frame's press until a step takes it. The held
+			// state is level-triggered and is simply the latest reading,
+			// so it is copied rather than accumulated.
+			pending_input.move_up ||= input.move_up
+			pending_input.move_down ||= input.move_down
+			pending_input.move_left ||= input.move_left
+			pending_input.move_right ||= input.move_right
+			pending_input.hold_up = input.hold_up
+			pending_input.hold_down = input.hold_down
+			pending_input.hold_left = input.hold_left
+			pending_input.hold_right = input.hold_right
 
 			accumulator += frame_time
 
-			// Run as many whole simulation steps as the elapsed real time
-			// has earned — usually one, occasionally none or two.
 			for accumulator >= core.FIXED_TIMESTEP {
 				accumulator -= core.FIXED_TIMESTEP
 
-				// This step consumes the latched input; any further step
-				// this frame sees no press, exactly as if the key had been
-				// released, because it has.
+				// This step consumes the latched press; any further step
+				// this frame sees none, exactly as if the key had been
+				// released, because it has. A key still *held* keeps
+				// meaning the same thing, so it survives the reset.
 				step_input := pending_input
-				pending_input = core.Input{}
+				pending_input.move_up = false
+				pending_input.move_down = false
+				pending_input.move_left = false
+				pending_input.move_right = false
 
-				// world.tick is still the count of completed steps here,
-				// so it names the step this input is about to drive —
-				// exactly the index a replay would feed it back on.
-				if step_input.flip {
-					core.record_flip(&recorder, world.tick)
+				// A key held down repeats the move it already means, once
+				// the body is free to take another. It is not a second
+				// gesture — see core/input.odin.
+				if player.dir == .None && game.input_direction(step_input) == .None {
+					step_input.move_up = step_input.hold_up
+					step_input.move_down = step_input.hold_down
+					step_input.move_left = step_input.hold_left
+					step_input.move_right = step_input.hold_right
 				}
 
-				// where this run is on the difficulty curve, from the
-				// distance it has covered (based on the previous step's
-				// scroll_offset — one step of lag here is irrelevant)
-				difficulty := game.get_difficulty(world.scroll_offset)
+				// Every chunk the pen will reach, built here rather than
+				// from inside a draw (game/maze.odin).
+				game.ensure_maze_ahead(&maze, world)
 
-				// point the generator at everything the curve moves: the
-				// air between patterns, how hard the draw leans on the
-				// ones that ask more, and which are unlocked at all
-				game.set_generator_difficulty(&generator, difficulty)
+				// The camera must run before the body: the body's screen
+				// position is read against this step's camera.
+				game.update_world(&world, core.FIXED_TIMESTEP, game.get_player_world(player).x)
 
-				// update the world — must run before update_player, since
-				// update_player reads world.elapsed_time (section 17).
-				// Speed is not a difficulty knob: a run scrolls at the
-				// opening speed until the player buys more (roadmap R6.3),
-				// which is why this is a constant here. It was briefly a
-				// function of the lane, and the playtest took that out
-				// (game/world.odin).
-				game.update_world(&world, core.FIXED_TIMESTEP, game.INITIAL_SCROLL_SPEED)
+				game.update_player(&player, &maze, step_input, core.FIXED_TIMESTEP)
 
-				// update the player: the press, the journey it starts, and
-				// the ground held or lost against the cubes already on
-				// screen — which is why the obstacle list goes in
-				game.update_player(
-					&player,
-					world,
-					obstacles[:],
-					step_input,
-					core.FIXED_TIMESTEP,
-				)
+				// The front takes its cut of the ground just covered.
+				game.update_corruption(&corruption, world, core.FIXED_TIMESTEP)
 
-				// the front takes its cut of the ground just covered and
-				// hands back whatever the fragments bought (F2)
-				game.update_corruption(
-					&corruption,
-					world,
-					difficulty,
-					core.FIXED_TIMESTEP,
-				)
+				game.update_score(&score, player)
 
-				// depth is how far the *character* travelled, so a step
-				// spent pinned against a cube scores nothing
-				game.update_score(&score, world, player, core.FIXED_TIMESTEP)
-
-				// keep generating obstacles ahead of the player
-				game.generate_ahead(&generator, &obstacles, &fragments, world.elapsed_time)
-
-				// take whatever the body is touching. It is a reward and
-				// never an ending, so unlike the collision check below it
-				// runs whatever else this step decided — and it reports
-				// *where* each one was, so the frame can burst there.
-				//
-				// Two counts, and they are not interchangeable: the burst
-				// is paid out of what fitted in the array, the ground off
-				// the Corruption out of what was actually taken.
-				reported, taken := game.collect_fragments(
-					&fragments,
-					player,
-					world,
-					pickups[picked_count:],
-				)
-				picked_count += reported
-				game.repay_corruption(&corruption, taken)
-
-				// out of room: the front caught up. Checked before the
-				// obstacles because it is the ending the whole design is
-				// built around, and it should not be masked by a gap the
-				// player fell into on the same step.
-				if game.corruption_has_reached(corruption, player) {
+				// Out of room: the front caught up. The only ending there
+				// is, which is the design working rather than a
+				// simplification (pillar 7).
+				if game.corruption_has_reached(corruption, player, world) {
 					game_state = .GameOver
 					if score.value > high_score {
 						high_score = score.value
@@ -546,48 +349,11 @@ main :: proc() {
 					}
 				}
 
-				// check collision against every obstacle
-				for obstacle in obstacles {
-					if game_state != .Playing {
-						break
-					}
-					if game.check_player_obstacle_collision(player, obstacle, world) {
-						game_state = .GameOver
-						fell_through = game.is_gap(obstacle.obstacle_type)
-						fall_started = display_time
-
-						// the run just ended: this is the one moment we check
-						// and persist a new personal best
-						if score.value > high_score {
-							high_score = score.value
-							platform.save_best_run(
-								high_score,
-								core.build_manifest(recorder, world.tick, score.value),
-							)
-						}
-					}
-				}
-
-				// drop obstacles that are off-screen,
-				// so the list stays short instead of growing all run
-				game.remove_finished_obstacles(&obstacles, world)
-				game.remove_finished_fragments(&fragments, world)
-
-				// The run ended inside this step: stop simulating, whatever
-				// time is left in the accumulator belongs to the next run.
 				if game_state != .Playing {
 					accumulator = 0
 					pending_input = core.Input{}
 					break
 				}
-			}
-
-			// Restarted once per frame rather than once per collection: two
-			// fragments taken in the same frame are one pop, because two
-			// pops a sixtieth of a second apart is a flicker, not an
-			// acknowledgement.
-			if picked_count > 0 {
-				pickup_timer = 0
 			}
 
 		case .Paused:
@@ -604,17 +370,10 @@ main :: proc() {
 					game_state = .MainMenu
 				}
 			}
-		// deliberately nothing else runs here: world, player, obstacles
-		// all stay frozen exactly as they were when ESC was pressed
+		// deliberately nothing else runs here: the world and the body stay
+		// frozen exactly as they were when ESC was pressed
 
 		case .Options:
-			// A setting is applied the moment it changes, so the player sees
-			// what they picked, and written to disk on the way out — one save
-			// per visit instead of one per keypress.
-			//
-			// Safe to do mid-run: nothing here reaches the simulation, and the
-			// long frame a mode change costs is capped by core.MAX_FRAME_TIME
-			// before it can become catch-up steps.
 			leave, changed := ui.update_options_screen(
 				&options_screen,
 				&settings,
@@ -636,44 +395,29 @@ main :: proc() {
 		case .GameOver:
 			if input.confirm {
 				run_seed = rand.uint64()
-				game.reset_run(
-						&player,
-						&world,
-						&score,
-						&obstacles,
-						&fragments,
-						&generator,
-						&corruption,
-						run_seed,
-					)
-				fx.clear_particles(&particles)
-				fell_through = false
-				intro_timer = 0
-				intro_dismissed_at = -1
-				pickup_timer = 999
-				accumulator = 0
-				pending_input = core.Input{}
-				core.destroy_run_recorder(&recorder)
-				recorder = core.new_run_recorder(run_seed)
+				start_run(
+					&player,
+					&world,
+					&maze,
+					&score,
+					&corruption,
+					&particles,
+					&recorder,
+					&accumulator,
+					&pending_input,
+					&intro_timer,
+					&intro_dismissed_at,
+					run_seed,
+				)
 				game_state = .Playing
 			}
 		}
 
 		// ============================================================
-		// DRAW — separate switch, only draws what's already been decided
-		// above. Never changes game state or game logic, only pixels.
-		// Runs once per frame, AFTER update, onto the fixed-resolution
-		// virtual canvas (begin/end_game_canvas), which present_display
-		// then scales and letterboxes into the real window/fullscreen.
-		// Add new visual elements inside the relevant case(s) below.
+		// DRAW
 		// ============================================================
 		platform.begin_game_canvas(disp)
 
-		// The palette of this frame (core/palette.odin). With a run on
-		// screen it is read off the player's height and the run's depth;
-		// with only a menu on screen there is no player to read, so it
-		// drifts slowly between the two worlds instead — the first thing
-		// anyone sees already states the premise.
 		showing_run :=
 			game_state == .Playing ||
 			game_state == .Paused ||
@@ -687,16 +431,7 @@ main :: proc() {
 
 		rl.ClearBackground(palettes.neutral.deep)
 
-		// The field is the world (Design Doc, section 10), and it arrives
-		// about a second after the player does. Chased here rather than
-		// inside the draw because it is state that has to survive the
-		// frame, and it is advanced from the frame clock — the same wall
-		// time display_time is made of, never a simulation step.
 		background_t = render.chase_background_t(background_t, palettes.world_t, frame_time)
-		// The parallax rides however far the world has travelled — the
-		// run's own scroll behind a run, and the wall clock at the opening
-		// speed behind a menu, so the first screen anyone sees already has
-		// a horizon moving on it (render/parallax.odin).
 		render.draw_background(
 			background,
 			palettes,
@@ -705,31 +440,11 @@ main :: proc() {
 			showing_run ? world.scroll_offset : display_time * game.INITIAL_SCROLL_SPEED,
 		)
 
-		// The world's line coming apart behind the front. Advanced from
-		// the frame clock, like background_t above and for the same
-		// reason: it is drawn, it is never simulated, and it may not reach
-		// a step.
-		//
 		// Only while actually playing, not for every state that *shows* a
 		// run: a paused frame is a still, and dust drifting across one
 		// would be the only thing on screen that had not stopped.
 		if game_state == .Playing {
 			render.emit_fray(&particles, world, corruption, player, palettes, frame_time)
-
-			// The one thing that says a fragment counted. Emitted here
-			// rather than where it was collected, because a burst is
-			// presentation and the step that took it may not know that
-			// particles exist — the simulation handed over a position and a
-			// lane, and this is what becomes of them.
-			for index in 0 ..< picked_count {
-				render.burst_fragment(
-					&particles,
-					pickups[index].at,
-					pickups[index].lane,
-					palettes,
-				)
-			}
-
 			fx.update_particles(&particles, frame_time)
 		}
 
@@ -738,105 +453,42 @@ main :: proc() {
 			ui.draw_main_menu(main_menu, high_score, palettes)
 
 		case .Playing:
-			// The simulation moves in whole steps; the display refreshes
-			// on its own schedule. Drawing the last stepped state directly
-			// would visibly stutter on frames that ran no step, so the
-			// scene is drawn from a *copy* of the world nudged forward by
-			// whatever fraction of a step is still in the accumulator.
-			//
-			// Scrolling is perfectly linear, so this is exact rather than a
-			// guess. It does mean the picture leads the collision state by
-			// up to one step (~17ms) — the forgiving direction: something
-			// can look like it grazed you a frame before the game agrees.
 			draw_gameplay(
+				&maze,
 				interpolated_world(world, accumulator),
-				obstacles[:],
-				fragments.live[:],
 				interpolated_player(player, accumulator),
 				corruption,
 				palettes,
 				particles,
-				0,
-				pickup_timer,
 			)
 			ui.draw_hud(score, palettes)
-
-			// C5: the one instruction, over the live run and gone in a few
-			// seconds (ui/screens.odin). Only here, never over a paused or
-			// finished frame.
 			ui.draw_intro_prompt(intro_timer, intro_dismissed_at, palettes)
 
 		case .Paused:
-			// draw the frozen gameplay frame underneath, then the overlay on top
-			draw_gameplay(
-					world,
-					obstacles[:],
-					fragments.live[:],
-					player,
-					corruption,
-					palettes,
-					particles,
-					0,
-					pickup_timer,
-				)
+			draw_gameplay(&maze, world, player, corruption, palettes, particles)
 			ui.draw_hud(score, palettes)
 			ui.draw_pause_overlay(pause_menu, palettes)
 
 		case .GameOver:
-			fall: f32 = 0
-			if fell_through {
-				fall = (display_time - fall_started) / render.PLAYER_DEATH_FALL_TIME
-			}
-			draw_gameplay(
-					world,
-					obstacles[:],
-					fragments.live[:],
-					player,
-					corruption,
-					palettes,
-					particles,
-					fall,
-					pickup_timer,
-				)
-			ui.draw_game_over(score, fragments, high_score, palettes)
+			draw_gameplay(&maze, world, player, corruption, palettes, particles)
+			ui.draw_game_over(score, high_score, palettes)
 
 		case .Options:
-			// Opened from the pause menu, the frozen run stays visible behind
-			// it — the same overlay relationship the pause screen has, so
-			// changing a setting mid-run does not look like leaving it.
 			if options_return == .Paused {
-				draw_gameplay(
-					world,
-					obstacles[:],
-					fragments.live[:],
-					player,
-					corruption,
-					palettes,
-					particles,
-					0,
-					pickup_timer,
-				)
+				draw_gameplay(&maze, world, player, corruption, palettes, particles)
 			}
 			ui.draw_options_screen(options_screen, palettes)
 		}
 
 		platform.end_game_canvas()
 
-		// The light, added after everything that emits it has been drawn.
-		// It reads the same two variables the palette does, so the bloom
-		// and the colors describe one world rather than two.
-		fx.apply_bloom(&bloom, disp.render_target, fx.bloom_for_world(palettes.world_t, palettes.depth_t))
-
-		// After the bloom, because a lifted field pixel lands just *over*
-		// the lowest bloom threshold and the bright pass must never see
-		// one; and before the Corruption, so the void behind the front
-		// stays a black with nothing scattered in it (fx/dither.odin).
+		fx.apply_bloom(
+			&bloom,
+			disp.render_target,
+			fx.bloom_for_world(palettes.world_t, palettes.depth_t),
+		)
 		fx.apply_dither(dither, disp.render_target)
 
-		// Off since RL.6, and kept rather than deleted — see
-		// CORRUPTION_FILTER_ENABLED. The front is given as a fraction of
-		// the frame, which is what keeps fx from needing to know the canvas
-		// is 1280 wide or that a game is what filled it.
 		if CORRUPTION_FILTER_ENABLED && showing_run {
 			fx.apply_corruption(
 				&corruption_fx,

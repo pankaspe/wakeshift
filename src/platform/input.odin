@@ -16,7 +16,14 @@ import rl "vendor:raylib/v55"
 // Samples every key the game cares about, once, for this frame.
 read_input :: proc() -> core.Input {
 	return core.Input {
-		flip = rl.IsKeyPressed(.SPACE),
+		move_up = rl.IsKeyPressed(.UP) || rl.IsKeyPressed(.W),
+		move_down = rl.IsKeyPressed(.DOWN) || rl.IsKeyPressed(.S),
+		move_left = rl.IsKeyPressed(.LEFT) || rl.IsKeyPressed(.A),
+		move_right = rl.IsKeyPressed(.RIGHT) || rl.IsKeyPressed(.D),
+		hold_up = rl.IsKeyDown(.UP) || rl.IsKeyDown(.W),
+		hold_down = rl.IsKeyDown(.DOWN) || rl.IsKeyDown(.S),
+		hold_left = rl.IsKeyDown(.LEFT) || rl.IsKeyDown(.A),
+		hold_right = rl.IsKeyDown(.RIGHT) || rl.IsKeyDown(.D),
 		pause = rl.IsKeyPressed(.ESCAPE),
 		confirm = rl.IsKeyPressed(.ENTER),
 		menu_up = rl.IsKeyPressed(.UP),

@@ -40,6 +40,16 @@ non verbo di navigazione). I frammenti fanno **un mestiere solo**: rallentano il
 
 ---
 
+## 6 settembre 2026 — L1: la griglia, lo scivolamento, il generatore
+
+Il gioco a due corsie esce dal codice: 11 file cancellati. Al suo posto una griglia di 12 righe da 60
+px, il corpo che scivola in quattro direzioni finché un muro non lo ferma, e un generatore a chunk
+che **misura** ogni chunk sul grafo delle scivolate e lo ritira se il costo di attraversamento cade
+fuori banda. La telecamera corre da sola e non torna mai indietro. I muri sono spigoli, fusi in
+polilinee prima di essere disegnati.
+
+---
+
 ## In corso — la fase L
 
 Si va a passi piccoli, uno alla volta, e si rivede il piano dopo ognuno.

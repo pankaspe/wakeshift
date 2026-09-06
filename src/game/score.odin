@@ -30,17 +30,13 @@ new_score :: proc() -> Score {
 	return Score{value = 0}
 }
 
-// Depth is how far the *character* travelled this step, which is not the
-// same as how far the world scrolled.
+// The furthest the *body* has got, not how far the camera has travelled.
 //
-// The world comes at them at scroll_speed; their own screen x moves too.
-// Add the two and the arithmetic says the right thing at every moment
-// without a single branch: pinned against a cube the character's x falls
-// at exactly the scroll speed, the two cancel, and depth stops. Running
-// back to their resting position they cover more ground per second than
-// the world does, and the run they lost is repaid in score as well as in
-// room. **Blocking costs depth, and nothing here had to be told that.**
-update_score :: proc(score: ^Score, world: World, player: Player, delta_time: f32) {
-	travelled := (world.scroll_speed + player.velocity_x) * delta_time
-	score.value += max(travelled, 0) / PIXELS_PER_DEPTH
+// The two used to be nearly the same thing and are not any more: the
+// camera advances whatever the player does, so scoring it would pay a
+// player who stood still. Taking the maximum rather than accumulating
+// also means sliding back to reach a branch costs nothing and buys
+// nothing — the ground is scored once, the first time it is reached.
+update_score :: proc(score: ^Score, player: Player) {
+	score.value = max(score.value, get_player_world(player).x / PIXELS_PER_DEPTH)
 }

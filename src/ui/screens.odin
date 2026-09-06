@@ -92,7 +92,7 @@ draw_intro_prompt :: proc(elapsed: f32, dismissed_at: f32, palettes: core.Palett
 	}
 
 	draw_centered_text(
-		"PRESS SPACE TO SHIFT",
+		"WASD OR ARROWS - YOU SLIDE UNTIL A WALL",
 		INTRO_PROMPT_Y,
 		INTRO_PROMPT_SIZE,
 		core.with_alpha(palettes.current.light, alpha),
@@ -125,7 +125,6 @@ draw_pause_overlay :: proc(menu: Menu, palettes: core.PaletteSet) {
 // a new personal best. The full report is roadmap T13.2.
 draw_game_over :: proc(
 	score: game.Score,
-	fragments: game.Fragments,
 	high_score: f32,
 	palettes: core.PaletteSet,
 ) {
@@ -143,17 +142,9 @@ draw_game_over :: proc(
 		core.with_alpha(palettes.current.light, TEXT_PRIMARY),
 	)
 
-	// The run's fragments, in the accent they were drawn in. It is a
-	// tally and not a currency — every one of them was spent against the
-	// front the moment it was taken (game/corruption.odin) — so it is
-	// reported once, here, and never during the run.
-	fragment_text := fmt.ctprintf("Fragments: %d", fragments.collected)
-	draw_centered_text(
-		fragment_text,
-		342,
-		18,
-		core.with_alpha(palettes.current.accent, TEXT_SECONDARY),
-	)
+	// The fragments' tally used to be reported here. They come back with
+	// the Dream (Design Doc §8), and a line reading zero every time would
+	// be worse than no line at all.
 
 	if score.value >= high_score {
 		draw_centered_text("NEW BEST!", 374, 22, palettes.dream.accent)
