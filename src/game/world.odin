@@ -19,7 +19,18 @@ package game
 
 // Pixels of world per second. Constant for the whole of L1: speed is a
 // level knob (Design Doc §12), and there is one level yet.
-INITIAL_SCROLL_SPEED :: 270
+//
+// 270 until the first maze playtest, which reported the Corruption as far
+// too fast. It was not — the front was taking 10.8 px/s while this number
+// was taking 270 for every second the player was not sliding right, which
+// in a maze is most of them.
+//
+// **This is the only lever that gives the runway and the preview more
+// seconds at once**, because both of them are distances on one 1280 px
+// screen and both divide by this to become time. Moving the body right
+// buys one by spending the other (core/screen.odin); slowing the world
+// buys both, and the two together are what the retune is.
+INITIAL_SCROLL_SPEED :: 220
 
 World :: struct {
 	scroll_speed:  f32,

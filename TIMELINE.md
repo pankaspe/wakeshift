@@ -50,6 +50,15 @@ polilinee prima di essere disegnati.
 
 ---
 
+## 6 settembre 2026 — il primo playtest, e la Corruzione non era il problema
+
+**Il labirinto si legge e si gioca: L1 ha la sua risposta.** Il fronte però sembrava velocissimo, e
+misurato non lo era — prendeva 10,8 px/s mentre la telecamera ne prendeva 270 per ogni secondo
+passato senza andare a destra. Ritarati tre numeri: pista da 341 a 541 px, mondo da 270 a 220 px/s,
+appetito del fronte −71%. I vecchi erano calibrati su un'economia di frammenti che non esiste più.
+
+---
+
 ## In corso — la fase L
 
 Si va a passi piccoli, uno alla volta, e si rivede il piano dopo ognuno. Lo stato si aggiorna a ogni
@@ -57,7 +66,7 @@ passo che atterra: ✅ fatto · 🟡 in parte · ⬜ da fare.
 
 | | | Task | Note |
 |---|---|---|---|
-| ✅ | **L1** | **La griglia e lo scivolamento** → Celle, muri, movimento a quattro direzioni che scivola fino all'ostacolo, la Corruzione che già c'è. Serve a rispondere a una domanda sola: **a questa velocità un labirinto si legge e diverte?** | cella 60, 12 righe, corpo 38. Il codice c'è; **la domanda la risponde il playtest**, non il commit |
+| ✅ | **L1** | **La griglia e lo scivolamento** → Celle, muri, movimento a quattro direzioni che scivola fino all'ostacolo, la Corruzione che già c'è. Serve a rispondere a una domanda sola: **a questa velocità un labirinto si legge e diverte?** | cella 60, 12 righe, corpo 38. **Playtest 6 settembre: sì, si legge.** L'economia del terreno è stata ritarata subito dopo |
 | 🟡 | **L2** | **Il generatore vero** → L'invariante del cammino garantito, poi rami e vicoli ciechi attorno. I parametri (densità, lunghezza dei muri, ramificazione, vicoli) sono continui e crescono con la distanza. | invariante, intreccio e misura ci sono. Mancano: i parametri che **crescono** con la distanza, e la riparazione deterministica della trappola 1/1000 |
 | ⬜ | **L3** | **Frammenti e Corruzione nel labirinto** → Dove stanno i rombi in un labirinto perché costino qualcosa. Il BFS del generatore dà già il costo di deviazione di ogni cella: si piazzano per misura. | |
 | ⬜ | **L4** | **La barra e la fase Onirica** → Cosa carica la barra, quanto dura l'Onirico, e cosa cambia lassù oltre al colore (pilastro 6). | attraversamento di un muro + il fronte che arretra |

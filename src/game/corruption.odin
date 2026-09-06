@@ -128,6 +128,10 @@ import "../core"
 // Where the front starts: the left edge of the screen. A run opens with
 // the whole runway between PLAYER_HOME_X and here, and that is also the
 // most room there ever is (see "the bank is the screen" above).
+//
+// It may not go negative to buy a longer runway, however tempting that
+// looks: the player travels through the runway, so a front off the left
+// edge is a health bar the player walks off the screen to reach.
 CORRUPTION_START_X :: 0
 
 // Pixels of front gained per pixel of world scrolled, at the opening of
@@ -145,28 +149,39 @@ CORRUPTION_START_X :: 0
 // changing under the player. C3's lesson was that one curve saturates;
 // three curves that saturate together are the same mistake spread out.
 //
-// **Chosen against what a player can actually collect**, which is the
-// only calibration that means anything here. Supply is 0.9 to 1.3
-// fragments per 1000 px, so at CORRUPTION_REFUND a run collecting *all*
-// of it earns about 0.130 px of front per px of world and a good one
-// about 0.100. The line below is drawn so a good collector breaks even
-// around 30000 px and a perfect one only past 45000 — the front still
-// always wins in the end (that is the F2 promise), but it wins late
-// enough that working the ceiling is worth doing.
+// THESE WERE NOT UNTUNED, THEY WERE TUNED FOR A GAME THAT NO LONGER EXISTS
 //
-// 0.040 costs a run that collects nothing its whole runway in about 8000
-// px, roughly 30 seconds, which is the number the phase opened with and
-// nothing has argued with.
+// 0.040 and 0.140 were drawn against what a player could *collect*: a
+// supply of 0.9 to 1.3 fragments per 1000 px, each buying CORRUPTION_REFUND
+// pixels back, arranged so a good collector broke even around 30000 px and
+// the front still always won in the end. In the maze that income is
+// exactly **zero** — nothing hands ground back yet — so the appetite has
+// to be the appetite of a run with no economy at all. Half a curve
+// calibrated against the other half of a mechanism that was deleted is
+// worse than an arbitrary number, because it looks justified.
 //
-// The F playtest is what moved them: at the old 0.030..0.180 the front's
-// appetite passed even a perfect collector's income at about 15000 px,
-// and the report was exactly that — "I cannot take the diamonds any
-// more, the Corruption reaches me" — at depth 2158 and 2417 with 18 and
-// 22 fragments collected, which is *better* collecting than the bot
-// manages. The player was not losing to skill, they were losing to
-// arithmetic.
-CORRUPTION_GAIN_OPEN :: 0.040
-CORRUPTION_GAIN_TOP :: 0.140
+// THE FRONT WAS NEVER THE FAST THING
+//
+// Measured at the old numbers, at the opening speed: the front took
+// **10.8 px/s** while the camera took **270 px/s** for every second the
+// player was not sliding right — and in a maze that is every vertical
+// move, every wrong branch and every moment spent reading. Around 96% of
+// the ground a player loses is the camera. The first maze playtest
+// reported the Corruption as far too fast, and it was reading the sum of
+// the two and blaming the half with a name.
+//
+// So the fix is three numbers and only one of them is in this file: the
+// runway grew (core/screen.odin), the world slowed (game/world.odin), and
+// the appetite came down to what a run with no income can pay. At 220 px/s
+// the front now takes 3.1 px/s, which is 141 seconds to cross the opening
+// runway on its own — the front is the clock the player can see, and it is
+// not supposed to be the thing that kills them while they are still
+// playing well.
+//
+// **When fragments land (L3/L4) these have to be redrawn against the new
+// income, not nudged.** That is the same mistake as above, one phase later.
+CORRUPTION_GAIN_OPEN :: 0.014
+CORRUPTION_GAIN_TOP :: 0.050
 
 // The distance the gain takes to travel between those two, and it is
 // **not** DIFFICULTY_FULL_DISTANCE any more.

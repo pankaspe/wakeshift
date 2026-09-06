@@ -11,29 +11,24 @@ package core
 SCREEN_WIDTH :: 1280
 SCREEN_HEIGHT :: 720
 
-// The screen x that world time maps onto: an obstacle whose arrival_time
-// is *now* is drawn here, and the ground drawn here is the ground at the
-// world's current time.
+// Where the block starts, and the whole of the health bar.
 //
-// It used to be called PLAYER_X, and that name was doing two jobs at
-// once. Since R2.1 the player's own x is game state — they lose ground
-// when a cube pins them and win it back running free — so "where the
-// player is" and "where world time lands on screen" are different
-// questions, and only the second one may be a constant. Every conversion
-// between screen space and world time reads this and nothing else, which
-// is what keeps the level from sliding against itself the moment the
-// player falls behind.
-WORLD_ANCHOR_X :: 360
-
-// Where a player running free settles.
+// The distance between here and the Corruption's front *is* how much room
+// is left to make mistakes in, so this number is the size of the health
+// bar and nothing else. It was 360 and it had a second name,
+// WORLD_ANCHOR_X, because in the two-lane game it was also the screen x
+// that world time mapped onto. The maze has no such mapping — column 0
+// starts here and every other column follows from the grid — so the
+// second job is gone and the second name went with it.
 //
-// Equal to the anchor, so that at rest a pattern's timing means exactly
-// what it says: an event authored to arrive at t = 1.2 arrives at the
-// character at t = 1.2. They need not be equal — a player resting ahead
-// of the anchor would meet everything early — but nothing wants that
-// today, and the equality is worth one less thing to reason about.
+// **THE RUNWAY AND THE PREVIEW ARE THE SAME 1280 PX, SPLIT BY THIS**
 //
-// It is also, with the Corruption front behind it, the entire health bar:
-// how far the character sits from the front *is* how much room is left to
-// make mistakes in (Design Doc, section 5).
-PLAYER_HOME_X :: WORLD_ANCHOR_X
+// Every pixel this moves right is health bought with warning time, and
+// every pixel left is the reverse. There is no third place for either to
+// come from, which is why the first maze playtest could not be answered
+// by this constant alone: moving it right *and* slowing the world by a
+// matching proportion buys the health without spending the warning, and
+// neither does that on its own. At 560 against a 220 px/s world the block
+// sees 3.05 s of maze ahead of it — which is what it saw at 360 against
+// 270, to within a twentieth of a second.
+PLAYER_HOME_X :: 560
