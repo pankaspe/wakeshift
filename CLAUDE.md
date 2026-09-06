@@ -2,13 +2,17 @@
 
 Operational rules for developing this project.
 
-**The game is being rewritten.** On 6 September 2026 the two-lane dodging game was replaced, by the
-author's decision, with a **procedural maze** run at speed. Everything about the old gameplay — the
-pattern pool, the skylines, the cubes and holes, the fairness rule, the difficulty curve, the
-economy tuning — is archived in `docs/archive/CLAUDE_v2_mattoncini.md` and
+**The game was rewritten on 6 September 2026.** The two-lane dodging game was replaced, by the
+author's decision, with a **procedural maze** run at speed, and the first step of that rewrite has
+landed: the grid, the sliding, the generator and the Corruption all run. Everything about the old
+gameplay — the pattern pool, the skylines, the cubes and holes, the fairness rule, the difficulty
+curve, the economy tuning — is archived in `docs/archive/CLAUDE_v2_mattoncini.md` and
 `docs/archive/TIMELINE_v2_mattoncini.md`. **Do not read those as instructions.** They are history,
 and the reason they are kept is that they record measurements and traps that cost real work to find:
 go there to learn *why* something was once true, never to learn what to build.
+
+The fragments, the Dream phase and the levels are designed and not built. `TIMELINE.md` says where
+each one stands.
 
 What still binds:
 
@@ -107,6 +111,11 @@ Five traps, all learned the hard way and all still live:
 - **When a check involves the window, do not trust what raylib reports about itself.** Read the live
   window's state from the outside (`wmctrl -lG`, `xprop -id <id> _NET_WM_STATE`). raylib claimed
   `IsWindowFullscreen() = true` for a window the compositor had merely maximized.
+- **A model that grades its own homework will pass.** The maze generator checked every chunk it made
+  and every check came out green, while the live maze was walled shut three chunks in: the model and
+  the world disagreed at the chunk boundaries, and only a real solver run over the real, assembled
+  world could say so. Whenever a check is per-piece, write the whole-thing check too — and when the
+  two disagree, do not reason about which is right, print both and diff them.
 
 ---
 
@@ -151,10 +160,10 @@ audio     ← core, game    (not created yet)
 from the platform layer at all. Keep it that way — it is what makes the simulation testable without
 a window.
 
-Three things live in `core` that look like they belong elsewhere — `Input`, `Settings` and `Palette`
-— all for the same reason: two packages that may not import each other both need them. When
-something is *vocabulary* rather than *behaviour*, `core` is where it goes; the package that owns the
-behaviour keeps the half that needs game state.
+Four things live in `core` that look like they belong elsewhere — `Input`, `Direction`, `Settings`
+and `Palette` — all for the same reason: two packages that may not import each other both need them.
+When something is *vocabulary* rather than *behaviour*, `core` is where it goes; the package that
+owns the behaviour keeps the half that needs game state.
 
 Odin forbids cyclic imports between packages, and one directory is exactly one package. The split is
 **by level of abstraction, not by game entity**.
@@ -181,6 +190,48 @@ Odin forbids cyclic imports between packages, and one directory is exactly one p
   of one rung, so tuning the world cannot silently invert the order.
 - **A *world* element nailed to the screen reads as two pictures.** The vignette is screen-fixed on
   purpose because it is a property of the lens; anything the world contains must ride the world.
+
+### The maze
+
+Twelve rows of 60 px fill the 720 px canvas exactly, and the columns run on forever. Vertically the
+division has to be whole or the corridor would not close against the floor; horizontally it never
+has to be, because the world scrolls and the fraction is only where the camera is.
+
+- **Walls are edges, not blocks.** Two things are filled — the field and the character — so a maze
+  of solid cells would be a third, and it would stop being La Linea. Each cell owns its **north**
+  and **west** wall and nothing else, so the two sides of one wall cannot drift apart, and a single
+  procedure answers for all four directions.
+- **Collision is a question to the grid, never an overlap of rectangles.** The block sits centred in
+  its cell and is smaller than it, so the air around it is presentation and costs nothing: there is
+  no pixel at which it can catch on a corner, because no pixel is ever consulted.
+- **A chunk is generated alone, and that is the point.** The holes in a seam are a function of the
+  boundary's column index alone, so the two chunks that touch it agree without ever meeting. That
+  buys three things at once: an evicted chunk comes back identical, a chunk can be verified on its
+  own in a test, and nothing has to be generated in order. **Never hand a seam forward.**
+- **The invariant is a budget, not a connection.** "A path exists" is too weak here: the camera
+  advances whether the player is making progress or not, so a route costing three cells of climbing
+  per column gained is a route that kills. Measure the cheapest crossing, re-roll the chunk when it
+  falls outside the band the level asked for, and keep the loop deterministic from the seed so the
+  run stays reproducible. Difficulty is *measured*, never hoped for.
+- **Measure on the slide graph, not on cell adjacency.** A press travels until a wall stops it, so
+  the player can only stop where something stops them, and a junction in the middle of a straight
+  run is passed over rather than turned at. Slide-connectivity is strictly weaker than
+  cell-connectivity; measuring the wrong one is measuring a game nobody is playing.
+- **Braid, never a perfect maze.** The tree a DFS carve produces is exactly wrong: with no way to
+  turn round against the scroll, a dead end does not cost time, it kills.
+- **Both edges of a chunk lie, and they lie in opposite directions.** A chunk-local search is blind
+  past its own columns, so at each edge it reports a standstill where the live maze reports a
+  journey continuing — and in both cases it is a row whose seam is open. The right edge is the
+  *crossing*, so that state is absorbing and may never be a stepping stone; the left edge leads back
+  into a chunk this measurement cannot see, so that move is struck out entirely. Conservative is the
+  correct direction: a chunk wrongly called hard is re-rolled, a chunk wrongly called easy is
+  shipped. Left in, the search stands still at an edge and climbs through those phantom stops into
+  rows the player can never stop in — every per-chunk number came out green while the live maze was
+  walled shut three chunks in.
+- **Generation belongs to a simulation step, never to a draw.** It is pure and idempotent, so a
+  draw that triggered it would still get the right walls — and would pay several milliseconds for
+  them mid-frame, at a moment chosen by the camera rather than by the simulation.
+- **Merge collinear walls before drawing them.** Measured: 82 strokes a screen instead of 562.
 
 ### Presentation
 
@@ -224,9 +275,10 @@ reading pixels back:
 - **Joins are mitred and caps are tessellated into the ribbon**, never stamped on as circles.
   Additive geometry that overlaps itself adds twice, so a circle at each vertex is a bright bead.
 - **`STROKE_MAX_POINTS` is load-bearing and it truncates in silence.** A polyline over the cap is a
-  line that stops in mid air with nothing to say so. **The maze will push on this**: a screen of maze
-  is hundreds of short segments rather than one long polyline, so both the cap and the draw-call cost
-  need measuring rather than assuming.
+  line that stops in mid air with nothing to say so. The maze was expected to push on this and does
+  not: welding collinear wall edges into runs takes a screen from 562 segments to **82 strokes,
+  measured**, and a merged run is two points, so the cap is not in play. It comes back the day a
+  wall curves.
 
 Two other lessons that will come up again:
 
@@ -309,9 +361,10 @@ allocates and runs on a wall clock, so inside a simulation step it would break r
 - Changing `SaveData`'s shape means bumping `SAVE_FORMAT_VERSION`, which makes every existing save
   unreadable. That is the right default, but it discards the player's data, so **say so before doing
   it**.
-- **The manifest records flip ticks only.** A four-direction control scheme means it no longer
-  reproduces a run, and extending it is part of making the maze real rather than an optional
-  tidy-up.
+- **The manifest records flip ticks only, and there are no flips any more.** It does not reproduce
+  a run, confirmed: the control scheme is four directions, and a held key is simulation input too,
+  so recording the presses alone would not be enough either. Extending it is part of making the maze
+  real rather than an optional tidy-up.
 
 ---
 
@@ -370,8 +423,10 @@ with the author before writing code.
 3. **Every run is different, every run is fair.** Procedural but never unsolvable and never a
    surprise: every danger has a visible arrival phase before it is dangerous.
 4. **The theme is not decoration.** Real and Dream must shape mechanics, visuals and feedback.
-5. **The generator can never trap you.** From wherever the player is, a path onward exists. Being
-   stuck is always the consequence of a route they chose, never of a maze that had no answer.
+5. **The generator can never trap you, and it can never merely *just* let you through.** From
+   wherever the player is there is a path onward, and it arrives in time — the world scrolls whether
+   they are progressing or not, so a solvable maze that cannot be crossed fast enough is an
+   unsolvable one wearing a disguise. Being stuck is always the consequence of a route they chose.
 6. **Never colour alone.** Real and Dream are distinguishable by layout and by motion as well as by
    colour. This is an accessibility constraint, not a preference.
 7. **A mistake costs ground, not the run.** You die when the ground you have left runs out.
