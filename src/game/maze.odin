@@ -46,6 +46,28 @@
 * The measurement walks *slides*, not cells, because that is what the
 * player actually does: one press travels until a wall stops it. Measuring
 * cell adjacency instead would be measuring a game nobody is playing.
+*
+* AND IT IS STILL NOT ENOUGH — MEASURED, AND OPEN
+*
+* A solver run over the *assembled* world says so. Of the cells a player
+* can reach from the start, **3.18% are cells from which no route gains
+* another twenty columns** (16 seeds, 260 columns each, 5184 reachable
+* cells, 165 of them terminal; the worst seed had 28). Every one of them
+* is a run that is over, and pillar 5 says never.
+*
+* The per-chunk numbers do not see it and cannot: trap_free only checks
+* cells `reached` by cheapest_crossing, and that search stops at the first
+* exit it pops, so everything dearer than the crossing is never examined.
+* The band and the trap test are about the route; this is about the rest
+* of the maze.
+*
+* It is L2's remaining half — the deterministic repair, not more
+* attempts — and it is unchanged by the fragments: the identical census
+* run against the previous commit returns the identical 165.
+*
+* One thing does answer it, and it was not designed to: the Dream's
+* pierce frees **165 of 165**. That is a nice property and it is not a
+* fix. A player without a full bar is still walled in.
 */
 package game
 
@@ -92,13 +114,32 @@ ChunkMetrics :: struct {
 	moves:     int, // slides taken along that same crossing
 	attempts:  int, // how many re-rolls it took to land in the band
 	accepted:  bool, // false if the band was never met and the closest was kept
+
+	// The seam hole `cells` and `moves` were measured from: the *worst*
+	// entry, the one the difficulty band is stated against. Kept because
+	// everything measured on the chunk afterwards — where a fragment is
+	// worth putting, above all — has to be measured against the same
+	// route the chunk was graded on, or the two numbers describe
+	// different games.
+	entry_row: int,
 }
 
 Chunk :: struct {
-	index:   int,
-	live:    bool,
-	cells:   CellGrid,
-	metrics: ChunkMetrics,
+	index:        int,
+	live:         bool,
+	cells:        CellGrid,
+	metrics:      ChunkMetrics,
+
+	// What is lying in it to be picked up, and what has already been
+	// taken (game/fragment.odin).
+	//
+	// **The taken flags do not survive eviction**, because a chunk is
+	// rebuilt from the seed and its index alone. That is only safe
+	// because an evicted chunk is three chunks behind the camera and the
+	// Corruption reaches at most CORRUPTION_MAX_LEAD back: by the time a
+	// slot is reused, the ground it held is gone from the world.
+	pickups:      [MAX_PICKUPS_PER_CHUNK]Pickup,
+	pickup_count: int,
 }
 
 // The knobs, all continuous, all growing with the level (Design Doc §12).
@@ -121,15 +162,63 @@ MazeParams :: struct {
 	// loses ground even played perfectly.
 	min_ratio:  f32,
 	max_ratio:  f32,
+
+	// What a fragment has to cost, in **cells of detour** off the
+	// cheapest crossing. Not a place on the grid and not a probability:
+	// the generator already knows the exact price of every cell, so
+	// "somewhere that costs about a second" is a query rather than a
+	// guess (Design Doc §9).
+	//
+	// Below the floor the fragment is on the way and is not a decision;
+	// above the ceiling it is not an offer, it is a trap with a reward
+	// painted on it. Both ends grow with the level.
+	fragment_min:  f32,
+	fragment_max:  f32,
+	fragments:     int, // how many to try to place per chunk
+
+	// A Lucid is only worth its name where the plain route will not go:
+	// it has to be dear without a pierce and cheap with one, or the
+	// bonus is not paying for the bonus.
+	lucid_min:     f32, // cells of detour on the plain slide graph
+	lucid_max:     f32, // cells of detour once one wall a move may be pierced
+	lucids:        int,
 }
 
 // Where the first level starts. Wide band and a very high braid rate: the
 // opening minute is meant to be readable, not tight.
 DEFAULT_MAZE_PARAMS :: MazeParams {
-	wall_bias  = 2.4,
-	braid_rate = 0.90,
-	min_ratio  = 1.05,
-	max_ratio  = 2.00,
+	wall_bias    = 2.4,
+	braid_rate   = 0.90,
+	min_ratio    = 1.05,
+	max_ratio    = 2.00,
+
+	// A cell is 60 px and a slide covers 900 px/s, so **15 cells is one
+	// second**. The opening band is a fifth of a second to a little over
+	// one: cheap enough that a first run can afford every fragment it
+	// sees, dear enough that taking one is a thing the player decided to
+	// do. Against the front's opening 190 px/s, an 18-cell detour costs
+	// 228 px of the 2000 px starting lead.
+	//
+	// Measured, 1000 chunks over 40 seeds: **2.26 fragments a chunk**
+	// rather than the 3 asked for, detour mean 10.6 cells, min 3, max 18.
+	// 34 chunks in 1000 got none at all. A slice with nothing in the band
+	// is left empty rather than widened, which is the shortfall and is
+	// the right shortfall to have.
+	fragment_min = 3,
+	fragment_max = 18,
+	fragments    = 3,
+
+	// A chunk is 32 columns, so three fragments is one about every ten
+	// columns, and FRAGMENTS_TO_FILL of them is two chunks of collecting
+	// (game/dream.odin).
+	//
+	// Measured over the same 1000: **1.87 Lucids a chunk**, and 62% of
+	// them sit where the walking maze cannot reach them *at all* — mean
+	// 53.7 cells of detour for the rest — against a mean 5.3 cells once a
+	// move may pierce. The bonus is paying for the bonus.
+	lucid_min    = 22,
+	lucid_max    = 12,
+	lucids       = 2,
 }
 
 // How many times a chunk may be re-rolled before the closest attempt is
@@ -154,6 +243,12 @@ new_maze :: proc(seed: u64, params: MazeParams = DEFAULT_MAZE_PARAMS) -> Maze {
 // gives: every draw has to be threaded explicitly so a run is reproducible
 // from its seed. splitmix64 is also a *hash*, which is what lets a seam be
 // computed from its column index alone.
+//
+// `Rng` and `mix` are visible to the package rather than to this file
+// alone, and that is deliberate: fragment placement (game/fragment.odin)
+// has to draw from the *same* lineage as the carve it is placing into, or
+// two chunks with the same walls could end up with different fragments.
+// One seed, one generator, one run.
 
 @(private = "file")
 splitmix64 :: proc(state: ^u64) -> u64 {
@@ -164,28 +259,23 @@ splitmix64 :: proc(state: ^u64) -> u64 {
 	return z ~ (z >> 31)
 }
 
-@(private = "file")
 mix :: proc(a, b: u64) -> u64 {
 	state := a ~ (b + 0x9E3779B97F4A7C15 + (a << 6) + (a >> 2))
 	return splitmix64(&state)
 }
 
-@(private = "file")
 Rng :: struct {
 	state: u64,
 }
 
-@(private = "file")
 next_u64 :: proc(rng: ^Rng) -> u64 {
 	return splitmix64(&rng.state)
 }
 
-@(private = "file")
 next_f32 :: proc(rng: ^Rng) -> f32 {
 	return f32(next_u64(rng) >> 40) / f32(1 << 24)
 }
 
-@(private = "file")
 next_int :: proc(rng: ^Rng, n: int) -> int {
 	if n <= 0 {
 		return 0
@@ -611,8 +701,37 @@ slide_dirs :: proc() -> [4]core.Direction {
 // Left in, the two lies let the search stand still at an edge and use it
 // to climb into rows the player can never stop in. Every chunk came out
 // green and the live maze was walled shut three chunks in.
+// A slide that goes through the wall that stopped it and runs on to the
+// next one — the Dream's one verb (game/dream.odin), on a chunk that is
+// being measured rather than played.
+//
+// Exactly one wall, and only where there is a cell on the far side of it:
+// a pierce may never carry the body out through the floor, the ceiling or
+// the chunk's own edges. Refusing at the edges is also what keeps the
+// pierced measurement as blind past the chunk as the plain one is.
 @(private = "file")
-build_slide_table :: proc(cells: ^CellGrid, left_seam: [MAZE_ROWS]bool) -> SlideTable {
+grid_slide_pierced :: proc(
+	cells: ^CellGrid,
+	col, row: int,
+	dir: core.Direction,
+) -> (
+	end_col, end_row, travelled: int,
+) {
+	end_col, end_row, travelled = grid_slide(cells, col, row, dir)
+	next_col, next_row := core.step_cell(end_col, end_row, dir)
+	if next_col < 0 || next_col >= CHUNK_COLUMNS || next_row < 0 || next_row >= MAZE_ROWS {
+		return
+	}
+	beyond_col, beyond_row, beyond := grid_slide(cells, next_col, next_row, dir)
+	return beyond_col, beyond_row, travelled + 1 + beyond
+}
+
+@(private = "file")
+build_slide_table :: proc(
+	cells: ^CellGrid,
+	left_seam: [MAZE_ROWS]bool,
+	pierce: bool = false,
+) -> SlideTable {
 	table: SlideTable
 	dirs := slide_dirs()
 	for col in 0 ..< CHUNK_COLUMNS {
@@ -620,6 +739,9 @@ build_slide_table :: proc(cells: ^CellGrid, left_seam: [MAZE_ROWS]bool) -> Slide
 			for dir_index in 0 ..< 4 {
 				dir := dirs[dir_index]
 				end_col, end_row, travelled := grid_slide(cells, col, row, dir)
+				if pierce {
+					end_col, end_row, travelled = grid_slide_pierced(cells, col, row, dir)
+				}
 				if dir == .Left && end_col == 0 && left_seam[end_row] {
 					travelled = 0
 				}
@@ -784,8 +906,10 @@ measure_chunk :: proc(cells: ^CellGrid, seed: u64, index: int) -> ChunkMetrics {
 	table := build_slide_table(cells, left)
 
 	metrics := ChunkMetrics {
-		solvable = true,
+		solvable  = true,
+		entry_row = MAZE_START_ROW,
 	}
+	graded := false
 	reached: [CHUNK_COLUMNS][MAZE_ROWS]bool
 	for row in 0 ..< MAZE_ROWS {
 		if !entries[row] {
@@ -820,9 +944,11 @@ measure_chunk :: proc(cells: ^CellGrid, seed: u64, index: int) -> ChunkMetrics {
 		}
 		// The worst entry, not the best: the player does not get to
 		// choose which hole the previous chunk spat them through.
-		if crossing > metrics.cells {
+		if !graded || crossing > metrics.cells {
 			metrics.cells = crossing
 			metrics.moves = moves
+			metrics.entry_row = row
+			graded = true
 		}
 	}
 	if !metrics.solvable {
@@ -843,6 +969,282 @@ measure_chunk :: proc(cells: ^CellGrid, seed: u64, index: int) -> ChunkMetrics {
 	return metrics
 }
 
+
+// --- The price of every cell ---
+//
+// The band above says whether the chunk is crossable in time. This says
+// what every *other* cell in it costs, which is the question a fragment
+// answers to (Design Doc §9): a fragment is not dropped somewhere pretty,
+// it is placed where the detour costs what the level asked for.
+//
+// MEASURE COLLECTING, NOT STOPPING
+//
+// The obvious number — cheapest cost to *stop* on a cell, plus cheapest
+// cost from there to an exit — is a proxy, and it is wrong in the
+// direction that matters. A pickup is taken by passing over it, and a
+// slide passes over every cell between its ends without stopping on any
+// of them. A cell sitting in the middle of the optimal route's own
+// straight run would price as an expensive detour while actually being
+// free, and the risk/reward junction the design is built on would be
+// decorated with fragments that cost nothing.
+//
+// So `cover` is the cheapest **whole route through the chunk that passes
+// over the cell**: for every slide the route could take, the cost of
+// reaching its start, plus the slide, plus the cheapest way out of its
+// end — charged to every cell the slide crosses. Subtract the crossing
+// and what is left is what the cell costs to collect, in cells travelled.
+// It is zero for anything the player was going to drive over anyway.
+
+ChunkCosts :: struct {
+	// Cheapest cost to come to rest on each cell, from the graded entry.
+	to_cell:  [CHUNK_COLUMNS][MAZE_ROWS]int,
+
+	// Cheapest cost from each cell to a hole in the right-hand seam.
+	to_exit:  [CHUNK_COLUMNS][MAZE_ROWS]int,
+
+	// Cheapest whole crossing that passes over each cell. See above.
+	cover:    [CHUNK_COLUMNS][MAZE_ROWS]int,
+
+	// The cheapest crossing from that entry — the baseline every detour
+	// is measured against.
+	crossing: int,
+	found:    bool,
+}
+
+// Whether a cost read out of a ChunkCosts is a real number or the absence
+// of any such route. Callers ask this rather than being handed the
+// sentinel, so there is one place that knows what "no route" is spelled.
+cost_is_real :: proc(cost: int) -> bool {
+	return cost < UNREACHED
+}
+
+// Everything above, for one chunk, entered at one row.
+//
+// `pierce` swaps the slide graph for the one the Dream plays on — every
+// move goes through the wall that stopped it and runs to the next. The
+// entry slide is deliberately *not* pierced in either case, so the two
+// results share a starting position and their costs can be subtracted
+// from each other.
+chunk_costs :: proc(
+	cells: ^CellGrid,
+	seed: u64,
+	index: int,
+	entry_row: int,
+	pierce: bool = false,
+) -> (
+	costs: ChunkCosts,
+) {
+	left := seam_openings(seed, index * CHUNK_COLUMNS)
+	exits := seam_openings(seed, (index + 1) * CHUNK_COLUMNS)
+	any_entry := false
+	for row in 0 ..< MAZE_ROWS {
+		any_entry ||= left[row]
+	}
+
+	table := build_slide_table(cells, left, pierce)
+	dirs := slide_dirs()
+
+	// The player is carried in by the slide that crossed the seam, exactly
+	// as measure_chunk assumes. The first chunk of a run is the exception:
+	// nothing carried them in, so it really does begin at rest.
+	start_col, start_row, entry_cost := 0, entry_row, 0
+	if any_entry {
+		start_col, start_row, entry_cost = grid_slide(cells, 0, entry_row, .Right)
+	}
+
+	for col in 0 ..< CHUNK_COLUMNS {
+		for row in 0 ..< MAZE_ROWS {
+			costs.to_cell[col][row] = UNREACHED
+			costs.to_exit[col][row] = UNREACHED
+			costs.cover[col][row] = UNREACHED
+		}
+	}
+	costs.to_cell[start_col][start_row] = entry_cost
+
+	// Forward, to completion this time: cheapest_crossing stops at the
+	// first exit because that is all the band needs, and every cell's
+	// price needs the whole thing. Exits stay absorbing for the reason
+	// they are absorbing there — the slide that reaches one does not stop,
+	// it carries the player into the next chunk.
+	done: [CHUNK_COLUMNS][MAZE_ROWS]bool
+	for _ in 0 ..< CELL_COUNT {
+		best := UNREACHED
+		best_col, best_row := -1, -1
+		for col in 0 ..< CHUNK_COLUMNS {
+			for row in 0 ..< MAZE_ROWS {
+				if !done[col][row] && costs.to_cell[col][row] < best {
+					best = costs.to_cell[col][row]
+					best_col, best_row = col, row
+				}
+			}
+		}
+		if best_col < 0 {
+			break
+		}
+		done[best_col][best_row] = true
+
+		if best_col == CHUNK_COLUMNS - 1 && exits[best_row] {
+			if !costs.found {
+				costs.crossing = best
+				costs.found = true
+			}
+			continue
+		}
+
+		for dir_index in 0 ..< 4 {
+			travelled := int(table.travelled[best_col][best_row][dir_index])
+			if travelled == 0 {
+				continue
+			}
+			end_col := int(table.end_col[best_col][best_row][dir_index])
+			end_row := int(table.end_row[best_col][best_row][dir_index])
+			candidate := best + travelled
+			if candidate < costs.to_cell[end_col][end_row] {
+				costs.to_cell[end_col][end_row] = candidate
+			}
+		}
+	}
+	if !costs.found {
+		return
+	}
+
+	// Backward, by the same fixpoint sweep cells_that_can_still_get_out
+	// uses and for the same reason: 384 cells and four moves each is
+	// cheaper to sweep than a reversed adjacency list is to build.
+	for row in 0 ..< MAZE_ROWS {
+		if exits[row] {
+			costs.to_exit[CHUNK_COLUMNS - 1][row] = 0
+		}
+	}
+	for {
+		changed := false
+		for col in 0 ..< CHUNK_COLUMNS {
+			for row in 0 ..< MAZE_ROWS {
+				if col == CHUNK_COLUMNS - 1 && exits[row] {
+					continue
+				}
+				best := UNREACHED
+				for dir_index in 0 ..< 4 {
+					travelled := int(table.travelled[col][row][dir_index])
+					if travelled == 0 {
+						continue
+					}
+					end_col := int(table.end_col[col][row][dir_index])
+					end_row := int(table.end_row[col][row][dir_index])
+					if !cost_is_real(costs.to_exit[end_col][end_row]) {
+						continue
+					}
+					candidate := travelled + costs.to_exit[end_col][end_row]
+					if candidate < best {
+						best = candidate
+					}
+				}
+				if best < costs.to_exit[col][row] {
+					costs.to_exit[col][row] = best
+					changed = true
+				}
+			}
+		}
+		if !changed {
+			break
+		}
+	}
+
+	// And the one that is actually read: charge every route to every cell
+	// it drives over.
+	charge :: proc(
+		costs: ^ChunkCosts,
+		from_col, from_row, to_col, to_row: int,
+		dir: core.Direction,
+		total: int,
+	) {
+		col, row := from_col, from_row
+		for {
+			if total < costs.cover[col][row] {
+				costs.cover[col][row] = total
+			}
+			if col == to_col && row == to_row {
+				return
+			}
+			col, row = core.step_cell(col, row, dir)
+			if col < 0 || col >= CHUNK_COLUMNS || row < 0 || row >= MAZE_ROWS {
+				return
+			}
+		}
+	}
+
+	for col in 0 ..< CHUNK_COLUMNS {
+		for row in 0 ..< MAZE_ROWS {
+			if !cost_is_real(costs.to_cell[col][row]) {
+				continue
+			}
+			for dir_index in 0 ..< 4 {
+				travelled := int(table.travelled[col][row][dir_index])
+				if travelled == 0 {
+					continue
+				}
+				end_col := int(table.end_col[col][row][dir_index])
+				end_row := int(table.end_row[col][row][dir_index])
+				if !cost_is_real(costs.to_exit[end_col][end_row]) {
+					continue
+				}
+				total :=
+					costs.to_cell[col][row] + travelled + costs.to_exit[end_col][end_row]
+				charge(&costs, col, row, end_col, end_row, dirs[dir_index], total)
+			}
+		}
+	}
+
+	// The entry slide is a move too, and the cells it carried the player
+	// over are collected on the way in like any others.
+	if cost_is_real(costs.to_exit[start_col][start_row]) {
+		charge(
+			&costs,
+			0,
+			entry_row,
+			start_col,
+			start_row,
+			.Right,
+			entry_cost + costs.to_exit[start_col][start_row],
+		)
+	}
+	return
+}
+
+// Takes a wall down in the *live* maze, which is the Dream's pierce
+// (game/player.odin) and the only thing in the game that writes to a
+// chunk after it was generated.
+//
+// A wall belongs to exactly one cell — its own north or west — so the
+// direction is resolved to that owner here and nowhere else, which is the
+// same rule crosses_wall reads by. Refusing at the corridor's own edges
+// is not a special case for tidiness: it is what stops a pierce carrying
+// the body out through the floor.
+//
+// It makes a chunk stop being a pure function of its seed until the slot
+// is reused, and that is accepted rather than overlooked — see Chunk.
+maze_open_wall :: proc(maze: ^Maze, col, row: int, dir: core.Direction) {
+	owner_col, owner_row := col, row
+	wall: Wall
+	switch dir {
+	case .Right:
+		owner_col, wall = col + 1, .West
+	case .Left:
+		wall = .West
+	case .Down:
+		owner_row, wall = row + 1, .North
+	case .Up:
+		wall = .North
+	case .None:
+		return
+	}
+	if owner_row < 0 || owner_row >= MAZE_ROWS || owner_col < 0 {
+		return
+	}
+	chunk := ensure_chunk(maze, owner_col / CHUNK_COLUMNS)
+	chunk.cells[owner_col % CHUNK_COLUMNS][owner_row] -= {wall}
+}
+
 // --- Accept or re-roll ---
 
 @(private = "file")
@@ -858,6 +1260,12 @@ band_distance :: proc(ratio: f32, params: MazeParams) -> f32 {
 
 // Fills a slot with the chunk at this index: generate, measure, and
 // re-roll until the crossing costs what the level asked for.
+//
+// Measured at **5.8 ms a chunk**, of which the carve-and-measure loop is
+// the 4.1 ms it always was and placing the pickups is the rest. One chunk
+// is generated about every seven seconds of play and it lands inside a
+// 16.7 ms step, so it fits — but it is the largest single thing a step
+// ever does, and anything added to placement is paid there.
 //
 // The loop always terminates with something playable. A chunk that never
 // lands in the band is kept anyway — that is a tuning problem, not a
@@ -907,6 +1315,11 @@ generate_chunk :: proc(maze: ^Maze, chunk: ^Chunk, index: int) {
 	chunk.live = true
 	chunk.cells = best_cells
 	chunk.metrics = best_metrics
+
+	// Once, on the chunk that won — not on every attempt. Placement reads
+	// the walls that shipped, and measuring the ones that did not would be
+	// paying twenty-four times for an answer about a maze nobody plays.
+	place_pickups(maze, chunk)
 }
 
 // --- What the camera can see, and what has to exist before it does ---
@@ -927,8 +1340,8 @@ get_visible_columns :: proc(world: World, margin: int = 1) -> (first, last: int)
 // simulation step.
 //
 // Generation is pure and idempotent, so a draw that triggered it would
-// still get the right walls — but it would pay 4 ms for them in the middle
-// of a frame, and it would do it at a moment decided by the camera rather
+// still get the right walls — but it would pay 5.8 ms for them in the
+// middle of a frame, and it would do it at a moment decided by the camera rather
 // than by the simulation. Doing it here means the cost lands on a step,
 // where a fixed timestep can absorb it, and the renderer only ever reads.
 ensure_maze_ahead :: proc(maze: ^Maze, world: World) {

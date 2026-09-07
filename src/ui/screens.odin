@@ -126,6 +126,7 @@ draw_pause_overlay :: proc(menu: Menu, palettes: core.PaletteSet) {
 draw_game_over :: proc(
 	score: game.Score,
 	high_score: f32,
+	dream: game.Dream,
 	palettes: core.PaletteSet,
 ) {
 	draw_overlay_scrim(palettes)
@@ -142,17 +143,31 @@ draw_game_over :: proc(
 		core.with_alpha(palettes.current.light, TEXT_PRIMARY),
 	)
 
-	// The fragments' tally used to be reported here. They come back with
-	// the Dream (Design Doc §8), and a line reading zero every time would
-	// be worse than no line at all.
+	// The tally, which is where a tally belongs: after the run, not in
+	// the corner of it. What a fragment was *worth* was said while it was
+	// being spent, by the front sliding backwards.
+	//
+	// Lucids are only named on the line when there were some. A run that
+	// never reached the Dream has no business being told what it missed
+	// in a language it has not been taught yet.
+	haul_text :=
+		dream.lucids > 0 \
+		? fmt.ctprintf("Fragments: %d   Lucids: %d", dream.fragments, dream.lucids) \
+		: fmt.ctprintf("Fragments: %d", dream.fragments)
+	draw_centered_text(
+		haul_text,
+		342,
+		18,
+		core.with_alpha(palettes.current.light, TEXT_SECONDARY),
+	)
 
 	if score.value >= high_score {
-		draw_centered_text("NEW BEST!", 374, 22, palettes.dream.accent)
+		draw_centered_text("NEW BEST!", 396, 22, palettes.dream.accent)
 	} else {
 		best_text := fmt.ctprintf("Best Depth: %.0f", high_score)
 		draw_centered_text(
 			best_text,
-			374,
+			396,
 			20,
 			core.with_alpha(palettes.current.light, TEXT_SECONDARY),
 		)
@@ -160,7 +175,7 @@ draw_game_over :: proc(
 
 	draw_centered_text(
 		"Press ENTER to try again",
-		416,
+		438,
 		20,
 		core.with_alpha(palettes.current.light, TEXT_MUTED),
 	)

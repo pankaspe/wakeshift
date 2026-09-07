@@ -17,6 +17,21 @@
 * straight runs a difficulty knob and not a decoration: a long corridor is
 * fast and asks nothing, a short one is slow and asks constantly.
 *
+* AND IN THE DREAM IT GOES THROUGH ONE WALL (Design Doc §7)
+*
+* The verb does not change: a press still travels until something stops
+* it, and nothing may steer it on the way. What changes is *what stops
+* it* — the first wall is gone through and the journey ends at the
+* second. So the commitment is intact and the reading got harder, which
+* is the right way round for a bonus: the player has to pick which wall
+* and look two cells further than they were looking.
+*
+* The pierced wall is taken down in the live maze rather than stepped
+* over, and it stays down. That is the wake pillar 6 asks for — with the
+* colour off you can still see which world you are in by the holes behind
+* you — and it costs nothing, because the shape it leaves is exactly the
+* shape the body took.
+*
 * THE BODY LIVES ON THE GRID, AND THE GRID ANSWERS FOR IT
 *
 * Collision is a question to the maze about a wall between two cells, not
@@ -96,8 +111,24 @@ input_direction :: proc(input: core.Input) -> core.Direction {
 }
 
 @(private = "file")
-start_slide :: proc(player: ^Player, maze: ^Maze, dir: core.Direction) {
+start_slide :: proc(player: ^Player, maze: ^Maze, dir: core.Direction, pierce: bool) {
 	to_col, to_row, cells := maze_slide(maze, player.col, player.row, dir)
+
+	// One wall a move, and only where there is a cell on the far side:
+	// the pierce may never carry the body out through the floor, the
+	// ceiling or the left edge of the world. Taking the wall down first
+	// and then simply asking the maze again is what keeps this three
+	// lines — after the hole exists, "run on to the next wall" is the
+	// ordinary slide.
+	if pierce {
+		next_col, next_row := core.step_cell(to_col, to_row, dir)
+		if next_col >= 0 && next_row >= 0 && next_row < MAZE_ROWS {
+			maze_open_wall(maze, to_col, to_row, dir)
+			end_col, end_row, beyond := maze_slide(maze, to_col, to_row, dir)
+			to_col, to_row, cells = end_col, end_row, cells + beyond
+		}
+	}
+
 	if cells == 0 {
 		return
 	}
@@ -114,14 +145,20 @@ start_slide :: proc(player: ^Player, maze: ^Maze, dir: core.Direction) {
 // The overshoot of the step that completes a journey is carried into the
 // next one rather than thrown away, so the speed is exactly RUNNER_SPEED
 // however the steps fall.
-update_player :: proc(player: ^Player, maze: ^Maze, input: core.Input, delta_time: f32) {
+update_player :: proc(
+	player: ^Player,
+	maze: ^Maze,
+	input: core.Input,
+	delta_time: f32,
+	pierce: bool = false,
+) {
 	if pressed := input_direction(input); pressed != .None {
 		player.queued = pressed
 	}
 
 	if player.dir == .None {
 		if player.queued != .None {
-			start_slide(player, maze, player.queued)
+			start_slide(player, maze, player.queued, pierce)
 			player.queued = .None
 		}
 		return
@@ -140,7 +177,7 @@ update_player :: proc(player: ^Player, maze: ^Maze, input: core.Input, delta_tim
 	player.length = 0
 
 	if player.queued != .None {
-		start_slide(player, maze, player.queued)
+		start_slide(player, maze, player.queued, pierce)
 		player.queued = .None
 		if player.dir != .None {
 			player.travelled = min(overshoot, player.length)

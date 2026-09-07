@@ -20,10 +20,19 @@ GameState :: enum {
 // maze the player gets, and it has to be recorded alongside the input log
 // for the run to be reproducible later. A replay passes the recorded seed;
 // a live run passes a fresh one.
-reset_run :: proc(player: ^Player, world: ^World, maze: ^Maze, score: ^Score, corruption: ^Corruption, seed: u64) {
+reset_run :: proc(
+	player: ^Player,
+	world: ^World,
+	maze: ^Maze,
+	score: ^Score,
+	corruption: ^Corruption,
+	dream: ^Dream,
+	seed: u64,
+) {
 	player^ = new_player()
 	world^ = new_world()
 	maze^ = new_maze(seed)
 	score^ = new_score()
 	corruption^ = new_corruption()
+	dream^ = new_dream()
 }

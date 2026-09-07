@@ -95,6 +95,29 @@ CORRUPTION_MAX_LEAD :: 3400
 CORRUPTION_SPEED_OPEN :: 190
 CORRUPTION_SPEED_TOP :: 500
 
+// How fast it runs *backwards* in the Dream, in world pixels per second.
+//
+// This is the whole payout of the loop, and it is a speed rather than a
+// snap on purpose: a front that jumped back would be a number changing,
+// while a front visibly sliding away is the sawtooth being drawn at full
+// size in the picture the player is already watching (Design Doc §7).
+//
+// 300 px/s over the 6 s of a full bar is 1800 px given back. Against the
+// ~4 s of detour a bar costs to fill (game/dream.odin): 760 px of ground
+// spent at the opening speed, 2000 at the top. So the Dream pays well
+// early and stops paying late, which is the front still winning in the
+// end without ever winning against someone playing well.
+//
+// It is bounded by CORRUPTION_MAX_LEAD like everything else, and measured,
+// that is not the footnote it reads as: at the opening speed a good line
+// sits against the cap nearly the whole time, so the retreat is mostly
+// thrown away and collecting comes out a net **loss** (game/dream.odin has
+// the runs). The reasoning stands — the Dream recovers ground, and there
+// is none to recover when none was lost — but it means the loop cannot
+// pay until the Real stops being net positive, which is the front redraw
+// the design asks for and the author has to make.
+CORRUPTION_DREAM_RETREAT :: 300
+
 // The distance the speed takes to travel between those two. Long, because
 // it has to grow across the whole of a long run rather than saturating in
 // the first minute.
@@ -110,17 +133,30 @@ new_corruption :: proc() -> Corruption {
 	return Corruption{world_x = cell_centre_x(0) - CORRUPTION_START_LEAD}
 }
 
-// How fast the front is eating right now. A straight line in depth.
-get_corruption_speed :: proc(depth: f32) -> f32 {
+// How fast the front is eating right now. A straight line in depth,
+// crossed with the Dream.
+//
+// dream_t is the crossing rather than the phase, so the front decelerates,
+// stops and reverses over DREAM_CROSSING_TIME instead of changing sign in
+// one step. That is the one place the world turning is *felt* rather than
+// seen, and it is why the crossing had to be simulation state.
+get_corruption_speed :: proc(depth: f32, dream_t: f32 = 0) -> f32 {
 	t := clamp(depth / CORRUPTION_FULL_DISTANCE, 0, 1)
-	return CORRUPTION_SPEED_OPEN + (CORRUPTION_SPEED_TOP - CORRUPTION_SPEED_OPEN) * t
+	forward := f32(CORRUPTION_SPEED_OPEN) + (CORRUPTION_SPEED_TOP - CORRUPTION_SPEED_OPEN) * t
+	k := clamp(dream_t, 0, 1)
+	return forward + (-f32(CORRUPTION_DREAM_RETREAT) - forward) * k
 }
 
 // One step of the front: it comes on, and it is towed if it has fallen
 // further behind than a player can spend.
-update_corruption :: proc(corruption: ^Corruption, player: Player, delta_time: f32) {
+update_corruption :: proc(
+	corruption: ^Corruption,
+	player: Player,
+	dream: Dream,
+	delta_time: f32,
+) {
 	depth := get_player_world(player).x
-	corruption.world_x += get_corruption_speed(depth) * delta_time
+	corruption.world_x += get_corruption_speed(depth, dream.world_t) * delta_time
 	corruption.world_x = max(corruption.world_x, depth - CORRUPTION_MAX_LEAD)
 }
 

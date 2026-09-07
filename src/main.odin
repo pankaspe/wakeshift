@@ -48,6 +48,7 @@ draw_gameplay :: proc(
 	world: game.World,
 	player: game.Player,
 	corruption: game.Corruption,
+	dream: game.Dream,
 	palettes: core.PaletteSet,
 	particles: fx.Particles,
 ) {
@@ -55,13 +56,21 @@ draw_gameplay :: proc(
 	// right, eaten by the Corruption on the left. Both are a clip, and
 	// both of them are this one number and DRAW_FRONT_X. The left one is
 	// usually off the picture, and clipping to it then costs nothing.
-	render.draw_maze(maze, world, palettes, game.get_corruption_screen_x(corruption, world))
+	front_x := game.get_corruption_screen_x(corruption, world)
+	render.draw_maze(maze, world, palettes, front_x)
+
+	// Between the walls and the body: a pickup is an object in the maze,
+	// and the block passing over one has to cover it.
+	render.draw_pickups(maze, world, palettes, front_x, dream)
 
 	// The dust the world's line throws off as it reaches the front. Drawn
 	// with the world because it *is* the world, a moment later.
 	fx.draw_particles(particles)
 
 	render.draw_player(player, world, palettes)
+
+	// The bar, around the body it belongs to (render/charge.odin).
+	render.draw_charge(player, dream, world, palettes)
 
 	// Last, over everything: the front is in front of the world it is
 	// eating. This is the edge; the fraying is the dust above.
@@ -173,6 +182,7 @@ main :: proc() {
 
 	score := game.new_score()
 	corruption := game.new_corruption()
+	dream := game.new_dream()
 
 	// The run's input log. It records flip ticks and a four-direction
 	// control scheme has no flips, so **a manifest saved today does not
@@ -191,6 +201,11 @@ main :: proc() {
 	intro_timer: f32 = 0
 	intro_dismissed_at: f32 = -1
 
+	// How many pickups this frame's steps took, so the dust can be thrown
+	// for something that *happened*. A difference read off the run's own
+	// tally: presentation derived from the simulation, never the reverse.
+	pickups_taken := 0
+
 	// Simulation input waiting for a step to consume it. A frame and a step
 	// are not the same thing: a frame that runs no step would otherwise
 	// drop the press, and one that runs two would apply it twice.
@@ -202,6 +217,7 @@ main :: proc() {
 		maze: ^game.Maze,
 		score: ^game.Score,
 		corruption: ^game.Corruption,
+		dream: ^game.Dream,
 		particles: ^fx.Particles,
 		recorder: ^core.RunRecorder,
 		accumulator: ^f32,
@@ -210,7 +226,7 @@ main :: proc() {
 		intro_dismissed_at: ^f32,
 		seed: u64,
 	) {
-		game.reset_run(player, world, maze, score, corruption, seed)
+		game.reset_run(player, world, maze, score, corruption, dream, seed)
 		fx.clear_particles(particles)
 		accumulator^ = 0
 		pending_input^ = core.Input{}
@@ -259,6 +275,7 @@ main :: proc() {
 						&maze,
 						&score,
 						&corruption,
+						&dream,
 						&particles,
 						&recorder,
 						&accumulator,
@@ -337,13 +354,29 @@ main :: proc() {
 				// The order used to be the other way round because the
 				// camera was the thing setting the pace; it is a camera
 				// again (game/world.odin), so it goes second.
-				game.update_player(&player, &maze, step_input, core.FIXED_TIMESTEP)
+				// The Dream's rules are in force from the instant the bar
+				// fills, not from the end of the crossing: a pierce that
+				// half worked would be unreadable.
+				game.update_player(
+					&player,
+					&maze,
+					step_input,
+					core.FIXED_TIMESTEP,
+					game.dream_is_active(dream),
+				)
+
+				// Before the bar is stepped, so a fragment that fills it
+				// turns the world on the step it was taken.
+				taken_before := dream.fragments + dream.lucids
+				game.collect_pickups(&maze, player, &dream)
+				pickups_taken += dream.fragments + dream.lucids - taken_before
+				game.update_dream(&dream, core.FIXED_TIMESTEP)
 
 				game.update_world(&world, core.FIXED_TIMESTEP, game.get_player_world(player).x)
 
 				// The front comes on through the world, on its own clock
 				// and never on the camera's.
-				game.update_corruption(&corruption, player, core.FIXED_TIMESTEP)
+				game.update_corruption(&corruption, player, dream, core.FIXED_TIMESTEP)
 
 				game.update_score(&score, player)
 
@@ -413,6 +446,7 @@ main :: proc() {
 					&maze,
 					&score,
 					&corruption,
+					&dream,
 					&particles,
 					&recorder,
 					&accumulator,
@@ -438,7 +472,7 @@ main :: proc() {
 
 		palettes :=
 			showing_run \
-			? render.new_scene_palette(player, world) \
+			? render.new_scene_palette(dream, world) \
 			: render.new_menu_palette(display_time)
 
 		rl.ClearBackground(palettes.neutral.deep)
@@ -451,8 +485,10 @@ main :: proc() {
 		// would be the only thing on screen that had not stopped.
 		if game_state == .Playing {
 			render.emit_fray(&particles, world, corruption, player, palettes, frame_time)
+			render.emit_pickup_burst(&particles, player, world, palettes, pickups_taken)
 			fx.update_particles(&particles, frame_time)
 		}
+		pickups_taken = 0
 
 		switch game_state {
 		case .MainMenu:
@@ -465,6 +501,7 @@ main :: proc() {
 				interpolated_world(world, ahead_player, accumulator),
 				ahead_player,
 				corruption,
+				dream,
 				palettes,
 				particles,
 			)
@@ -472,17 +509,17 @@ main :: proc() {
 			ui.draw_intro_prompt(intro_timer, intro_dismissed_at, palettes)
 
 		case .Paused:
-			draw_gameplay(&maze, world, player, corruption, palettes, particles)
+			draw_gameplay(&maze, world, player, corruption, dream, palettes, particles)
 			ui.draw_hud(score, palettes)
 			ui.draw_pause_overlay(pause_menu, palettes)
 
 		case .GameOver:
-			draw_gameplay(&maze, world, player, corruption, palettes, particles)
-			ui.draw_game_over(score, high_score, palettes)
+			draw_gameplay(&maze, world, player, corruption, dream, palettes, particles)
+			ui.draw_game_over(score, high_score, dream, palettes)
 
 		case .Options:
 			if options_return == .Paused {
-				draw_gameplay(&maze, world, player, corruption, palettes, particles)
+				draw_gameplay(&maze, world, player, corruption, dream, palettes, particles)
 			}
 			ui.draw_options_screen(options_screen, palettes)
 		}

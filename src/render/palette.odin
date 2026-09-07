@@ -34,13 +34,19 @@ CONVERGENCE_FULL_TIME :: 100
 // against the screen would make the colour of a player standing still
 // depend on where the track happens to have carried them, which is not
 // something the palette has any business knowing about.
-get_world_t :: proc(player: game.Player, world: game.World) -> f32 {
-	// Zero for the whole of L1: the Dream is a phase of the run, not a
-	// place in the corridor, and the phase does not exist yet. It stays a
-	// procedure rather than a constant because everything downstream —
-	// palette, bloom, glow gain — is already written against it, and the
-	// Dream will set it without touching any of them.
-	return 0
+// It is the Dream's crossing and nothing else. The corridor's height was
+// never going to be it: in a maze the body is up and down constantly and
+// a palette that followed it would strobe, and the Dream is a *phase of
+// the run* rather than a place in the corridor.
+//
+// The value is read straight off the simulation instead of being chased
+// here, because the front's velocity reads the same number
+// (game/corruption.odin) and a run's outcome may not depend on anything
+// the frame clock owns. What is chased is the field behind it, on its
+// own 0.45 s constant (render/background.odin) — the glow leads, the
+// colour arrives.
+get_world_t :: proc(dream: game.Dream) -> f32 {
+	return dream.world_t
 }
 
 get_depth_t :: proc(world: game.World) -> f32 {
@@ -58,8 +64,8 @@ get_depth_t :: proc(world: game.World) -> f32 {
 // shares. It is applied to the finished frame instead
 // (fx/corruption.odin), which is the only stage that knows what x a pixel
 // is at.
-new_scene_palette :: proc(player: game.Player, world: game.World) -> core.PaletteSet {
-	return core.new_palette_set(get_world_t(player, world), get_depth_t(world))
+new_scene_palette :: proc(dream: game.Dream, world: game.World) -> core.PaletteSet {
+	return core.new_palette_set(get_world_t(dream), get_depth_t(world))
 }
 
 // The palette for a screen with no run behind it (menus, options). It
