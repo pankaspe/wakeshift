@@ -220,7 +220,16 @@ Odin forbids cyclic imports between packages, and one directory is exactly one p
 - **The weight hierarchy lives in the arithmetic.** Every stroke weight is a multiple or a fraction
   of one rung, so tuning the world cannot silently invert the order.
 - **A *world* element nailed to the screen reads as two pictures.** The vignette is screen-fixed on
-  purpose because it is a property of the lens; anything the world contains must ride the world.
+  purpose because it is a property of the lens; anything the world contains must ride the world. The
+  dust gets away with screen coordinates because it lives at a front that barely moves on screen; the
+  pierce ring does not, because it marks a *wall*, so it stores a world x and `fx.draw_rings` takes
+  the offset. Handing fx an offset is arithmetic, not game knowledge.
+- **Nothing happening is not an event.** The pierce worked from the day it landed and read as a
+  glitch, because one wall quietly ceasing to exist is indistinguishable from the wall never having
+  been there — which is what the maze is full of. What was missing was not a better effect but *any*
+  statement that something happened at a place. The flash is warm and belongs to you; the wake is the
+  world's light, dimmed and broken, because it is what the world was left like. An act and a
+  consequence, told apart the way the palette tells anything apart.
 
 ### The maze
 
@@ -228,10 +237,18 @@ Twelve rows of 60 px fill the 720 px canvas exactly, and the columns run on fore
 division has to be whole or the corridor would not close against the floor; horizontally it never
 has to be, because the world scrolls and the fraction is only where the camera is.
 
-- **Walls are edges, not blocks.** Two things are filled — the field and the character — so a maze
-  of solid cells would be a third, and it would stop being La Linea. Each cell owns its **north**
-  and **west** wall and nothing else, so the two sides of one wall cannot drift apart, and a single
-  procedure answers for all four directions.
+- **Walls are edges, not blocks.** A maze of solid cells would be a third filled thing and it would
+  stop being La Linea. Each cell owns its **north** and **west** wall and nothing else, so the two
+  sides of one wall cannot drift apart, and a single procedure answers for all four directions.
+- **A pierced wall is open, and it is not the same as a wall that was never carved.** Two more bits
+  per cell say so. Nothing about collision reads them — they exist because the difference *is* the
+  wake, and the wake is pillar 6's third channel: with the colour off you can still tell which world
+  you are in by the holes behind you. Only the player's pierce sets them; the carve, the braid and
+  the repair all open walls that were never there.
+- **An instant cannot be read off a level.** A pierce, a pickup: the simulation counts them and
+  presentation compares the count across a frame's steps. That is the allowed direction — derived
+  from the simulation, never read by it — and it is the only way a frame can be told that something
+  *happened* rather than what is currently true.
 - **Collision is a question to the grid, never an overlap of rectangles.** The block sits centred in
   its cell and is smaller than it, so the air around it is presentation and costs nothing: there is
   no pixel at which it can catch on a corner, because no pixel is ever consulted.

@@ -51,6 +51,7 @@ draw_gameplay :: proc(
 	dream: game.Dream,
 	palettes: core.PaletteSet,
 	particles: fx.Particles,
+	rings: fx.Rings,
 	display_time: f32,
 ) {
 	// The world exists between the two fronts: written by the pen on the
@@ -67,6 +68,11 @@ draw_gameplay :: proc(
 	// The dust the world's line throws off as it reaches the front. Drawn
 	// with the world because it *is* the world, a moment later.
 	fx.draw_particles(particles)
+
+	// The portals a pierce leaves. They keep a world x and are put on
+	// screen here, so they stay on the wall while the wall scrolls
+	// (fx/rings.odin).
+	fx.draw_rings(rings, game.maze_screen_x(0, world.camera_x))
 
 	render.draw_player(player, world, palettes)
 
@@ -139,6 +145,7 @@ main :: proc() {
 	defer fx.destroy_corruption(corruption_fx)
 
 	particles := fx.new_particles()
+	rings := fx.new_rings()
 
 	dither := fx.new_dither()
 	defer fx.destroy_dither(dither)
@@ -207,6 +214,11 @@ main :: proc() {
 	// tally: presentation derived from the simulation, never the reverse.
 	pickups_taken := 0
 
+	// The same idea for the walls the Dream went through: a pierce is an
+	// instant, so the frame has to be told one happened rather than being
+	// able to read it off a level (game/player.odin).
+	pierces_seen := 0
+
 	// Simulation input waiting for a step to consume it. A frame and a step
 	// are not the same thing: a frame that runs no step would otherwise
 	// drop the press, and one that runs two would apply it twice.
@@ -220,6 +232,7 @@ main :: proc() {
 		corruption: ^game.Corruption,
 		dream: ^game.Dream,
 		particles: ^fx.Particles,
+		rings: ^fx.Rings,
 		recorder: ^core.RunRecorder,
 		accumulator: ^f32,
 		pending_input: ^core.Input,
@@ -229,6 +242,7 @@ main :: proc() {
 	) {
 		game.reset_run(player, world, maze, score, corruption, dream, seed)
 		fx.clear_particles(particles)
+		fx.clear_rings(rings)
 		accumulator^ = 0
 		pending_input^ = core.Input{}
 		intro_timer^ = 0
@@ -278,6 +292,7 @@ main :: proc() {
 						&corruption,
 						&dream,
 						&particles,
+						&rings,
 						&recorder,
 						&accumulator,
 						&pending_input,
@@ -368,9 +383,11 @@ main :: proc() {
 
 				// Before the bar is stepped, so a fragment that fills it
 				// turns the world on the step it was taken.
+				pierces_before := player.pierces
 				taken_before := dream.fragments + dream.lucids
 				game.collect_pickups(&maze, player, &dream)
 				pickups_taken += dream.fragments + dream.lucids - taken_before
+				pierces_seen += player.pierces - pierces_before
 				game.update_dream(&dream, core.FIXED_TIMESTEP)
 
 				game.update_world(&world, core.FIXED_TIMESTEP, game.get_player_world(player).x)
@@ -449,6 +466,7 @@ main :: proc() {
 					&corruption,
 					&dream,
 					&particles,
+					&rings,
 					&recorder,
 					&accumulator,
 					&pending_input,
@@ -488,9 +506,14 @@ main :: proc() {
 			render.emit_fray(&particles, world, corruption, player, palettes, frame_time)
 			render.emit_pickup_burst(&particles, player, world, palettes, pickups_taken)
 			render.emit_charge_dust(&particles, player, dream, world, palettes, frame_time)
+			if pierces_seen > 0 {
+				render.emit_pierce(&particles, &rings, player, world, palettes)
+			}
+			fx.update_rings(&rings, frame_time)
 			fx.update_particles(&particles, frame_time)
 		}
 		pickups_taken = 0
+		pierces_seen = 0
 
 		switch game_state {
 		case .MainMenu:
@@ -506,23 +529,24 @@ main :: proc() {
 				dream,
 				palettes,
 				particles,
+				rings,
 				display_time,
 			)
 			ui.draw_hud(score, palettes)
 			ui.draw_intro_prompt(intro_timer, intro_dismissed_at, palettes)
 
 		case .Paused:
-			draw_gameplay(&maze, world, player, corruption, dream, palettes, particles, display_time)
+			draw_gameplay(&maze, world, player, corruption, dream, palettes, particles, rings, display_time)
 			ui.draw_hud(score, palettes)
 			ui.draw_pause_overlay(pause_menu, palettes)
 
 		case .GameOver:
-			draw_gameplay(&maze, world, player, corruption, dream, palettes, particles, display_time)
+			draw_gameplay(&maze, world, player, corruption, dream, palettes, particles, rings, display_time)
 			ui.draw_game_over(score, high_score, dream, palettes)
 
 		case .Options:
 			if options_return == .Paused {
-				draw_gameplay(&maze, world, player, corruption, dream, palettes, particles, display_time)
+				draw_gameplay(&maze, world, player, corruption, dream, palettes, particles, rings, display_time)
 			}
 			ui.draw_options_screen(options_screen, palettes)
 		}

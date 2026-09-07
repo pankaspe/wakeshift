@@ -36,10 +36,11 @@ which is what makes the Dream the place ground is bought back rather than a ligh
 drains while it lasts; **Lucids**, which exist only up there and sit where the walking maze cannot
 reach them, push it back up.
 
-Pierced walls stay open behind you, and fragments vanish while Lucids appear at the moment the world
-turns — so with the colour off entirely you can still tell which world you are in by what the body
-does and what the maze is offering. That is the point: the theme has to change the mechanics, not
-just the palette.
+Going through a wall opens it and *leaves it open* — drawn afterwards as a wall with its middle
+missing, which is a shape the generator can never make. Fragments vanish and Lucids appear at the
+moment the world turns. So with the colour off entirely you can still tell which world you are in by
+what the body does, by what the maze is offering, and by the holes behind you. That is the point: the
+theme has to change the mechanics, not just the palette.
 
 Levels are designed and not yet built, and the loop's four numbers — how many fragments fill the bar,
 how long the Dream lasts, how fast the front retreats, what a Lucid is worth — are first drafts drawn

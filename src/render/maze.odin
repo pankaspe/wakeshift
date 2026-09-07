@@ -55,6 +55,28 @@ MAZE_WALL_WEIGHT :: 1.0
 MAZE_GLOW :: 0.40
 MAZE_SPREAD :: 4.0
 
+// --- The wake ---
+//
+// A wall the Dream went through is drawn as **the wall with its middle
+// missing**: a stub at each end and a gap between them. That is the one
+// shape the generator can never make — its walls are always whole cell
+// edges welded into runs — so it cannot be mistaken for a wall, and it
+// reads as damage without anything having to be explained.
+//
+// It is the world's own light, dimmed and thinner, and never the body's:
+// the flash that marked the act is warm and belongs to you
+// (render/pierce.odin), and this is what the world was left like
+// afterwards. Dim also puts it behind the maze ahead, where a thing you
+// have already passed belongs.
+//
+// This is pillar 6's third channel, and the design has been promising it
+// since the Dream was written down: with the colour turned off you can
+// still tell which world you are in by the holes behind you.
+WAKE_WEIGHT :: 0.7 // multiples of the wall's own weight
+WAKE_STUB :: 0.28 // how much of the wall each end keeps
+WAKE_ALPHA :: 0.55
+WAKE_GLOW :: 0.22
+
 @(private = "file")
 clipped_span :: proc(a, b, low, high: f32) -> (f32, f32, bool) {
 	start := max(min(a, b), low)
@@ -150,6 +172,8 @@ draw_maze :: proc(
 		}
 	}
 
+	draw_wake(maze, world, palettes, first, last, left, right)
+
 	// The pen, on the two lines that are always there. One nib per
 	// horizontal wall would be a dotted column at the right edge, which is
 	// the bright vertical bar draw_front.odin exists to refuse.
@@ -158,4 +182,62 @@ draw_maze :: proc(
 		rl.Vector2{right, boundary_y(game.MAZE_ROWS, bound.thickness * 0.5)},
 		palettes,
 	)
+}
+
+// The stubs of every pierced wall the camera can see.
+//
+// A separate pass rather than part of the runs above, and it has to be:
+// the merge welds *adjacent* walls into one stroke, and a pierced wall is
+// not there any more — it would break every run it sat in. It is cheap
+// enough not to care. A screen is around 270 cells and this asks each of
+// them two questions, against the 82 strokes the walls themselves cost.
+@(private = "file")
+draw_wake :: proc(
+	maze: ^game.Maze,
+	world: game.World,
+	palettes: core.PaletteSet,
+	first, last: int,
+	left, right: f32,
+) {
+	stub := new_stroke(
+		core.with_alpha(palettes.current.light, WAKE_ALPHA),
+		WORLD_STROKE_THICKNESS * MAZE_WALL_WEIGHT * WAKE_WEIGHT,
+	)
+	stub.glow = WAKE_GLOW
+	stub.spread = MAZE_SPREAD
+	stub.round_caps = false
+	apply_glow_gain(&stub, glow_gain(palettes.world_t))
+
+	// Both ends of one wall, cut to the two fronts like everything else.
+	mark :: proc(a, b: rl.Vector2, camera_x, left, right: f32, stroke: Stroke) {
+		length := f32(WAKE_STUB)
+		for end in 0 ..< 2 {
+			from := end == 0 ? a : b
+			to := end == 0 ? a + (b - a) * length : b + (a - b) * length
+			x0 := game.maze_screen_x(from.x, camera_x)
+			x1 := game.maze_screen_x(to.x, camera_x)
+			if max(x0, x1) < left || min(x0, x1) > right {
+				continue
+			}
+			draw_stroke_line(
+				rl.Vector2{clamp(x0, left, right), from.y},
+				rl.Vector2{clamp(x1, left, right), to.y},
+				stroke,
+			)
+		}
+	}
+
+	for col in first ..= last + 1 {
+		for row in 0 ..< game.MAZE_ROWS {
+			walls := game.maze_walls(maze, col, row)
+			if .PiercedNorth in walls {
+				a, b := game.wall_segment(col, row, .Up)
+				mark(a, b, world.camera_x, left, right, stub)
+			}
+			if .PiercedWest in walls {
+				a, b := game.wall_segment(col, row, .Left)
+				mark(a, b, world.camera_x, left, right, stub)
+			}
+		}
+	}
 }

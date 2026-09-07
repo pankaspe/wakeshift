@@ -13,8 +13,14 @@
 *
 * Each cell owns two walls, its **north** and its **west**. The south wall
 * of a cell is the north wall of the cell below it, and storing that twice
-* is the classic way to let the two copies drift apart. Two bits per cell,
-* 384 bytes for a chunk of 32 columns.
+* is the classic way to let the two copies drift apart.
+*
+* Two more bits say that a wall *was* there and the Dream went through it.
+* A pierced wall is open — nothing about collision reads those bits — but
+* it is not the same thing as a wall that was never carved, and the
+* difference is the whole of the wake (Design Doc §7): with the colour
+* turned off you can still tell which world you are in by the holes behind
+* you. Four bits per cell, still one byte, still 384 bytes for a chunk.
 *
 * THE WALLS ARE EDGES, NOT BLOCKS
 *
@@ -73,6 +79,7 @@ package game
 
 import "../core"
 import "core:slice"
+import rl "vendor:raylib/v55"
 
 // --- The grid ---
 
@@ -95,11 +102,23 @@ MAZE_ORIGIN_X :: f32(core.PLAYER_HOME_X) - CELL_SIZE * 0.5
 Wall :: enum u8 {
 	North,
 	West,
+
+	// The wake. Set when the Dream takes a wall down, never by the carve,
+	// the braid or the repair — a wall that was opened while the maze was
+	// being built was never there, and only the player's own pierce leaves
+	// a mark.
+	PiercedNorth,
+	PiercedWest,
 }
 
 WallSet :: bit_set[Wall;u8]
 
 ALL_WALLS :: WallSet{.North, .West}
+
+// Which mark a wall leaves behind when it is pierced.
+wake_of :: proc(wall: Wall) -> Wall {
+	return wall == .North ? .PiercedNorth : .PiercedWest
+}
 
 // One chunk's cells, addressed chunk-locally.
 CellGrid :: [CHUNK_COLUMNS][MAZE_ROWS]WallSet
@@ -399,6 +418,28 @@ cell_centre_x :: proc(col: int) -> f32 {
 
 cell_centre_y :: proc(row: int) -> f32 {
 	return f32(row) * CELL_SIZE + CELL_SIZE * 0.5
+}
+
+// The two ends of one wall, in world coordinates.
+//
+// A wall belongs to exactly one cell — its own north or west — and this
+// resolves the direction to that wall's actual segment, so the flash and
+// the wake cannot disagree about where the thing they are marking is.
+wall_segment :: proc(col, row: int, dir: core.Direction) -> (a, b: rl.Vector2) {
+	left := f32(col) * CELL_SIZE
+	top := f32(row) * CELL_SIZE
+	switch dir {
+	case .Right:
+		return {left + CELL_SIZE, top}, {left + CELL_SIZE, top + CELL_SIZE}
+	case .Left:
+		return {left, top}, {left, top + CELL_SIZE}
+	case .Down:
+		return {left, top + CELL_SIZE}, {left + CELL_SIZE, top + CELL_SIZE}
+	case .Up:
+		return {left, top}, {left + CELL_SIZE, top}
+	case .None:
+	}
+	return {left, top}, {left, top}
 }
 
 // World x to screen x. The one conversion; nothing else may invent its
@@ -1465,7 +1506,9 @@ maze_open_wall :: proc(maze: ^Maze, col, row: int, dir: core.Direction) {
 		return
 	}
 	chunk := ensure_chunk(maze, owner_col / CHUNK_COLUMNS)
-	chunk.cells[owner_col % CHUNK_COLUMNS][owner_row] -= {wall}
+	cell := &chunk.cells[owner_col % CHUNK_COLUMNS][owner_row]
+	cell^ -= {wall}
+	cell^ += {wake_of(wall)}
 }
 
 // --- Accept or re-roll ---

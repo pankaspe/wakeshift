@@ -14,7 +14,7 @@ Stato: ✅ fatto · 🟡 in parte · ⬜ da fare.
 | ✅ | **L1** | **La griglia e lo scivolamento** → Celle, muri, movimento a quattro direzioni che scivola fino all'ostacolo, la Corruzione. Rispondeva a una domanda sola: **a questa velocità un labirinto si legge e diverte?** | Opus | cella 60, 12 righe, corpo 38. **Sì a entrambe**, in tre playtest. Taratura fine rimandata |
 | 🟡 | **L2** | **Il generatore vero** → I parametri (densità, lunghezza dei muri, ramificazione, vicoli) sono continui e **crescono con la distanza**. | Opus | invariante, intreccio, misura e **riparazione** ci sono: sacche 3,18% → **0 su 13533 celle**. Manca solo la crescita coi livelli |
 | ✅ | **L3** | **I frammenti nel labirinto** → Dove stanno i rombi perché costino qualcosa. Il BFS del generatore dà già il costo di deviazione di ogni cella: si piazzano per misura. | Opus | fascia 3–18 celle, misurata sul costo di **copertura** (ci passi sopra) e non di sosta. 2,26 frammenti e 1,87 Lucidi per chunk |
-| 🟡 | **L4** | **La barra e la fase Onirica** → Cosa carica la barra, quanto dura l'Onirico, e cosa cambia lassù oltre al colore (pilastro 6). | Opus | attraversamento, arretramento, barra ad anello attorno al corpo: ci sono. **L'anello non paga ancora**: raccogliere è in perdita finché il Reale è in attivo |
+| 🟡 | **L4** | **La barra e la fase Onirica** → Cosa carica la barra, quanto dura l'Onirico, e cosa cambia lassù oltre al colore (pilastro 6). | Opus | attraversamento (lampo + scia), arretramento, anello. Colori: mondo / frammenti / corpo separati e senza convergenza. **Non paga ancora**: raccogliere è in perdita finché il Reale è in attivo |
 | ⬜ | **L5** | **Il disegno del labirinto** → I muri come tratto al neon. | Sonnet | il rischio tecnico è chiuso (82 tratti a schermo contro 562). Resta il giudizio estetico |
 | ⬜ | **L6** | **Punteggio, HUD, font** → Cosa si segna in un labirinto. Megrim (SIL OFL 1.1) in `assets/fonts/`, caricato dai byte così il binario resta autosufficiente. | Sonnet | |
 | ⬜ | **L7** | **Audio** → Tenuto per ultimo per scelta dell'autore. | Sonnet | |
@@ -62,3 +62,7 @@ L'aritmetica sta in `game/dream.odin`.
 
 Poi, in qualsiasi ordine: la crescita delle manopole coi livelli (l'altra metà di L2), oppure **L5**,
 che è disegno e non blocca niente.
+
+Parcheggiato per scelta, non dimenticato: i **quattro muri candidati** marcati mentre sei fermo
+nell'Onirico — è quello che trasforma il bonus da «vado e vedo» a «scelgo quale», ed è anche il più
+a rischio di fare confusione a schermo.

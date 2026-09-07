@@ -72,6 +72,20 @@ Player :: struct {
 	// One press held for the moment the body arrives. Exactly one: a queue
 	// would let a player type a route in advance and stop reading the maze.
 	queued:    core.Direction,
+
+	// The last wall the Dream went through, and how many there have been.
+	//
+	// Written by the simulation and read only by presentation, which is
+	// the allowed direction: a pierce is an *instant*, and an instant
+	// cannot be read off a level — the frame has to be told that one
+	// happened. main compares the count across a frame's steps and marks
+	// the wall (render/pierce.odin). Two pierces inside one frame would
+	// only mark the second, and at 900 px/s a slide is four steps a cell,
+	// so that does not happen.
+	pierces:   int,
+	pierce_col: int,
+	pierce_row: int,
+	pierce_dir: core.Direction,
 }
 
 new_player :: proc() -> Player {
@@ -124,6 +138,8 @@ start_slide :: proc(player: ^Player, maze: ^Maze, dir: core.Direction, pierce: b
 		next_col, next_row := core.step_cell(to_col, to_row, dir)
 		if next_col >= 0 && next_row >= 0 && next_row < MAZE_ROWS {
 			maze_open_wall(maze, to_col, to_row, dir)
+			player.pierces += 1
+			player.pierce_col, player.pierce_row, player.pierce_dir = to_col, to_row, dir
 			end_col, end_row, beyond := maze_slide(maze, to_col, to_row, dir)
 			to_col, to_row, cells = end_col, end_row, cells + beyond
 		}
