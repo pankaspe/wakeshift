@@ -11,9 +11,9 @@ curve, the economy tuning — is archived in `docs/archive/CLAUDE_v2_mattoncini.
 and the reason they are kept is that they record measurements and traps that cost real work to find:
 go there to learn *why* something was once true, never to learn what to build.
 
-The fragments and the Dream phase have landed since; **the levels are still designed and not
-built**, and so is the deterministic repair the generator needs. `TIMELINE.md` says where each one
-stands.
+The fragments, the Dream phase and the generator's deterministic repair have landed since; **the
+levels are still designed and not built**, and so is the growth of the generator's knobs with
+distance. `TIMELINE.md` says where each one stands.
 
 What still binds:
 
@@ -256,12 +256,24 @@ has to be, because the world scrolls and the fraction is only where the camera i
   draw that triggered it would still get the right walls — and would pay several milliseconds for
   them mid-frame, at a moment chosen by the camera rather than by the simulation.
 - **Merge collinear walls before drawing them.** Measured: 82 strokes a screen instead of 562.
-- **The invariant is not met yet, and the per-chunk test cannot tell you so.** A solver over the
-  assembled world says **3.18% of the cells reachable from the start are cells from which no route
-  gains another twenty columns** — finished runs, and pillar 5 says never. `trap_free` misses them
-  because it only examines cells the crossing search reached, and that search stops at the first exit
-  it pops. **A check that stops early is blind past where it stopped**, which is the seam lesson
-  wearing a different costume. The fix is a deterministic repair, not more attempts.
+- **A check that stops early is blind past where it stopped.** `trap_free` used to examine only the
+  cells the crossing search had reached, and that search returns at the first exit it pops — so
+  everything dearer than the crossing was never looked at, and a solver over the assembled world
+  found **3.18% of reachable cells terminal** while every chunk reported green. It tests every cell
+  now. Same lesson as the seams, different costume.
+- **Pillar 5 is repaired, not re-rolled.** Re-rolling is right for the difficulty band, because a
+  chunk outside it is still a chunk; it is wrong for a pocket, because twenty-four attempts can make
+  "never" rarer and cannot promise it. So the pockets are opened, one wall at a time, at the cell
+  furthest along that still has a wall to take down. Measured: 73.8% of chunks want a repair, mean
+  2.05 walls, and the assembled world goes from 3.18% pockets to **0 over 13533 reachable cells**.
+- **Safety is not monotone in openings**, which is the one thing about the repair that is not
+  obvious. Taking a wall down does not only add a move, it *lengthens a slide* — a cell that used to
+  stop on safe ground can run past it and end somewhere worse. A batch of openings cannot be reasoned
+  about, only a sequence of them, each one measured. Never rewrite that loop into a single pass.
+- **A horizontal slide reads only west walls and a vertical one only north walls**, so one opened
+  wall can only change one row's Left/Right or one column's Up/Down. Patching the slide table instead
+  of rebuilding it is what lets the repair fit in a step: 10.7 ms a chunk down to 5.5, with output
+  identical to the digit, which is also how you know the patch is equivalent.
 
 ### Presentation
 

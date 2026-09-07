@@ -71,7 +71,12 @@ A chunk is built and verified **entirely on its own**, in any order:
    cell you can get to, you can still get out of.
 5. **Accept or re-roll** with another sub-seed until the crossing lands in the band the level asked
    for. The loop is deterministic from the seed, so the run stays reproducible.
-6. **Place the pickups by measure**, on the chunk that won. The same search prices every cell, so
+6. **Repair rather than re-roll** anything that broke the invariant. Re-rolling is the right tool
+   for the difficulty band — a chunk outside it is still a chunk — and the wrong one for a pocket,
+   since more attempts can only make *never* rarer. So walls come down one at a time, at the cell
+   furthest along that cannot reach a crossing, re-measuring after every single one because opening
+   a wall lengthens a slide as well as adding a move.
+7. **Place the pickups by measure**, on the chunk that won. The same search prices every cell, so
    "somewhere that costs about half a second of detour" is a question to ask rather than a place to
    guess — and the risk/reward junction the design turns on is selected rather than decorated. The
    price asked for is the cost of a whole crossing that *drives over* the cell, not of stopping on
@@ -82,10 +87,11 @@ making progress or not, so it is **a path exists that arrives in time**. Measure
 0 unsolvable, mean crossing at a third of the time available, 5.8 ms of generation for every 7
 seconds of play.
 
-It is not finished. A solver run over the *assembled* world — rather than over one chunk, which is
-the only thing that can contradict a measurement grading its own homework — says 3.18% of the cells
-reachable from the start are cells no route leaves. Closing that with a deterministic repair, rather
-than with more attempts, is the generator's remaining work.
+Verified by a solver over the *assembled* world rather than over one chunk, which is the only thing
+that can contradict a measurement grading its own homework. It used to say 3.18% of the cells
+reachable from the start were cells no route leaves — every chunk reporting green while the world
+held dead ends — and it now says **0 over 13533 reachable cells**. What is left for the generator is
+making its knobs grow with distance.
 
 ---
 

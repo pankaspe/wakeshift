@@ -115,6 +115,9 @@ ChunkMetrics :: struct {
 	attempts:  int, // how many re-rolls it took to land in the band
 	accepted:  bool, // false if the band was never met and the closest was kept
 
+	repairs:   int, // walls the repair had to take down
+	repaired:  bool, // false if it gave up and the chunk was kept anyway
+
 	// The seam hole `cells` and `moves` were measured from: the *worst*
 	// entry, the one the difficulty band is stated against. Kept because
 	// everything measured on the chunk afterwards — where a fragment is
@@ -641,6 +644,167 @@ grid_slide :: proc(
 	return
 }
 
+
+// --- The repair ---
+//
+// WHY RE-ROLLING IS NOT AN ANSWER HERE
+//
+// The band is a preference and re-rolling is the right tool for it: a
+// chunk outside the difficulty asked for is still a chunk, so throwing it
+// away costs nothing but a sub-seed. A pocket is not a preference. Pillar
+// 5 says *never*, and "never" is not something a loop of twenty-four
+// attempts can promise — it can only make it rarer, and rarer is what the
+// generator was already doing while 3.18% of the cells a player could
+// reach were cells no route leaves.
+//
+// So the pockets are opened rather than re-drawn. One wall at a time, at
+// the cell that is furthest along, and always the same wall for the same
+// maze — the whole loop is a function of the walls it is handed, so it
+// costs the run's reproducibility nothing.
+//
+// WHY IT HAS TO RE-MEASURE AFTER EVERY SINGLE WALL
+//
+// Safety is **not monotone in openings**, which is the one thing about
+// this that is not obvious. Taking a wall down does not only add a move,
+// it *lengthens a slide*: a cell that used to stop on safe ground now
+// runs past it and may end somewhere worse. So a batch of openings cannot
+// be reasoned about, only a sequence of them, each one measured. That is
+// also why the loop's convergence is a measurement below and not an
+// argument here.
+//
+// WHAT IT WILL NOT TOUCH
+//
+// The west wall of column 0 is the seam, and the seam is a function of
+// its boundary's column index so that two chunks agree on it without
+// meeting. Opening it here would make this chunk disagree with the one
+// before it. The direction is simply not offered — both edges fall out of
+// the bounds check for free.
+
+// How many walls the repair may take down before it gives up and lets the
+// chunk be re-rolled instead.
+//
+// Measured over 1000 chunks: 74.7% need one at all, and the mean is 3.21.
+// The cap is not there for the mean, it is there for the tail — a chunk
+// that wants two dozen walls down is a chunk the carve made badly, and
+// re-rolling it costs a sub-seed while opening it costs the maze. Giving
+// up is the cheaper failure, and generate_chunk already scores an
+// unrepaired chunk below any repaired one.
+REPAIR_MAX_STEPS :: 24
+
+// Preference order. Right first, because the cell being repaired is the
+// pocket's furthest one and east is where the crossing is; vertical next,
+// which is the cheapest way out of a horizontal pocket; left last,
+// because sending the player backwards is the move the scroll charges
+// most for.
+@(private = "file")
+repair_dirs :: proc() -> [4]core.Direction {
+	return {.Right, .Up, .Down, .Left}
+}
+
+// Takes down one wall, at the cell furthest along that cannot reach a
+// crossing and *has a wall left to take down*.
+//
+// The second half of that is not a detail. A cell whose four sides are
+// already open can still be unsafe — every one of its slides ends
+// somewhere unsafe — and there is nothing to do at that cell. Stopping
+// there was worth 1 chunk in 1000 shipping with a pocket in it; walking on
+// to the next unsafe cell instead costs a few lines and takes it to zero.
+// Something further back opens, the slides lengthen, and the cell that
+// could not be touched is reached from somewhere new.
+//
+// Furthest along first, and a fixed tie-break, so the same walls come down
+// for the same maze every time.
+@(private = "file")
+open_one_wall :: proc(
+	cells: ^CellGrid,
+	safe: ^[CHUNK_COLUMNS][MAZE_ROWS]bool,
+) -> (
+	any_unsafe: bool,
+	col, row: int,
+	dir: core.Direction,
+) {
+	dirs := repair_dirs()
+	for c := CHUNK_COLUMNS - 1; c >= 0; c -= 1 {
+		for r := MAZE_ROWS - 1; r >= 0; r -= 1 {
+			if safe[c][r] {
+				continue
+			}
+			any_unsafe = true
+			for candidate in dirs {
+				next_col, next_row := core.step_cell(c, r, candidate)
+				// Both chunk edges fall out here for free, and the left
+				// one is the seam: opening it would make this chunk
+				// disagree with the one before it.
+				if next_col < 0 || next_col >= CHUNK_COLUMNS {
+					continue
+				}
+				if next_row < 0 || next_row >= MAZE_ROWS {
+					continue
+				}
+				if !crosses_wall(cells[c][r], cells[next_col][next_row], candidate) {
+					continue // already open; taking it down again is a no-op loop
+				}
+				open_wall(cells, c, r, candidate)
+				return true, c, r, candidate
+			}
+		}
+	}
+	return any_unsafe, 0, 0, .None
+}
+
+// Opens walls until every cell in the chunk can still reach a crossing.
+//
+// Every cell, not only the ones an entry happens to reach: a chunk has to
+// be verifiable on its own, and chunk-local reachability is an
+// underestimate anyway — the player can slide back into this chunk from
+// the next one, through a seam this measurement is blind past.
+repair_chunk :: proc(
+	cells: ^CellGrid,
+	left_seam: [MAZE_ROWS]bool,
+	exits: [MAZE_ROWS]bool,
+) -> (
+	opened: int,
+	ok: bool,
+) {
+	table := build_slide_table(cells, left_seam)
+	for _ in 0 ..< REPAIR_MAX_STEPS {
+		safe := cells_that_can_still_get_out(&table, exits)
+		any_unsafe, col, row, dir := open_one_wall(cells, &safe)
+		if !any_unsafe {
+			return opened, true
+		}
+		// Every unsafe cell in the chunk is already open on all four
+		// sides. Nothing here can fix it, so the caller re-rolls.
+		if dir == .None {
+			return opened, false
+		}
+		opened += 1
+
+		// Patch the table instead of rebuilding it. A west wall belongs to
+		// one row and a north wall to one column, and nothing else can
+		// have changed.
+		#partial switch dir {
+		case .Left, .Right:
+			refresh_slide_row(&table, cells, left_seam, row)
+		case .Up, .Down:
+			refresh_slide_column(&table, cells, left_seam, col)
+		}
+	}
+
+	// The last step of the loop opens a wall and falls out without looking
+	// again, and that wall may well have been the one. Ask once more
+	// rather than reporting a failure the chunk did not have.
+	final := cells_that_can_still_get_out(&table, exits)
+	for col in 0 ..< CHUNK_COLUMNS {
+		for row in 0 ..< MAZE_ROWS {
+			if !final[col][row] {
+				return opened, false
+			}
+		}
+	}
+	return opened, true
+}
+
 // --- The measurement ---
 //
 // WHY SLIDING IS NOT THE SAME AS WALKING, AND WHY IT MATTERS HERE
@@ -727,31 +891,79 @@ grid_slide_pierced :: proc(
 }
 
 @(private = "file")
+fill_slide :: proc(
+	table: ^SlideTable,
+	cells: ^CellGrid,
+	left_seam: [MAZE_ROWS]bool,
+	col, row, dir_index: int,
+	pierce: bool,
+) {
+	dir := slide_dirs()[dir_index]
+	end_col, end_row, travelled := grid_slide(cells, col, row, dir)
+	if pierce {
+		end_col, end_row, travelled = grid_slide_pierced(cells, col, row, dir)
+	}
+	if dir == .Left && end_col == 0 && left_seam[end_row] {
+		travelled = 0
+	}
+	table.end_col[col][row][dir_index] = i16(end_col)
+	table.end_row[col][row][dir_index] = i16(end_row)
+	table.travelled[col][row][dir_index] = i16(travelled)
+}
+
 build_slide_table :: proc(
 	cells: ^CellGrid,
 	left_seam: [MAZE_ROWS]bool,
 	pierce: bool = false,
 ) -> SlideTable {
 	table: SlideTable
-	dirs := slide_dirs()
 	for col in 0 ..< CHUNK_COLUMNS {
 		for row in 0 ..< MAZE_ROWS {
 			for dir_index in 0 ..< 4 {
-				dir := dirs[dir_index]
-				end_col, end_row, travelled := grid_slide(cells, col, row, dir)
-				if pierce {
-					end_col, end_row, travelled = grid_slide_pierced(cells, col, row, dir)
-				}
-				if dir == .Left && end_col == 0 && left_seam[end_row] {
-					travelled = 0
-				}
-				table.end_col[col][row][dir_index] = i16(end_col)
-				table.end_row[col][row][dir_index] = i16(end_row)
-				table.travelled[col][row][dir_index] = i16(travelled)
+				fill_slide(&table, cells, left_seam, col, row, dir_index, pierce)
 			}
 		}
 	}
 	return table
+}
+
+// What one opened wall actually changes in the table, which is far less
+// than everything.
+//
+// **A horizontal slide reads only west walls and a vertical one reads only
+// north walls**, and a wall lives in exactly one row or one column. So
+// taking down a west wall in row r can only change the Left and Right
+// entries of row r — twelve columns' worth of one row, not the whole
+// grid — and a north wall in column c only that column's Up and Down.
+//
+// The repair opens a wall and re-measures, over and over, so this is the
+// difference between the loop costing four milliseconds a chunk and
+// costing well under one. It is the only reason the repair fits inside a
+// simulation step.
+@(private = "file")
+refresh_slide_row :: proc(
+	table: ^SlideTable,
+	cells: ^CellGrid,
+	left_seam: [MAZE_ROWS]bool,
+	row: int,
+) {
+	for col in 0 ..< CHUNK_COLUMNS {
+		fill_slide(table, cells, left_seam, col, row, 0, false) // .Left
+		fill_slide(table, cells, left_seam, col, row, 1, false) // .Right
+	}
+}
+
+@(private = "file")
+refresh_slide_column :: proc(
+	table: ^SlideTable,
+	cells: ^CellGrid,
+	left_seam: [MAZE_ROWS]bool,
+	col: int,
+) {
+	for row in 0 ..< MAZE_ROWS {
+		fill_slide(table, cells, left_seam, col, row, 2, false) // .Up
+		fill_slide(table, cells, left_seam, col, row, 3, false) // .Down
+	}
 }
 
 // The cheapest crossing from one entry row, in cells travelled, plus the
@@ -957,15 +1169,26 @@ measure_chunk :: proc(cells: ^CellGrid, seed: u64, index: int) -> ChunkMetrics {
 		return metrics
 	}
 
+	// **Every cell, not the ones the crossing search happened to reach.**
+	// It used to be the latter and that is what hid the pockets:
+	// cheapest_crossing returns at the first exit it pops, so `reached`
+	// holds only what is cheaper than the crossing and everything dearer
+	// was never looked at. A solver over the assembled world found 3.18%
+	// of reachable cells terminal while every chunk reported green.
+	//
+	// `reached` is kept because the fragment placement is graded on the
+	// same route, and because a test is easier to trust when the thing it
+	// used to check is still there to compare against.
 	safe := cells_that_can_still_get_out(&table, exits)
 	metrics.trap_free = true
 	for col in 0 ..< CHUNK_COLUMNS {
 		for row in 0 ..< MAZE_ROWS {
-			if reached[col][row] && !safe[col][row] {
+			if !safe[col][row] {
 				metrics.trap_free = false
 			}
 		}
 	}
+	_ = reached
 	return metrics
 }
 
@@ -1283,10 +1506,22 @@ generate_chunk :: proc(maze: ^Maze, chunk: ^Chunk, index: int) {
 	// of a CellGrid, which is a grid with no walls at all.
 	best_score = max(f32)
 
+	left := seam_openings(maze.seed, index * CHUNK_COLUMNS)
+	exits := seam_openings(maze.seed, (index + 1) * CHUNK_COLUMNS)
+
 	for attempt in 0 ..< MAZE_MAX_ATTEMPTS {
 		cells := carve_chunk(maze.seed, index, mix(base, u64(attempt)), maze.params)
+
+		// Before the measurement, not after: the band has to describe the
+		// chunk that ships, and the repair takes walls down, which makes
+		// the crossing cheaper. Measuring first would grade a maze nobody
+		// is given.
+		repairs, repaired := repair_chunk(&cells, left, exits)
+
 		metrics := measure_chunk(&cells, maze.seed, index)
 		metrics.attempts = attempt + 1
+		metrics.repairs = repairs
+		metrics.repaired = repaired
 
 		// Lexicographic, so the fallback degrades in the order the design
 		// cares about: a chunk that can be crossed beats one that cannot,

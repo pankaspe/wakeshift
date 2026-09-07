@@ -12,7 +12,7 @@ Stato: ✅ fatto · 🟡 in parte · ⬜ da fare.
 | | | Task | Modello | Note |
 |---|---|---|---|---|
 | ✅ | **L1** | **La griglia e lo scivolamento** → Celle, muri, movimento a quattro direzioni che scivola fino all'ostacolo, la Corruzione. Rispondeva a una domanda sola: **a questa velocità un labirinto si legge e diverte?** | Opus | cella 60, 12 righe, corpo 38. **Sì a entrambe**, in tre playtest. Taratura fine rimandata |
-| 🟡 | **L2** | **Il generatore vero** → I parametri (densità, lunghezza dei muri, ramificazione, vicoli) sono continui e **crescono con la distanza**. | Opus | invariante, intreccio e misura ci sono. Manca la crescita. **La trappola non è 1/1000**: un solutore sul mondo assemblato dice **3,18%** delle celle raggiungibili (16 semi) |
+| 🟡 | **L2** | **Il generatore vero** → I parametri (densità, lunghezza dei muri, ramificazione, vicoli) sono continui e **crescono con la distanza**. | Opus | invariante, intreccio, misura e **riparazione** ci sono: sacche 3,18% → **0 su 13533 celle**. Manca solo la crescita coi livelli |
 | ✅ | **L3** | **I frammenti nel labirinto** → Dove stanno i rombi perché costino qualcosa. Il BFS del generatore dà già il costo di deviazione di ogni cella: si piazzano per misura. | Opus | fascia 3–18 celle, misurata sul costo di **copertura** (ci passi sopra) e non di sosta. 2,26 frammenti e 1,87 Lucidi per chunk |
 | 🟡 | **L4** | **La barra e la fase Onirica** → Cosa carica la barra, quanto dura l'Onirico, e cosa cambia lassù oltre al colore (pilastro 6). | Opus | attraversamento, arretramento, barra ad anello attorno al corpo: ci sono. **L'anello non paga ancora**: raccogliere è in perdita finché il Reale è in attivo |
 | ⬜ | **L5** | **Il disegno del labirinto** → I muri come tratto al neon. | Sonnet | il rischio tecnico è chiuso (82 tratti a schermo contro 562). Resta il giudizio estetico |
@@ -49,15 +49,16 @@ record salvato (4998) è di un equilibrio che non esiste più e non sarà compar
 
 ## Prossimo step consigliato
 
-### **La metà che resta di L2: la riparazione deterministica.**
+### **La decisione sull'economia, giocando.**
 
-L'anello adesso c'è per intero, e la misura fatta per chiuderlo ha tirato fuori il numero che conta
-più dell'economia: su 16 semi, **il 3,18% delle celle raggiungibili è una cella da cui non si guadagna
-più una colonna**. Sono run finite, ed è il pilastro 5 rotto per intero. Il test per chunk non lo vede
-e non può vederlo (`trap_free` guarda solo le celle più economiche dell'attraversamento). Lo stesso
-censimento sul commit precedente dà gli stessi 165: non è un effetto dei frammenti, è L2.
+Il pilastro 5 è chiuso: il generatore ripara invece di ritirare, e il solutore sul mondo assemblato
+dice **0 sacche su 13533 celle raggiungibili** (40 semi) contro il 3,18% di prima. Non c'è più niente
+in mezzo fra te e il giudizio sul resto.
 
-Dopo, la decisione dell'autore sui numeri: **l'Onirico non paga**, perché il Reale è in attivo e il
-recupero sbatte contro `CORRUPTION_MAX_LEAD`. La leva è il **ciclo di lavoro** dell'Onirico
-(quanti frammenti, quanto dura), non la velocità di arretramento — l'aritmetica sta in
-`game/dream.odin`.
+Quello che resta è una decisione tua, non un lavoro: **l'Onirico non paga**, perché a L1 il Reale è in
+attivo e il recupero sbatte contro `CORRUPTION_MAX_LEAD`. La leva è il **ciclo di lavoro**
+dell'Onirico — quanti frammenti riempiono la barra e quanto dura — non la velocità di arretramento.
+L'aritmetica sta in `game/dream.odin`.
+
+Poi, in qualsiasi ordine: la crescita delle manopole coi livelli (l'altra metà di L2), oppure **L5**,
+che è disegno e non blocca niente.
