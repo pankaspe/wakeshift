@@ -74,6 +74,13 @@ Pickup :: struct {
 VisiblePickup :: struct {
 	position: rl.Vector2,
 	kind:     PickupKind,
+
+	// Absolute grid coordinates. Presentation uses them as a *key* —
+	// something that is the same for one pickup on every frame and
+	// different from its neighbours — so an effect can be out of step
+	// without anything having to be remembered between frames.
+	col:      int,
+	row:      int,
 }
 
 @(private = "file")
@@ -249,11 +256,10 @@ gather_pickups :: proc(maze: ^Maze, first, last: int, out: []VisiblePickup) -> i
 				return written
 			}
 			out[written] = VisiblePickup {
-				position = rl.Vector2 {
-					cell_centre_x(col),
-					cell_centre_y(int(pickup.row)),
-				},
+				position = rl.Vector2{cell_centre_x(col), cell_centre_y(int(pickup.row))},
 				kind     = pickup.kind,
+				col      = col,
+				row      = int(pickup.row),
 			}
 			written += 1
 		}

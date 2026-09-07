@@ -43,15 +43,21 @@ import "core:math"
 import "core:math/rand"
 import rl "vendor:raylib/v55"
 
-// How many marks can be alive at once. Measured against the worst case
-// RL.6 asks for — two streams at their most insistent, about 180 alive —
-// with room for whatever phase R7 adds on top.
-PARTICLE_CAPACITY :: 512
+// How many marks can be alive at once. The fray is the greedy one at
+// about 180 alive across its two streams; the charge ring adds around 20
+// and every burst is a few dozen for half a second. 768 leaves the same
+// kind of headroom 512 used to.
+PARTICLE_CAPACITY :: 768
 
 // How many independent emitters can keep a fractional debt. Each stream
 // carries the part of a particle it was owed last frame, so a rate of
 // 40/s still emits at 240 fps instead of rounding to nothing every frame.
-PARTICLE_STREAMS :: 4
+//
+// Two of these were in use and the third arrived with the charge ring.
+// Eight, because sharing an index is not an error and *is* a bug: two
+// emitters on one stream share the rounding, so the slower of them can be
+// starved by the faster one without anything saying so.
+PARTICLE_STREAMS :: 8
 
 // Below this, drag is treated as zero rather than dividing by it.
 PARTICLE_MIN_DRAG :: 1e-3

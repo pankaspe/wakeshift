@@ -38,12 +38,25 @@ import rl "vendor:raylib/v55"
 // The five roles every element samples from. Each of the three worlds
 // fills all five, so any drawing code can ask for "the light color"
 // without knowing which world is currently alive.
+// THREE FAMILIES, NOT TWO
+//
+// The maze is `light`, the things worth having are `accent`, and the body
+// is `figure`. That split is newer than the palette and it is the whole
+// reason this struct changed: the player and the fragments both sampled
+// `accent`, so the two things a player actually looks at were the same
+// colour and only told apart by one being filled. Hue is the channel with
+// room in it, so hue is what carries it now.
+//
+// `silhouette` was where a solid body used to come from — a dark fill,
+// for the obstacles of the two-lane game. Nothing has drawn with it since
+// that game was deleted, and leaving a dead role in a five-role palette is
+// how the next person picks the wrong one. `figure` takes its place.
 Palette :: struct {
-	deep:       rl.Color, // the field where the vignette takes over, at the edges
-	near:       rl.Color, // the field at its brightest, in the middle of the screen
-	silhouette: rl.Color, // every solid body: player, obstacles, terrain
-	light:      rl.Color, // rim light and glow
-	accent:     rl.Color, // the one thing allowed to shout
+	deep:   rl.Color, // the field where the vignette takes over, at the edges
+	near:   rl.Color, // the field at its brightest, in the middle of the screen
+	light:  rl.Color, // the world: walls, rim light, glow
+	accent: rl.Color, // what is worth going for: fragments, Lucids, the bar
+	figure: rl.Color, // you, and nothing else
 }
 
 // The three palettes: teal and cyan for the Real world, violet and
@@ -90,11 +103,11 @@ Palette :: struct {
 
 // The world below: cold teal, cyan light, green accent.
 REAL_PALETTE :: Palette {
-	deep       = rl.Color{0x16, 0x32, 0x3F, 255}, // max channel 0.247
-	near       = rl.Color{0x1A, 0x3E, 0x4C, 255}, // 0.298: under the *neutral* 0.30, not just Real's 0.50
-	silhouette = rl.Color{0x05, 0x0C, 0x11, 255},
-	light      = rl.Color{0x5F, 0xE0, 0xF0, 255},
-	accent     = rl.Color{0x8C, 0xF5, 0xB8, 255},
+	deep   = rl.Color{0x16, 0x32, 0x3F, 255}, // max channel 0.247
+	near   = rl.Color{0x1A, 0x3E, 0x4C, 255}, // 0.298: under the *neutral* 0.30, not just Real's 0.50
+	light  = rl.Color{0x5F, 0xE0, 0xF0, 255},
+	accent = rl.Color{0x7B, 0xF2, 0xA6, 255}, // pushed greener, away from the walls' cyan
+	figure = rl.Color{0xFF, 0xD0, 0x8A, 255}, // warm, and the only warm thing in the Real
 }
 
 // The threshold between them, and the colour both worlds converge toward
@@ -106,11 +119,15 @@ REAL_PALETTE :: Palette {
 // palettes onto these numbers — so a value that blooms here blooms across
 // the entire late game.
 NEUTRAL_PALETTE :: Palette {
-	deep       = rl.Color{0x23, 0x2B, 0x3E, 255}, // 0.243
-	near       = rl.Color{0x2E, 0x37, 0x4C, 255}, // 0.298, like every other near
-	silhouette = rl.Color{0x07, 0x08, 0x10, 255},
-	light      = rl.Color{0xE4, 0xFA, 0xFF, 255},
-	accent     = rl.Color{0xF2, 0xFD, 0xFF, 255},
+	deep   = rl.Color{0x23, 0x2B, 0x3E, 255}, // 0.243
+	near   = rl.Color{0x2E, 0x37, 0x4C, 255}, // 0.298, like every other near
+	light  = rl.Color{0xE4, 0xFA, 0xFF, 255},
+	accent = rl.Color{0xF2, 0xFD, 0xFF, 255},
+
+	// Only the UI ever samples these two out of the neutral palette: the
+	// actors take the straight Real to Dream road and never come through
+	// here (see actor_figure).
+	figure = rl.Color{0xFF, 0xE0, 0xB8, 255},
 }
 
 // The world above: violet, lavender light, pink accent.
@@ -121,11 +138,15 @@ NEUTRAL_PALETTE :: Palette {
 // violet, and warm orange was the single loudest thing on screen that the
 // sketches never contained.
 DREAM_PALETTE :: Palette {
-	deep       = rl.Color{0x2C, 0x1F, 0x42, 255}, // 0.259
-	near       = rl.Color{0x37, 0x22, 0x4C, 255}, // 0.298: under the *neutral* 0.30, not just Dream's 0.38
-	silhouette = rl.Color{0x0A, 0x06, 0x14, 255},
-	light      = rl.Color{0xB7, 0x9B, 0xF7, 255},
-	accent     = rl.Color{0xFF, 0x9F, 0xE2, 255},
+	deep   = rl.Color{0x2C, 0x1F, 0x42, 255}, // 0.259
+	near   = rl.Color{0x37, 0x22, 0x4C, 255}, // 0.298: under the *neutral* 0.30, not just Dream's 0.38
+	light  = rl.Color{0xB7, 0x9B, 0xF7, 255},
+	accent = rl.Color{0xFF, 0x9F, 0xE2, 255},
+
+	// The body's hue barely moves between the two worlds, and that is the
+	// point: everything else is transformed up there and you are not. It
+	// warms a shade toward the violet so it belongs to the picture.
+	figure = rl.Color{0xFF, 0xC7, 0xA6, 255},
 }
 
 // Shared line weights for the whole project — one "pen" for every
@@ -194,7 +215,7 @@ lerp_palette :: proc(a, b: Palette, t: f32) -> Palette {
 	return Palette {
 		deep = lerp_color(a.deep, b.deep, t),
 		near = lerp_color(a.near, b.near, t),
-		silhouette = lerp_color(a.silhouette, b.silhouette, t),
+		figure = lerp_color(a.figure, b.figure, t),
 		light = lerp_color(a.light, b.light, t),
 		accent = lerp_color(a.accent, b.accent, t),
 	}
@@ -211,10 +232,28 @@ PaletteSet :: struct {
 	dream:       Palette,
 
 	// Sampled at world_t: the palette of "wherever the player is right
-	// now", which is what the player's own body and light sample from.
-	current:     Palette,
-	world_t:     f32,
-	depth_t:     f32,
+	// now". The world samples from this, and only the world.
+	current:      Palette,
+
+	// THE WORLD CONVERGES, THE ACTORS DO NOT
+	//
+	// Depth washes both worlds toward the neutral palette, which is the
+	// right thing for a *place* — late in a run the maze stops being told
+	// apart by colour and position and motion carry it instead. It is the
+	// wrong thing for the two things the player is looking at: it would
+	// take the body and the fragments away exactly when the maze is at its
+	// densest and finding them matters most.
+	//
+	// So these two are sampled outside the convergence, and outside the
+	// neutral palette as well — neutral is *what the world converges to*,
+	// and something that does not converge has no business passing through
+	// it. Straight Real to Dream, which is also what stops the body going
+	// white in the middle of every crossing.
+	actor_figure: rl.Color,
+	actor_accent: rl.Color,
+
+	world_t:      f32,
+	depth_t:      f32,
 
 	// How alive each world is, 0..1 (they do not sum to 1 by accident:
 	// at the neutral palette both are half alive, which is the point).
@@ -249,5 +288,7 @@ new_palette_set :: proc(world_t: f32, depth_t: f32) -> PaletteSet {
 		dream_alive = clamp(world_t, 0, 1),
 	}
 	set.current = sample_palette(set, set.world_t)
+	set.actor_figure = lerp_color(REAL_PALETTE.figure, DREAM_PALETTE.figure, set.world_t)
+	set.actor_accent = lerp_color(REAL_PALETTE.accent, DREAM_PALETTE.accent, set.world_t)
 	return set
 }

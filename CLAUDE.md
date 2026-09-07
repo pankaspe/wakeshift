@@ -201,7 +201,22 @@ Odin forbids cyclic imports between packages, and one directory is exactly one p
   is placed, what it costs, when it is collected — is asked of the cells a slide *crosses*. Pricing
   the stop instead put fragments on the optimal route's own straight runs at a price they did not
   cost.
-- **Two things are filled: the field, and the character.** Everything else is line.
+- **Fill means actor, line means world.** The field and the body were the only filled things until
+  the fragments landed; the rule moved rather than broke. What makes it safe is that the palette has
+  **three families** now and hue carries the distinction: `light` is the world, `accent` is what is
+  worth going for, `figure` is you. Before this the player and the fragments both sampled `accent`,
+  so the two things a player actually looks at were the same colour. Nothing else may become filled
+  without earning a family of its own.
+- **The world converges with depth and the actors do not.** Washing both worlds toward the neutral
+  palette is right for a *place*; doing it to the body and the fragments would take them away exactly
+  when the maze is densest. The actors are also sampled straight Real → Dream rather than through the
+  neutral palette, because neutral is *what the world converges to* and something that does not
+  converge has no business passing through it — that is also what stopped the body going white in
+  the middle of every crossing.
+- **A small bright filled shape under the bloom is not a shape, it is a blob.** Fill dim, outline
+  bright: the fill says "actor", the outline carries the silhouette. And anything that pulses does it
+  on **scale and alpha, never brightness** — brightness crosses the bloom threshold and back, so the
+  halo pops and the mark reads as flicker instead of breathing.
 - **The weight hierarchy lives in the arithmetic.** Every stroke weight is a multiple or a fraction
   of one rung, so tuning the world cannot silently invert the order.
 - **A *world* element nailed to the screen reads as two pictures.** The vignette is screen-fixed on
@@ -311,6 +326,10 @@ reading pixels back:
 - **A triangle strip's winding is not free.** Backface culling drops the entire ribbon if the vertex
   pairs come out the other way round, silently and with nothing on screen. The convention: for a line
   running left to right, the first vertex of each pair is the upper one.
+- **Neither is a triangle fan's, and it wants the opposite order to the stroke.** The same shape that
+  outlines correctly fills *nothing* — measured, 0 lit pixels against the 2r² the area works out to,
+  and 7200 with the points reversed. Keep one point order for the shape and reverse it in the one
+  place that fills, so the two passes can never disagree about what the shape is.
 - **The halo has to start outside the core**, at `STROKE_HALO_INNER` times its width. Starting it at
   the core's own width spends its brightest layers under the opaque pass — measured, the profile fell
   from 642 to 36 in one pixel, which is a line with an outline rather than a line that glows.

@@ -51,6 +51,7 @@ draw_gameplay :: proc(
 	dream: game.Dream,
 	palettes: core.PaletteSet,
 	particles: fx.Particles,
+	display_time: f32,
 ) {
 	// The world exists between the two fronts: written by the pen on the
 	// right, eaten by the Corruption on the left. Both are a clip, and
@@ -61,7 +62,7 @@ draw_gameplay :: proc(
 
 	// Between the walls and the body: a pickup is an object in the maze,
 	// and the block passing over one has to cover it.
-	render.draw_pickups(maze, world, palettes, front_x, dream)
+	render.draw_pickups(maze, world, palettes, front_x, dream, display_time)
 
 	// The dust the world's line throws off as it reaches the front. Drawn
 	// with the world because it *is* the world, a moment later.
@@ -486,6 +487,7 @@ main :: proc() {
 		if game_state == .Playing {
 			render.emit_fray(&particles, world, corruption, player, palettes, frame_time)
 			render.emit_pickup_burst(&particles, player, world, palettes, pickups_taken)
+			render.emit_charge_dust(&particles, player, dream, world, palettes, frame_time)
 			fx.update_particles(&particles, frame_time)
 		}
 		pickups_taken = 0
@@ -504,22 +506,23 @@ main :: proc() {
 				dream,
 				palettes,
 				particles,
+				display_time,
 			)
 			ui.draw_hud(score, palettes)
 			ui.draw_intro_prompt(intro_timer, intro_dismissed_at, palettes)
 
 		case .Paused:
-			draw_gameplay(&maze, world, player, corruption, dream, palettes, particles)
+			draw_gameplay(&maze, world, player, corruption, dream, palettes, particles, display_time)
 			ui.draw_hud(score, palettes)
 			ui.draw_pause_overlay(pause_menu, palettes)
 
 		case .GameOver:
-			draw_gameplay(&maze, world, player, corruption, dream, palettes, particles)
+			draw_gameplay(&maze, world, player, corruption, dream, palettes, particles, display_time)
 			ui.draw_game_over(score, high_score, dream, palettes)
 
 		case .Options:
 			if options_return == .Paused {
-				draw_gameplay(&maze, world, player, corruption, dream, palettes, particles)
+				draw_gameplay(&maze, world, player, corruption, dream, palettes, particles, display_time)
 			}
 			ui.draw_options_screen(options_screen, palettes)
 		}

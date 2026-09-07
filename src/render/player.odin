@@ -17,9 +17,14 @@
 *   a hollow line. Fill is therefore the whole of "this one is you", which
 *   is a stronger discriminator than any silhouette this size could carry.
 *
-*   **It is the accent**, the one colour the palette allows to shout. In a
-*   screen of lattice the eye has to find the body in well under a second
-*   (pillar 2), and hue is the only channel not already spent on walls.
+*   **It has a hue of its own.** It used to share `accent` with the
+*   fragments, which meant the two things a player looks at were the same
+*   colour and only fill told them apart. There are three families now —
+*   the world is `light`, what is worth having is `accent`, the body is
+*   `figure` — and the body's is the only warm one in either world, so in
+*   a screen of lattice the eye finds it without reading anything
+*   (pillar 2). It also does not wash out with depth, which the maze
+*   around it does: see core/palette.odin.
 *
 * THE AIR AROUND IT IS FREE
 *
@@ -128,7 +133,7 @@ draw_player :: proc(player: game.Player, world: game.World, palettes: core.Palet
 	// The core is lifted the same amount a wall's is, so the block belongs
 	// to the same light rather than merely sharing its hue.
 	fill := core.with_alpha(
-		core.lighten_color(palettes.current.accent, WORLD_CORE_LIGHT),
+		core.lighten_color(palettes.actor_figure, WORLD_CORE_LIGHT),
 		PLAYER_FILL_ALPHA,
 	)
 	rl.DrawRectanglePro(

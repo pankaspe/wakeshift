@@ -3,19 +3,36 @@
 * The things lying in the maze: a small diamond, hollow, standing in the
 * middle of its cell.
 *
-* WHY A HOLLOW DIAMOND
+* WHY A FILLED DIAMOND, AND WHAT THAT CHANGED
 *
-* The picture already has exactly two vocabularies and the whole art
-* direction rests on them: **the walls are line, the body is fill**. A
-* pickup has to be an object rather than a piece of the maze, and it has
-* to be told apart from the body in the same glance — so it takes the
-* body's colour and the maze's hollowness. Filled would make it a second
-* character; the walls' colour would make it furniture.
+* It was hollow, and the rule it was obeying was the oldest one in
+* CLAUDE.md: two things are filled, the field and the character. The rule
+* has moved rather than been broken. **Fill now means actor** — you and
+* the things worth having — and line means world. That works because the
+* three families are told apart by *hue* now (core/palette.odin), so fill
+* is free to say something else.
+*
+* The fill is deliberately dimmer than the outline, and that is not
+* taste. A small bright filled shape under a frame-wide bloom stops being
+* a shape and becomes a blob — the same lesson the 45 px figure taught,
+* that you have to inspect a shape at the size it is drawn. So the fill
+* carries "this is solid, it is an actor" at low luminance and the bright
+* outline carries the silhouette.
 *
 * It is a diamond and not a square for the cheapest reason there is:
 * every wall in the game is axis-aligned, so forty-five degrees is a
 * shape nothing else on screen has, and the eye finds it without the
 * colour having to help (pillar 6).
+*
+* WHY IT PULSES ON SCALE AND ALPHA AND NEVER ON BRIGHTNESS
+*
+* Bloom is a threshold. A mark that pulses in brightness crosses it and
+* comes back, so the halo pops in and out and the whole thing reads as
+* flicker rather than as breathing. Scale and alpha move nothing across
+* the threshold.
+*
+* The phase comes from the cell the pickup is in, so a screen of them
+* breathes out of step without anything having to remember anything.
 *
 * A Lucid is the same mark with a dot in it. The two never share a screen
 * — a fragment is collectable only in the Real and a Lucid only in the
@@ -36,6 +53,7 @@ package render
 import "../core"
 import "../fx"
 import "../game"
+import "core:math"
 import rl "vendor:raylib/v55"
 
 // Half the diamond's width, in px. Against a 60 px cell and a 38 px body:
@@ -47,6 +65,17 @@ PICKUP_RADIUS :: 12
 PICKUP_WEIGHT :: 1.0 // multiples of the world's stroke
 PICKUP_GLOW :: 0.55
 PICKUP_SPREAD :: 5.0
+
+// The fill: dimmed well away from the outline so the bloom cannot eat the
+// silhouette, and opaque enough to read as solid over the field.
+PICKUP_FILL_DIM :: 0.55 // how far the accent is pulled toward black
+PICKUP_FILL_ALPHA :: 0.80
+
+// The breath. Slow, and small: a pickup is an offer sitting still in a
+// maze, not something arriving.
+PICKUP_PULSE_PERIOD :: 1.7 // seconds for a full breath
+PICKUP_PULSE_SCALE :: 0.09 // how much of the radius it swings
+PICKUP_PULSE_ALPHA :: 0.16 // and of the fill's opacity
 
 // The Lucid's centre mark.
 LUCID_DOT_WEIGHT :: 1.6
@@ -88,6 +117,86 @@ diamond_points :: proc(centre: rl.Vector2, radius: f32) -> [4]rl.Vector2 {
 	}
 }
 
+// Cuts a convex polygon to the strip between two x values, Sutherland
+// and Hodgman, one plane at a time. A quad against two planes comes out
+// as at most six points.
+//
+// The fill has to be clipped and not merely hidden. The world exists
+// between the two fronts and a shape that straddles one is *cut*, never
+// faded and never popped in: a fill that appeared whole the moment its
+// centre cleared the pen would be the appearance animation the whole
+// two-fronts idea exists to not need.
+@(private = "file")
+clip_convex_x :: proc(points: []rl.Vector2, low, high: f32, out: []rl.Vector2) -> int {
+	scratch: [8]rl.Vector2
+	count := 0
+	for point in points {
+		scratch[count] = point
+		count += 1
+	}
+
+	// keep = true means "inside is x >= edge", false means "x <= edge".
+	clip :: proc(
+		source: []rl.Vector2,
+		count: int,
+		edge: f32,
+		keep_right: bool,
+		out: []rl.Vector2,
+	) -> int {
+		inside :: proc(x, edge: f32, keep_right: bool) -> bool {
+			return keep_right ? x >= edge : x <= edge
+		}
+		written := 0
+		for i in 0 ..< count {
+			a := source[i]
+			b := source[(i + 1) % count]
+			a_in := inside(a.x, edge, keep_right)
+			b_in := inside(b.x, edge, keep_right)
+			if a_in {
+				out[written] = a
+				written += 1
+			}
+			if a_in != b_in {
+				span := b.x - a.x
+				t: f32 = span != 0 ? (edge - a.x) / span : 0
+				out[written] = a + (b - a) * clamp(t, 0, 1)
+				written += 1
+			}
+		}
+		return written
+	}
+
+	staging: [8]rl.Vector2
+	count = clip(scratch[:], count, low, true, staging[:])
+	if count < 3 {
+		return 0
+	}
+	count = clip(staging[:], count, high, false, out)
+	return count < 3 ? 0 : count
+}
+
+// Fills a convex polygon given in the *outline's* order.
+//
+// **A triangle fan's winding is not free either**, and it wants the
+// opposite order to the one the stroke wants. Measured by reading the
+// frame back: the diamond as the outline builds it fills 0 pixels — the
+// whole shape culled, silently, with nothing on screen to say so — and
+// reversed it fills 7200, which is the 2r² the area works out to on
+// paper. One point order for the shape, reversed here and nowhere else,
+// so the two passes can never disagree about what the diamond is.
+@(private = "file")
+fill_convex :: proc(points: []rl.Vector2, colour: rl.Color) {
+	if len(points) < 3 {
+		return
+	}
+	reversed: [8]rl.Vector2
+	count := min(len(points), len(reversed))
+	for i in 0 ..< count {
+		reversed[i] = points[count - 1 - i]
+	}
+	rl.DrawTriangleFan(raw_data(reversed[:count]), i32(count), colour)
+}
+
 // The pickups the camera can see, clipped to the world's two fronts.
 draw_pickups :: proc(
 	maze: ^game.Maze,
@@ -95,6 +204,7 @@ draw_pickups :: proc(
 	palettes: core.PaletteSet,
 	front_x: f32,
 	dream: game.Dream,
+	display_time: f32,
 ) {
 	first, last := game.get_visible_columns(world)
 
@@ -107,7 +217,9 @@ draw_pickups :: proc(
 	left := front_x
 	right := f32(DRAW_FRONT_X)
 
-	mark := new_stroke(palettes.current.accent, WORLD_STROKE_THICKNESS * PICKUP_WEIGHT)
+	// The actors' accent, not the world's: a fragment must not wash out
+	// with depth along with the maze it is hiding in (core/palette.odin).
+	mark := new_stroke(palettes.actor_accent, WORLD_STROKE_THICKNESS * PICKUP_WEIGHT)
 	mark.glow = PICKUP_GLOW
 	mark.spread = PICKUP_SPREAD
 	apply_glow_gain(&mark, glow_gain(palettes.world_t))
@@ -129,13 +241,33 @@ draw_pickups :: proc(
 			game.maze_screen_x(pickup.position.x, world.camera_x),
 			pickup.position.y,
 		}
-		if centre.x + PICKUP_RADIUS < left || centre.x - PICKUP_RADIUS > right {
+		if centre.x + PICKUP_RADIUS * 2 < left || centre.x - PICKUP_RADIUS * 2 > right {
 			continue
 		}
 
-		points := diamond_points(centre, PICKUP_RADIUS)
+		// Out of step with its neighbours, and reproducibly so: the phase
+		// is the cell, so nothing has to be remembered between frames and
+		// two runs of the same seed breathe identically.
+		phase := f32((pickup.col * 7 + pickup.row * 13) % 16) / 16
+		wave := math.sin_f32((display_time / PICKUP_PULSE_PERIOD + phase) * 2 * math.PI)
 
-		if centre.x - PICKUP_RADIUS >= left && centre.x + PICKUP_RADIUS <= right {
+		radius := PICKUP_RADIUS * (1 + PICKUP_PULSE_SCALE * wave)
+		points := diamond_points(centre, radius)
+
+		// The fill first, the outline over it.
+		fill_alpha := PICKUP_FILL_ALPHA + PICKUP_PULSE_ALPHA * wave
+		clipped: [8]rl.Vector2
+		if written := clip_convex_x(points[:], left, right, clipped[:]); written >= 3 {
+			fill_convex(
+				clipped[:written],
+				core.with_alpha(
+					core.dim_color(palettes.actor_accent, PICKUP_FILL_DIM),
+					fill_alpha,
+				),
+			)
+		}
+
+		if centre.x - radius >= left && centre.x + radius <= right {
 			whole := mark
 			whole.closed = true
 			draw_stroke(points[:], whole)
@@ -203,7 +335,7 @@ emit_pickup_burst :: proc(
 		life_jitter = 0.18,
 		size        = PICKUP_BURST_SIZE,
 		size_jitter = 0.8,
-		color       = core.with_alpha(palettes.current.accent, 0.9),
+		color       = core.with_alpha(palettes.actor_accent, 0.9),
 	}
 	fx.burst(particles, emitter, PICKUP_BURST_COUNT * taken)
 }
