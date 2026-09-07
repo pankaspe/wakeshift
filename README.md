@@ -22,8 +22,29 @@ distance between the two is the only health bar there is: run well and you push 
 screen, which buys you the seconds you need to read the maze; hesitate, backtrack badly or stall and
 it comes back into view. Its absence *is* the reading — there is no meter.
 
-Fragments, the Dream phase and levels are designed and not yet built. **[TIMELINE.md](TIMELINE.md)**
-says where each piece stands.
+---
+
+## The loop
+
+**Fragments** lie in the maze off the shortest line. Picking them up charges a bar and does nothing
+else; when the bar fills, the world turns **Dream**.
+
+Up there two things change and only two. A slide **goes through the wall that stopped it** and runs
+on to the next, so the move is still a commitment and the reading got harder — you have to choose
+*which* wall and look two cells further than you were looking. And the Corruption **runs backwards**,
+which is what makes the Dream the place ground is bought back rather than a light show. The bar
+drains while it lasts; **Lucids**, which exist only up there and sit where the walking maze cannot
+reach them, push it back up.
+
+Pierced walls stay open behind you, and fragments vanish while Lucids appear at the moment the world
+turns — so with the colour off entirely you can still tell which world you are in by what the body
+does and what the maze is offering. That is the point: the theme has to change the mechanics, not
+just the palette.
+
+Levels are designed and not yet built, and the loop's four numbers — how many fragments fill the bar,
+how long the Dream lasts, how fast the front retreats, what a Lucid is worth — are first drafts drawn
+against a measured income and meant to be played rather than read.
+**[TIMELINE.md](TIMELINE.md)** says where each piece stands.
 
 ---
 
@@ -50,11 +71,21 @@ A chunk is built and verified **entirely on its own**, in any order:
    cell you can get to, you can still get out of.
 5. **Accept or re-roll** with another sub-seed until the crossing lands in the band the level asked
    for. The loop is deterministic from the seed, so the run stays reproducible.
+6. **Place the pickups by measure**, on the chunk that won. The same search prices every cell, so
+   "somewhere that costs about half a second of detour" is a question to ask rather than a place to
+   guess — and the risk/reward junction the design turns on is selected rather than decorated. The
+   price asked for is the cost of a whole crossing that *drives over* the cell, not of stopping on
+   it: a pickup is taken by passing over it, and a slide passes over every cell between its ends.
 
 The invariant is deliberately stronger than *a path exists*: the world moves whether the player is
 making progress or not, so it is **a path exists that arrives in time**. Measured over 1000 chunks —
-0 unsolvable, mean crossing at a third of the time available, 4 ms of generation for every 7 seconds
-of play.
+0 unsolvable, mean crossing at a third of the time available, 5.8 ms of generation for every 7
+seconds of play.
+
+It is not finished. A solver run over the *assembled* world — rather than over one chunk, which is
+the only thing that can contradict a measurement grading its own homework — says 3.18% of the cells
+reachable from the start are cells no route leaves. Closing that with a deterministic repair, rather
+than with more attempts, is the generator's remaining work.
 
 ---
 

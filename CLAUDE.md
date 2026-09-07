@@ -11,8 +11,9 @@ curve, the economy tuning — is archived in `docs/archive/CLAUDE_v2_mattoncini.
 and the reason they are kept is that they record measurements and traps that cost real work to find:
 go there to learn *why* something was once true, never to learn what to build.
 
-The fragments, the Dream phase and the levels are designed and not built. `TIMELINE.md` says where
-each one stands.
+The fragments and the Dream phase have landed since; **the levels are still designed and not
+built**, and so is the deterministic repair the generator needs. `TIMELINE.md` says where each one
+stands.
 
 What still binds:
 
@@ -36,9 +37,11 @@ ceiling is an endless maze that scrolls past; the two lanes are no longer places
 maze's boundary. The player moves with **WASD / arrows** and **slides until a wall stops them**, so
 every input is a commitment rather than a steering correction. Behind them the **Corruption**
 advances from the left, and the distance between the two is the only health bar there is.
-**Fragments** picked up in the maze slow it down. A meter charges as the run goes on, and at full it
-turns the world **Dream** for a while — a richer, faster, more dangerous phase that falls back to
-Real. The visual identity is **La Linea**: a filled, vignetted field, one continuous glowing stroke,
+**Fragments** picked up in the maze charge a bar and do nothing else — they do not touch the front,
+because what moves the front is the *state of the world* and fragments are the only way to change it.
+At full the world turns **Dream**: a slide goes through the wall that stopped it and runs on to the
+next, and the Corruption runs backwards. The bar drains while it lasts, **Lucids** found only up
+there extend it, and at empty the world falls back to Real. The visual identity is **La Linea**: a filled, vignetted field, one continuous glowing stroke,
 and nothing else.
 
 ---
@@ -106,7 +109,10 @@ Five traps, all learned the hard way and all still live:
 - **Check the bot before trusting the bot.** The greedy bot sat inside a mirrored pair until it died,
   because it valued both lanes equally and never pressed; that silently invalidated every run-length
   number measured in a pool where such pairs were common. Instrument the *death mode* before quoting
-  a median.
+  a median. The maze bot repeated it twice over: it discarded every seam-crossing slide because the
+  destination fell outside its search window, and then it walked into the pockets above and died in
+  all 24 runs. **A model of a player who cannot read the maze is not a benchmark for an economy** —
+  give the bot the lookahead a competent player has, or the number measures the bot.
 - **When the thing to verify is pixels, read the pixels back.** `rl.LoadImageFromTexture` on the
   render target turns "does the bloom look right" into arithmetic: draw the frame twice, once with
   the effect and once without, and compare per-row brightness. Give a readback test an *asymmetric*
@@ -191,6 +197,10 @@ Odin forbids cyclic imports between packages, and one directory is exactly one p
   neutral.
 - **No hardcoded colours outside `core/palette.odin`.** A colour literal anywhere else is a bug,
   including in `ui/`.
+- **A pickup is taken by passing over it**, not by stopping on it, so everything about one — where it
+  is placed, what it costs, when it is collected — is asked of the cells a slide *crosses*. Pricing
+  the stop instead put fragments on the optimal route's own straight runs at a price they did not
+  cost.
 - **Two things are filled: the field, and the character.** Everything else is line.
 - **The weight hierarchy lives in the arithmetic.** Every stroke weight is a multiple or a fraction
   of one rung, so tuning the world cannot silently invert the order.
@@ -234,10 +244,24 @@ has to be, because the world scrolls and the fraction is only where the camera i
   shipped. Left in, the search stands still at an edge and climbs through those phantom stops into
   rows the player can never stop in — every per-chunk number came out green while the live maze was
   walled shut three chunks in.
+- **The pickups are placed by the same measurement, once, on the chunk that won.** Not on every
+  attempt: measuring the twenty-three that lost is paying twenty-four times for an answer about a
+  maze nobody plays. The band is stated in *cells of detour*, and a cell is 60 px against a 900 px/s
+  slide, so **15 cells is one second** and the band reads as time.
+- **The Dream's pierce is the one thing that writes to a chunk after it was generated**, so a chunk
+  is a pure function of its seed only until it is played through. The holes are behind the body and
+  the slot is reused long after the Corruption has eaten that ground, which is why it is safe — say
+  so, do not rely on it silently, and do not add a second writer.
 - **Generation belongs to a simulation step, never to a draw.** It is pure and idempotent, so a
   draw that triggered it would still get the right walls — and would pay several milliseconds for
   them mid-frame, at a moment chosen by the camera rather than by the simulation.
 - **Merge collinear walls before drawing them.** Measured: 82 strokes a screen instead of 562.
+- **The invariant is not met yet, and the per-chunk test cannot tell you so.** A solver over the
+  assembled world says **3.18% of the cells reachable from the start are cells from which no route
+  gains another twenty columns** — finished runs, and pillar 5 says never. `trap_free` misses them
+  because it only examines cells the crossing search reached, and that search stops at the first exit
+  it pops. **A check that stops early is blind past where it stopped**, which is the seam lesson
+  wearing a different costume. The fix is a deterministic repair, not more attempts.
 
 ### Presentation
 
